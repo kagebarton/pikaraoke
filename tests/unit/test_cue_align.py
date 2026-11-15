@@ -15,6 +15,7 @@ from pikaraoke.lib.cue_align import (
     split_section_to_lines,
 )
 from pikaraoke.lib.onset_snap import HOP_S
+from pikaraoke.lib.token_align import INSTANT_WORD_DUR_S
 
 
 def _words(*spans: tuple[str, float, float]) -> list[dict]:
@@ -539,6 +540,14 @@ class TestRepaceBadLines:
         assert out[4]["start"] == pytest.approx(94.5)
         assert out[4]["end"] == pytest.approx(95.0)
 
+    def test_a_line_past_the_cues_is_passed_through(self):
+        # More line objects than cues and lyric lines: the driver never makes one, but a
+        # direct caller can, and nothing reads the missing line's tokens.
+        objs, cues, lines = _anchor_lines(4)
+        objs.append(_line(4, "zz", ("zz", 8.0, 8.3)))
+        out, stats = repace_bad_lines(objs, cues, lines, lines)
+        assert out[4] is objs[4] and stats["n_guessed_words"] == 0
+
 
 class TestPartialLines:
     """A line the align timed only partly is rescued, and never shown with words missing."""
@@ -702,7 +711,8 @@ class TestPartialLines:
 
 
 class TestCrammedLines:
-    """A word for every token is not enough: zero-length words count as missing."""
+    """A word for every token is not enough: zero-length words count as missing, and the
+    ones a rescue leaves are shown with guessed timing."""
 
     CRAMMED = (("ee", 8.0, 8.3), ("ff", 8.3, 8.3), ("gg", 8.3, 8.3), ("hh", 8.3, 8.8))
     TIMED = (("ee", 8.0, 8.3), ("ff", 8.3, 8.5), ("gg", 8.5, 8.7), ("hh", 8.7, 8.9))
@@ -740,14 +750,93 @@ class TestCrammedLines:
             objs, cues, lines, lines, realign=lambda *_: _words(*self.CRAMMED)
         )
         assert out[4]["source"] == SOURCE
+        assert [w["word"] for w in out[4]["words"]] == ["ee", "ff", "gg", "hh"]
+        # "hh" keeps its time; the zero-length words share the 0.3 s slot of "ee" with it.
         assert [(w["start"], w["end"]) for w in out[4]["words"]] == [
-            (8.0, 8.3),
-            (8.3, 8.3),
-            (8.3, 8.3),
+            (8.0, pytest.approx(8.1)),
+            (pytest.approx(8.1), pytest.approx(8.2)),
+            (pytest.approx(8.2), pytest.approx(8.3)),
             (8.3, 8.8),
         ]
         assert stats["n_realigned"] == 0 and stats["crammed_line_ids"] == [4]
-        assert stats["n_guessed_words"] == 0 and stats["n_repaced"] == 0
+        assert stats["n_repaced"] == 0
+
+    def _guessed(self, text: str, cue: tuple[float, float], *words: tuple[str, float, float]):
+        """Four anchors plus line 4 (``text``, cued over ``cue``, ``words`` timed by the align,
+        no re-align answer); returns ``(line 4, stats)``."""
+        objs, cues, lines = _anchor_lines(4)
+        cues.append(cue)
+        lines.append(text)
+        objs.append(_line(4, text, *words))
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: None)
+        return out[4], stats
+
+    def test_a_zero_length_middle_word_is_timed_between_its_neighbours(self):
+        line, stats = self._guessed(
+            "ee ff gg", (8.0, 9.5), ("ee", 8.0, 8.3), ("ff", 8.9, 8.9), ("gg", 9.0, 9.4)
+        )
+        # The 0.7 s gap, at the line's pace (the median of 0.3 and 0.4 s).
+        assert [(w["start"], w["end"]) for w in line["words"]] == [
+            (8.0, 8.3),
+            (pytest.approx(8.3), pytest.approx(8.65)),
+            (9.0, 9.4),
+        ]
+        assert line["source"] == SOURCE
+        assert stats["crammed_line_ids"] == [4]
+        assert stats["n_guessed_words"] == 1 and stats["guessed_word_line_ids"] == [4]
+
+    def test_a_zero_length_word_between_touching_neighbours_shares_a_slot_not_none(self):
+        line, _ = self._guessed(
+            "ee ff gg", (8.0, 9.5), ("ee", 8.0, 8.3), ("ff", 8.3, 8.3), ("gg", 8.3, 8.7)
+        )
+        starts_ends = [(w["start"], w["end"]) for w in line["words"]]
+        assert starts_ends == [
+            (8.0, pytest.approx(8.15)),
+            (pytest.approx(8.15), pytest.approx(8.3)),
+            (8.3, 8.7),
+        ]
+        assert all(w["end"] - w["start"] >= INSTANT_WORD_DUR_S for w in line["words"])
+
+    def test_a_zero_length_first_and_last_word_are_timed_around_the_rest(self):
+        line, stats = self._guessed(
+            "ee ff gg hh",
+            (8.0, 10.0),
+            ("ee", 8.4, 8.4),
+            ("ff", 8.4, 8.8),
+            ("gg", 8.9, 9.3),
+            ("hh", 9.3, 9.3),
+        )
+        # The head runs back from "ff" by the line's pace (0.4 s); the tail on from "gg".
+        assert [(w["start"], w["end"]) for w in line["words"]] == [
+            (pytest.approx(8.0), pytest.approx(8.4)),
+            (8.4, 8.8),
+            (8.9, 9.3),
+            (pytest.approx(9.3), pytest.approx(9.7)),
+        ]
+        assert stats["n_guessed_words"] == 2
+
+    def test_a_zero_length_word_in_a_partial_line_stays_as_it_is_and_sets_no_pace(self):
+        # "hh" was dropped; "ff" is zero-length but the line does not have a word per token.
+        line, stats = self._guessed(
+            "ee ff gg hh", (8.0, 10.0), ("ee", 8.0, 8.3), ("ff", 8.4, 8.4), ("gg", 8.6, 9.1)
+        )
+        assert [(w["word"], w["start"], w["end"]) for w in line["words"][:3]] == [
+            ("ee", 8.0, 8.3),
+            ("ff", 8.4, 8.4),
+            ("gg", 8.6, 9.1),
+        ]
+        # Paced from the timed words (0.3 and 0.5 s), not the zero-length one with them.
+        hh = line["words"][3]
+        assert hh["word"] == "hh" and (hh["start"], hh["end"]) == pytest.approx((9.1, 9.5))
+        assert stats["crammed_line_ids"] == [] and stats["n_guessed_words"] == 1
+
+    def test_a_fill_keeps_its_paced_words_though_one_is_shorter_than_an_instant(self):
+        # No words from the align: "I" gets 1/16 of the 0.5 s cue, under INSTANT_WORD_DUR_S,
+        # but a fill's word was never aligned, so its shortness is not a failed alignment.
+        line, stats = self._guessed("I extraordinarily", (8.0, 8.5))
+        assert line["source"] == SOURCE_FILL and line["start"] == 8.0
+        assert line["words"][0]["end"] - line["words"][0]["start"] < INSTANT_WORD_DUR_S
+        assert stats["n_repaced"] == 1 and stats["n_guessed_words"] == 0
 
     def test_a_line_with_every_word_timed_asks_nothing(self):
         objs, cues, lines = self._song(*self.TIMED)
@@ -766,7 +855,8 @@ class TestCrammedLines:
         objs.append(_line(5, "ii jj", ("ii", 10.0, 10.3)))  # a word short, none zero-length
         _out, stats = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: None)
         assert stats["crammed_line_ids"] == [4]
-        assert stats["guessed_word_line_ids"] == [5]
+        # Line 5 is a word short; line 4's zero-length words are guessed too.
+        assert stats["guessed_word_line_ids"] == [4, 5]
 
 
 class TestStartAfterPrevious:
@@ -828,6 +918,372 @@ class TestStartAfterPrevious:
         out, stats = self._song(("ee", 8.3, 8.5), ("ff", 8.5, 8.7), ("gg", 8.7, 8.9))
         assert out[4]["source"] == SOURCE_REALIGN and stats["n_realigned"] == 1
         assert out[4]["words"][0]["start"] == 8.3
+
+
+class TestHeardWords:
+    """The transcriber's words outrank the cue: a line they confirm is kept (rule A)."""
+
+    @staticmethod
+    def _repeat_song():
+        """Four anchors plus a repeated line at lines 4 and 5, cued at 12 and 14 but sung
+        3 s earlier, which is where the first pass put it."""
+        objs, cues, lines = _anchor_lines(4)
+        for lid, (cue, sung) in enumerate(((12.0, 9.0), (14.0, 11.0)), start=4):
+            cues.append((cue, cue + 1.0))
+            lines.append("zim zam")
+            objs.append(
+                _line(lid, "zim zam", ("zim", sung, sung + 0.3), ("zam", sung + 0.4, sung + 0.8))
+            )
+        return objs, cues, lines
+
+    REPEAT_HEARD = (
+        ("zim", 9.05, 9.35),
+        ("zam", 9.45, 9.85),
+        ("zim", 11.05, 11.35),
+        ("zam", 11.45, 11.85),
+    )
+
+    def test_a_repeat_heard_where_the_first_pass_put_it_is_kept_not_spaced_from_its_cue(self):
+        objs, cues, lines = self._repeat_song()
+
+        def realign(lid, w0, w1):
+            raise AssertionError("a confirmed line asks for no re-align")
+
+        out, stats = repace_bad_lines(
+            objs, cues, lines, lines, realign=realign, heard_words=_words(*self.REPEAT_HEARD)
+        )
+        assert out[4] is objs[4] and out[5] is objs[5]
+        assert stats["heard_kept_line_ids"] == [4, 5]
+        assert stats["n_repaced"] == 0 and stats["n_realigned"] == 0
+
+    def test_the_same_repeat_with_one_of_the_two_unheard_is_spaced_from_its_cue_as_before(self):
+        objs, cues, lines = self._repeat_song()
+        out, stats = repace_bad_lines(
+            objs,
+            cues,
+            lines,
+            lines,
+            realign=lambda *_: None,
+            heard_words=_words(*self.REPEAT_HEARD[:2]),
+        )
+        assert stats["n_heard_lines"] == 1 and stats["heard_kept_line_ids"] == []
+        assert [out[4]["source"], out[5]["source"]] == [SOURCE_FILL, SOURCE_FILL]
+        assert out[4]["start"] == 12.0 and out[5]["start"] == 14.0
+
+    def test_a_line_with_a_long_inner_pause_before_its_cue_is_kept_where_it_was_heard(self):
+        objs, cues, lines = _anchor_lines(4)
+        cues.append((8.0, 11.0))
+        lines.append("ee ff gg hh")
+        sung = (("ee", 7.0, 7.3), ("ff", 7.4, 7.7), ("gg", 10.2, 10.5), ("hh", 10.6, 10.9))
+        objs.append(_line(4, "ee ff gg hh", *sung))  # 2.5 s pause; starts before its cue
+        calls = []
+
+        def realign(lid, w0, w1):
+            calls.append(lid)
+
+        heard = _words(*((w, s + 0.05, e + 0.05) for w, s, e in sung))
+        out, stats = repace_bad_lines(objs, cues, lines, lines, realign=realign, heard_words=heard)
+        assert out[4] is objs[4] and calls == [] and stats["heard_kept_line_ids"] == [4]
+        # Without the heard words the cue test fails it and the rescue goes looking.
+        repace_bad_lines(objs, cues, lines, lines, realign=realign)
+        assert calls == [4]
+
+    def test_heard_words_that_match_no_line_leave_the_output_as_it_was(self):
+        objs, cues, lines = self._repeat_song()
+        unrelated = _words(("flub", 3.0, 3.3), ("blip", 4.0, 4.3))
+        plain = repace_bad_lines(objs, cues, lines, lines, realign=lambda *_: None)
+        for heard in (None, [], unrelated):
+            out, stats = repace_bad_lines(
+                objs, cues, lines, lines, realign=lambda *_: None, heard_words=heard
+            )
+            assert out == plain[0]
+            assert stats["n_heard_lines"] == 0 and stats["heard_kept_line_ids"] == []
+
+
+class TestGuardLift:
+    """A re-align the transcriber confirms is not cut to the previous line's last word."""
+
+    @staticmethod
+    def _rescue(realigned, heard):
+        """Line 3's last word ends at 8.2; line 4 (cue 7.5-9.0, "ee ff") has no timed word,
+        and the re-align answers ``realigned`` for it."""
+        objs, cues, lines = _anchor_lines(3)
+        cues.append((6.0, 7.0))
+        lines.append("bb cc")
+        objs.append(_line(3, "bb cc", ("bb", 6.0, 6.3), ("cc", 7.0, 8.2)))
+        cues.append((7.5, 9.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff"))
+        return repace_bad_lines(
+            objs, cues, lines, lines, realign=lambda *_: _words(*realigned), heard_words=heard
+        )
+
+    SHORT_FIRST = (("ee", 7.3, 7.7), ("ff", 7.8, 8.6))  # starts 0.9 s before line 3 ends
+    SHORT_HEARD = (("ee", 7.35, 7.75), ("ff", 7.85, 8.65))
+
+    def test_two_words_heard_where_they_start_are_kept_untrimmed(self):
+        out, stats = self._rescue(self.SHORT_FIRST, _words(*self.SHORT_HEARD))
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == 7.3
+        assert [w["word"] for w in out[4]["words"]] == ["ee", "ff"]
+        assert stats["guard_lifted_line_ids"] == [4]
+
+    def test_the_same_words_unheard_leave_too_little_of_the_first_word_and_the_line_is_filled(self):
+        out, stats = self._rescue(self.SHORT_FIRST, None)
+        assert out[4]["source"] == SOURCE_FILL
+        assert stats["n_realigned"] == 0 and stats["guard_lifted_line_ids"] == []
+
+    def test_a_first_word_that_outlasts_the_previous_line_is_trimmed_unless_heard(self):
+        long_first = (("ee", 7.3, 8.6), ("ff", 8.6, 8.9))
+        out, stats = self._rescue(long_first, None)
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == pytest.approx(8.2)
+        out, stats = self._rescue(long_first, _words(("ee", 7.35, 8.0), ("ff", 8.6, 8.9)))
+        assert out[4]["start"] == 7.3 and stats["guard_lifted_line_ids"] == [4]
+
+    def test_a_re_align_the_heard_words_disagree_with_is_still_cut_as_before(self):
+        far = _words(("ee", 10.35, 10.75), ("ff", 10.85, 11.65))
+        out, stats = self._rescue(self.SHORT_FIRST, far)
+        assert out[4]["source"] == SOURCE_FILL and stats["guard_lifted_line_ids"] == []
+
+    def test_the_slices_lead_in_still_bounds_a_confirmed_re_align(self):
+        # Dragged back to 6.8, before the 7.0 lead-in: cut to it, though not to line 3's end.
+        dragged = (("ee", 6.8, 7.7), ("ff", 7.8, 8.6))
+        out, stats = self._rescue(dragged, _words(("ee", 6.85, 7.7), ("ff", 7.85, 8.65)))
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == pytest.approx(7.0)
+        assert stats["guard_lifted_line_ids"] == [4]
+
+
+class TestHeardAimedRetry:
+    """Rule B: a line heard far from its cue is first looked for where it was heard."""
+
+    @staticmethod
+    def _sung(start: float) -> tuple[tuple[str, float, float], ...]:
+        """ "ee ff gg" sung from ``start``."""
+        return (
+            ("ee", start, start + 0.3),
+            ("ff", start + 0.4, start + 0.7),
+            ("gg", start + 0.8, start + 1.1),
+        )
+
+    @staticmethod
+    def _song(
+        cue: tuple[float, float] = (8.0, 12.0),
+        *placed: tuple[str, float, float],
+        after: tuple[float, float] | None = None,
+    ):
+        """Four anchors plus line 4 ("ee ff gg"), cued over ``cue`` and holding ``placed``
+        words; it is the song's last unless ``after`` cues a clean line 5 ("a a") over it."""
+        objs, cues, lines = _anchor_lines(4)
+        cues.append(cue)
+        lines.append("ee ff gg")
+        objs.append(_line(4, "ee ff gg", *placed))
+        if after is not None:
+            c0, _c1 = after
+            cues.append(after)
+            lines.append("a a")
+            objs.append(_line(5, "a a", ("a", c0 + 0.1, c0 + 0.4), ("a", c0 + 0.5, c0 + 0.9)))
+        return objs, cues, lines
+
+    @staticmethod
+    def _rescue(song, answer, heard, line=4, **kwargs):
+        """``repace_bad_lines`` with a stub aligner answering ``answer(w0, w1)``; returns
+        ``(out, stats, calls)`` with the ``(w0, w1)`` of every align call, which must all be
+        for line ``line``."""
+        calls: list[tuple[float, float]] = []
+
+        def realign(lid, w0, w1):
+            assert lid == line
+            calls.append((w0, w1))
+            return answer(w0, w1)
+
+        objs, cues, lines = song
+        out, stats = repace_bad_lines(
+            objs, cues, lines, lines, realign=realign, heard_words=heard, **kwargs
+        )
+        return out, stats, calls
+
+    def test_a_line_with_no_words_heard_4_6_s_after_its_cue_is_kept_where_it_was_heard(self):
+        # Only the window around the heard words has an answer, as with a line the aligner
+        # could not place in its caption (the cue-aimed slice is 7.25-10.25).
+        song = self._song((8.0, 9.5))
+        heard = _words(*self._sung(12.6))
+
+        def answer(w0, w1):
+            return _words(*self._sung(12.65)) if w0 > 11 else None
+
+        out, stats, calls = self._rescue(song, answer, heard)
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == 12.65
+        assert calls == [(pytest.approx(11.85), pytest.approx(14.85))]
+        assert stats["heard_aimed_line_ids"] == [4] and stats["heard_aimed_kept_line_ids"] == [4]
+        assert stats["realigned_line_ids"] == [4] and stats["n_repaced"] == 0
+        assert stats["windows_unmeasured_line_ids"] == [4]
+        # Without the heard words the retry looks only in the caption, finds nothing, and the
+        # line is spaced from its cue.
+        out, stats, calls = self._rescue(song, answer, None)
+        assert out[4]["source"] == SOURCE_FILL and len(calls) == 1
+        assert stats["heard_aimed_line_ids"] == []
+
+    def test_a_result_the_heard_words_do_not_confirm_falls_back_to_the_cue_aimed_retry(self):
+        # In the moved window the stub answers 2 s off the heard words, inside the moved span.
+        def answer(w0, w1):
+            return _words(*self._sung(14.6 if w0 > 11 else 8.1))
+
+        out, stats, calls = self._rescue(self._song(), answer, _words(*self._sung(12.6)))
+        assert len(calls) == 2 and calls[0][0] > 11 and calls[1][0] == 7.25
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == 8.1
+        assert stats["heard_aimed_line_ids"] == [4] and stats["heard_aimed_kept_line_ids"] == []
+        assert stats["realigned_line_ids"] == [4]
+
+    @pytest.mark.parametrize(
+        "heard_start, tried", [(9.2, False), (9.4, False), (9.5, True), (9.6, True)]
+    )
+    def test_a_line_is_looked_for_where_heard_from_1_5_s_off_its_cue(self, heard_start, tried):
+        out, stats, calls = self._rescue(
+            self._song(), lambda w0, w1: _words(*self._sung(8.1)), _words(*self._sung(heard_start))
+        )
+        assert stats["heard_aimed_line_ids"] == ([4] if tried else [])
+        assert len(calls) == (2 if tried else 1)
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == 8.1
+
+    def test_a_line_heard_before_its_cue_is_looked_for_there(self):
+        # Cued over 12-14, heard from 9.6: the moved slice starts at 8.85, the cue's at 11.25.
+        def answer(w0, w1):
+            return _words(*self._sung(9.65)) if w0 < 10 else None
+
+        out, stats, calls = self._rescue(self._song((12.0, 14.0)), answer, _words(*self._sung(9.6)))
+        assert out[4]["start"] == 9.65 and stats["heard_aimed_kept_line_ids"] == [4]
+        assert len(calls) == 1
+
+    def test_a_line_whose_first_word_was_not_heard_gets_no_heard_aimed_retry(self):
+        heard = _words(*self._sung(12.6)[1:])  # "ff gg" heard, "ee" not
+        out, stats, calls = self._rescue(self._song(), lambda w0, w1: None, heard)
+        assert stats["n_heard_lines"] == 1 and stats["heard_aimed_line_ids"] == []
+        assert calls == [(7.25, 12.75)]
+
+    def test_a_line_in_a_run_not_heard_in_full_gets_no_heard_aimed_retry(self):
+        # Lines 4 and 5 have the same words; one "ee ff gg" was heard, 2.6 s past line 5's
+        # cue. It cannot say which line it was, so no re-align there could be confirmed.
+        objs, cues, lines = self._song((8.0, 9.5), *self._sung(8.1))
+        cues.append((10.0, 11.5))
+        lines.append("ee ff gg")
+        objs.append(_line(5, "ee ff gg"))
+        out, stats, calls = self._rescue(
+            (objs, cues, lines), lambda w0, w1: None, _words(*self._sung(12.6)), line=5
+        )
+        assert stats["n_heard_lines"] == 1 and stats["heard_aimed_line_ids"] == []
+        assert calls == [(pytest.approx(9.25), pytest.approx(12.25))]
+        assert out[5]["source"] == SOURCE_FILL
+
+    def test_without_an_aligner_nothing_is_tried_where_heard(self):
+        objs, cues, lines = self._song()
+        out, stats = repace_bad_lines(
+            objs, cues, lines, lines, realign=None, heard_words=_words(*self._sung(12.6))
+        )
+        assert stats["heard_aimed_line_ids"] == [] and out[4]["source"] == SOURCE_FILL
+
+    def test_the_song_s_last_line_looks_for_its_singing_end_from_the_moved_span(self):
+        env = _env(17.0, [(12.6, 15.2)])
+        out, stats, calls = self._rescue(
+            self._song((8.0, 9.5)),
+            lambda w0, w1: _words(*self._sung(12.65)),
+            _words(*self._sung(12.6)),
+            env=env,
+        )
+        assert len(calls) == 1
+        w0, w1 = calls[0]
+        # The stem's last sung frame + the pad, not the caption's 9.5 + the pad.
+        assert w0 == pytest.approx(11.85) and w1 == pytest.approx(15.95, abs=0.03)
+        assert stats["windows_widened_line_ids"] == [4]
+        assert out[4]["start"] == 12.65
+
+    def test_a_result_outside_the_moved_span_is_refused_though_the_heard_words_confirm_it(self):
+        # Moved span 12.6-13.6; the result ends at 14.6, past its slack, yet every start is
+        # within 1 s of the heard words'.
+        def answer(w0, w1):
+            return _words(*self._sung(13.5)) if w0 > 11 else None
+
+        out, stats, calls = self._rescue(self._song((8.0, 9.0)), answer, _words(*self._sung(12.6)))
+        assert len(calls) == 2 and stats["heard_aimed_kept_line_ids"] == []
+        assert out[4]["source"] == SOURCE_FILL and out[4]["start"] == 8.0
+
+    def test_the_start_bound_follows_the_moved_span(self):
+        # Dragged back to 11.9, before the moved slice's lead-in (12.1, the cue's 8.0 + 4.6
+        # - 0.5): cut to it.
+        dragged = _words(("ee", 11.9, 12.7), ("ff", 12.8, 13.1), ("gg", 13.2, 13.5))
+        out, stats, _ = self._rescue(
+            self._song(), lambda w0, w1: dragged if w0 > 11 else None, _words(*self._sung(12.6))
+        )
+        assert out[4]["start"] == pytest.approx(12.1)
+        assert stats["heard_aimed_kept_line_ids"] == [4]
+
+    def test_a_partial_line_on_its_cue_is_replaced_by_the_re_align_where_it_was_heard(self):
+        song = self._song((8.0, 9.5), ("ee", 8.0, 8.3), ("ff", 8.4, 8.7))
+        heard = _words(*self._sung(12.6))
+
+        def three(w0, w1):
+            return _words(*self._sung(12.65)) if w0 > 11 else None
+
+        def two(w0, w1):
+            return _words(*self._sung(12.65)[:2]) if w0 > 11 else None
+
+        out, stats, calls = self._rescue(song, three, heard)
+        assert out[4]["source"] == SOURCE_REALIGN and out[4]["start"] == 12.65
+        assert stats["heard_aimed_kept_line_ids"] == [4]
+        # A heard-aimed result that times no more words than the line has is no gain.
+        out, stats, calls = self._rescue(song, two, heard)
+        assert len(calls) == 2 and stats["heard_aimed_kept_line_ids"] == []
+        assert out[4]["source"] == SOURCE and out[4]["start"] == 8.0
+
+    @pytest.mark.parametrize(
+        "dragged_start, start, lifted",
+        [
+            # 1.2 s off the heard start: not confirmed as returned, so cut to line 4's end.
+            (8.2, 9.4, []),
+            # 0.45 s off: confirmed as returned, so kept untrimmed and listed as freed.
+            (8.95, 8.95, [5]),
+        ],
+    )
+    def test_a_line_heard_early_is_still_held_to_the_previous_line_unless_confirmed(
+        self, dragged_start, start, lifted
+    ):
+        # Line 4's caption ends 1.1 s past where line 5 was heard to start but 0.5 s before
+        # line 5's own caption: the two are not sung over each other, whatever the move.
+        objs, cues, lines = _anchor_lines(4)
+        cues += [(8.0, 10.5), (11.0, 13.0)]
+        lines += ["bb cc dd", "ee ff gg"]
+        objs += [
+            _line(4, "bb cc dd", ("bb", 8.0, 8.3), ("cc", 8.4, 8.7), ("dd", 8.8, 9.4)),
+            _line(5, "ee ff gg"),
+        ]
+        heard = _words(("bb", 8.0, 8.3), ("cc", 8.4, 8.7), ("dd", 8.8, 9.1), *self._sung(9.4))
+        # The aligner drags the first word back onto line 4's last word.
+        dragged = _words(("ee", dragged_start, 9.7), ("ff", 9.8, 10.1), ("gg", 10.2, 10.5))
+        out, stats, calls = self._rescue(
+            (objs, cues, lines), lambda w0, w1: dragged if w0 < 10 else None, heard, line=5
+        )
+        assert len(calls) == 1 and stats["heard_aimed_kept_line_ids"] == [5]
+        assert out[5]["source"] == SOURCE_REALIGN
+        assert out[5]["start"] == pytest.approx(start)
+        assert stats["guard_lifted_line_ids"] == lifted
+
+    def test_a_heard_aimed_line_with_a_line_after_it_looks_for_its_singing_end_from_the_moved_span(
+        self,
+    ):
+        # Cued 8.0-9.5, heard from 12.6 (moved span 12.6-14.1), the next line cued at 16. The
+        # note is held to 15.2: found from the moved span, missed from the cue's, whose
+        # quiet stretch (15.2-16) lies more than 4 s past the caption.
+        env = _env(20.0, [(0, 7.0), (12.6, 15.2), (16.0, 17.0)])
+        held = _words(("ee", 12.65, 13.0), ("ff", 13.1, 13.5), ("gg", 13.6, 15.0))
+        song = self._song((8.0, 9.5), after=(16.0, 17.0))
+        out, stats, calls = self._rescue(
+            song, lambda w0, w1: held, _words(*self._sung(12.6)), env=env, duration=20.0
+        )
+        (w0, w1) = calls[0]
+        assert len(calls) == 1 and w0 == pytest.approx(11.85)
+        assert w1 == pytest.approx(15.6, abs=0.03)
+        assert stats["windows_widened_line_ids"] == [4]
+        assert stats["heard_aimed_kept_line_ids"] == [4]
+        assert out[4]["start"] == 12.65 and out[4]["end"] == 15.0
+        assert out[5] == song[0][5]
 
 
 class TestRescueWindow:

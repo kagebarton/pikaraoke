@@ -611,8 +611,8 @@ class LyricAlignStage(BaseStage):
         library; this method only wires I/O and the audio duration.
 
         Returns ``(line_objects, transcribe_words, stats, env, cue_inputs)`` — the
-        gate's transcribe words, which the cue route doesn't use but the debug bundle
-        keeps as the song's heard words (the reference a movie-subtitle slice
+        gate's transcribe words, which the rescue weighs against the cues and the debug
+        bundle keeps as the song's heard words (the reference a movie-subtitle slice
         is checked against), the cue-align telemetry (section count, offset,
         re-pace + de-reverb sub-stats), the aligned stem's envelope (None
         if it can't be decoded), which places the rescue windows' ends here and
@@ -656,7 +656,14 @@ class LyricAlignStage(BaseStage):
             )
 
         line_objects, stats, cue_inputs = align_song(
-            cue_spans, display_lines, align_lines, duration, slice_align, env=env, progress=progress
+            cue_spans,
+            display_lines,
+            align_lines,
+            duration,
+            slice_align,
+            env=env,
+            progress=progress,
+            heard_words=transcribe_words,
         )
         if dereverb_stats is not None:
             stats["dereverb"] = dereverb_stats
