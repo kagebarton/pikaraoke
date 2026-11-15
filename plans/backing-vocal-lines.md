@@ -8,14 +8,14 @@ GATE B is read by Claude Fable 5.2 while it is available (to 2026-11-16), Opus 5
 **Status: GATE A ruled GO on the amended hybrid, 2026-11-14 ("GATE A ruling"). Build spec
 written 2026-11-14 ("Build spec": Design, Commits) and read by Fable 5.2 the same day ("Build
 spec read") and ruled by Ken ("Build spec ruling"). Stage 1 built 2026-11-14: C0-C3 and C2p
-on this branch (Results rows 13 and 14), stopped there. The D7 amendment was written
-2026-11-15 after GATE H of `cue_heard_rescue` was ruled ("The D7 amendment", Results row
-15), with two rulings by Ken the same day: an added line is timed by the rescue's own
-one-line retry, and stage 2's base is `dev` merged into this branch. Next: C0s and C4-C7
-(Sonnet 5.5), which wait for Phase 5 of `cue_heard_rescue` to land on `dev`. GATE B's
-reader and Phase 2's size were ruled 2026-11-15 for Fable's window (Results row 16). The review
-waits for C7. Nothing calls `judge` yet; the one behaviour change so far is C3: Genius and
-custom songs show their parentheses.**
+on this branch (Results rows 13 and 14). The D7 amendment was written 2026-11-15 after GATE H
+of `cue_heard_rescue` was ruled ("The D7 amendment", Results row 15), with two rulings by Ken
+the same day: an added line is timed by the rescue's own one-line retry, and stage 2's base is
+`dev` merged into this branch. GATE B's reader and Phase 2's size were ruled 2026-11-15 for
+Fable's window (Results row 16). Stage 2 built 2026-11-15 (Sonnet 5.5): C0s, C4-C7 (Results
+row 17). Stopped at C7: the review is due, then Phase 2. The pipeline now calls `judge`: a
+caption or LRCLIB song shows the backing vocals the transcriber heard, so a regenerated song
+changes; Genius and custom songs show their parentheses (C3).**
 
 Branch `backing_vocal_lines` off `dev` at `1016e20`, worktree
 `.claude/worktrees/backing_vocal_lines`. Work and run everything from the worktree. Whisper
@@ -469,14 +469,14 @@ cleaner's output changes, or anything here contradicts the code.
   paren included; an interp line with no words; a line that does not pair. In
   `test_lyric_align.py`: the joint route's ASS carries "(I" at unchanged times; transcribe mode
   does not go through it.
-- [ ] **C0s. Stage 2's base and its anchors** (a merge commit; no code of this plan's). Only
+- [x] **C0s. Stage 2's base and its anchors** (a merge commit; no code of this plan's). Only
   after Phase 5 of `cue_heard_rescue` has landed on `dev`; if it has not, STOP. `git merge
   dev` in this worktree (Ken's ruling, "The D7 amendment"). Conflicts are expected only
   where both sides edited the same lines of `lyric_align.py` (stage 1's `show_parens` call,
   the rescue's `heard_words`), each resolved by keeping both; any other conflict is a STOP.
   Then the full suite, which must pass before C4. Confirm on the merged tree, as the
   amendment uses them: `cue_align._Rescue` (its `__init__` fits `self.offset` with
-  `fit_offset`; `process`, `is_placed`, `confirmed`, `window`, `aimable`, `heard_shift`,
+  `fit_offset`; `process`, `is_placed`, `confirmed`, `window`, `can_realign`, `heard_shift`,
   `heard_aimed_line`, `retry`, `realigned_line`, `start_bounded`), `repace_bad_lines(...,
   heard_words=)`, `align_song(..., heard_words=)` returning three items,
   `_guess_missing_words`, `_start_bound`, `_lead_in_bound`, `_line_from_realigned`,
@@ -490,7 +490,7 @@ cleaner's output changes, or anything here contradicts the code.
   (rule C), `heard_held_line_ids` (A2). One present means the base is not the ruled set:
   STOP. And that neither `lrclib_fit_pick` Phase 4 nor `onset_loud_start` is on `dev`; if
   one is, STOP ("Landing order").
-- [ ] **C4. `feat(cue_align): kept backing vocals join the song's lines and are timed with
+- [x] **C4. `feat(cue_align): kept backing vocals join the song's lines and are timed with
   them`.** D6, and D7 as amended: `with_backing`; `align_song`'s `parens` keyword, the
   sections with a gaining line sent back, the renumbering, each added line handed to the
   rescue with no words, the pinned lead, the fourth return item, `joint_stats.backing` and
@@ -524,7 +524,7 @@ cleaner's output changes, or anything here contradicts the code.
   `test_backing_vocals.py`: `with_backing` at a line's start, middle and end, two groups, a
   paren-only line before a line and after the last. Existing `align_song` tests: call shape
   only.
-- [ ] **C5. `feat(pipeline): caption and LRC songs show the backing vocals they sing`.** D3,
+- [x] **C5. `feat(pipeline): caption and LRC songs show the backing vocals they sing`.** D3,
   D7.5: in `run`, on the cue route with an origin in `ORIGINS`, `sheet_parens` of the sheet
   `_load_lyrics` read; `_run_cue_align` takes them, passes them to `align_song` beside the
   gate's words it already passes, and hands back the timed lines. The bundle records those
@@ -535,7 +535,7 @@ cleaner's output changes, or anything here contradicts the code.
   ASS words "(oh," on both the gaining line and the added one; the same sheet as
   `movie_srt`, and an edited caption sheet (cleaned lines), are timed as today; an
   `lrclib_srt` sheet takes the same path as the caption; the joint route gets no parens.
-- [ ] **C6. `docs(plans): open issues for backing vocal lines`**, in `plans/open-issues.md`
+- [x] **C6. `docs(plans): open issues for backing vocal lines`**, in `plans/open-issues.md`
   (this one lands). Under "Cue align windows": on "Repeated tokens get two assignment rules",
   that an echo line repeats its lead's words within one line, so the in-order guess can put an
   echo's timing on the lead's token, now a common case, watched at GATE B (B3, B4); on "Duet
@@ -547,7 +547,7 @@ cleaner's output changes, or anything here contradicts the code.
   guessed share (`library_status._cue_fields`), so a song can read as poor from new lines
   alone; the rescue's rule B can aim an added line at another copy of its words, its lead's
   included ("The D7 amendment").
-- [ ] **C7. Finish.** Full suite; pre-commit on the changed files; self-review on the three
+- [x] **C7. Finish.** Full suite; pre-commit on the changed files; self-review on the three
   axes; `graphify update .`; Results log row. **STOP: review due** (core pipeline, several
   files). Hand Ken the line; do not launch it: `/code-review <C1>~1..HEAD` on `srt_cues.py`,
   `genius_lyrics.py`, `backing_vocals.py`, `cue_align.py`, `lyric_align.py`,
@@ -1567,3 +1567,4 @@ Raw tables, commands and commits only; no verdicts in this table.
 | 14 | 2026-11-14 | stage 1 | C0 anchors; C1 `474fc0ff`, C2 `5a70cf34`, C2p `3eed4bc2`, C3 `2eac1ad4` on `25130fa1`; `python -m pytest`, `pre-commit` on the changed files, `graphify update .` | C0: every anchor exists; `dev` `3c8d1de5` is `1016e20` plus one plans-only commit; neither `cue_heard_rescue` nor `lrclib_fit_pick` is on `dev` or this branch, `align_song` has no `heard_words`. Tests added: `test_srt_cues.py::TestSheetParens` 19, `test_backing_vocals.py` 39 (new file), `test_lyric_align.py::TestShowParensWiring` 2; no existing test edited, no cleaner output changed. Full suite 3636 passed. Pre-commit passed on every changed file. Graph rebuilt: 8606 nodes, 21481 edges. Ruling point 4's two cases built: `at` None after text with no letter (C1), a group with no word is `not_heard` before the vocable test (C2). One reading differs from D9's wording: a lone `)` token mid-line sticks to the previous token ("( oh ) hey" shows "(oh)", "hey"), not the next. "Build spec ruling", "Commits".
 | 15 | 2026-11-15 | D7 amendment | Written by Fable 5.2 on `de695678` against `cue_heard_rescue` `ac87c180` (GATE H ruled; the landed set is in no tree until its Phase 5); `amend_counts.py ~/pikaraoke-songs plans/backing-vocal-lines/out`, read-only over `out/heard.json`, `out/songs.json` and the bundles (`find ~/pikaraoke-songs -newer <stamp>` empty). Two points ruled by Ken by question dialog | 56 kept paren-only cues in 18 songs. Cue touches the cue before / after 43 / 39; under 0.5 s to it 55 / 46; a section-style pad clamped under 0.25 s 55 / 46; on raw cues that window opens after the singing starts 54. Today's first pass ends the line before past the echo's start (cue start plus the rescue lead) by more than 0 / 0.25 / 0.5 / 1.0 s: 27 / 15 / 9 / 3 of 55 with words; starts the line after before the echo's end: 18 / 15 / 9 / 5 of 56. Words in the line 1 / 2 / 3 or more: 7 / 3 / 46. Evidence heard / vocable / consistency 46 / 2 / 8. Text equals a neighbouring line's 6; is the end of the line before 9. Rescue leads of the 18 songs -0.713 to +0.198 s, median -0.296, 10 over 0.25 s either way. Ruled: an added line is timed by the rescue's own one-line retry (replacing the 2026-11-14 clause on a section-style window); stage 2's base is `dev` merged in after Phase 5 lands. No library write. "The D7 amendment". |
 | 16 | 2026-11-15 | ruling | Ken, by question dialog in a planning session (Opus 5.5); no script run | Part of a cross-branch build order for Fable's window (to 2026-11-16): `cue_heard_rescue` Phase 5, then C0s and C4-C7, review, Phase 2, GATE B. Ruled: Fable reads GATE B while available, Opus after; Phase 2 takes the floor if the full set would not finish by the morning of 2026-11-16; the library regen after a GO is the one full regen after `cue_heard_rescue`, `onset_loud_start` and this branch land. GATE B, "Rulings for Fable's window". |
+| 17 | 2026-11-15 | stage 2 | C0s: `git merge dev` (local `dev` `6c4e9991`) as `3636b1e0`. C4 `e528c92c`, C5 `ebd99489`, C6 `453bdfbc`, cleanup `4cfc1416` (C4's alias order, `Backed` not frozen; folds into C4 at landing if wanted). `python -m pytest`, `pre-commit` on the changed files, `graphify update .` | C0s: the merge was clean, no conflict in any file (`lyric_align.py` and `test_lyric_align.py` were the two both sides touched); full suite 3689 passed on the merged tree before C4. Every C0s anchor exists on the merged tree except `aimable`, which is not a `_Rescue` member on `dev` or anywhere in `cue_align.py`'s history and which no other part of the amendment uses; the list now reads `can_realign` (the `can_realign(win)` check before a retry). Absent, as required: `process_whole`, `whole_shift`, `gap_retry_line`, `free_stretch`, `heard_held_line_ids`. Neither `lrclib_fit_pick` Phase 4 nor `onset_loud_start` is on `dev`. C4-C5 changed 7 files, +906/-64 lines in `pikaraoke/` and `tests/`. Tests added: `test_backing_vocals.py::TestWithBacking` 10, `test_cue_align.py::TestAlignSongBacking` 11 and `TestRepaceBadLines::test_a_given_offset_is_used_and_not_fitted` 1, `test_lyric_align.py::TestBackingVocalsWiring` 5. Existing tests edited: 9 `align_song` call sites in `test_cue_align.py` (unpack four items), call shape only; no cleaner output changed. Full suite 3716 passed; pre-commit passed on every changed file. Mutation checks, each caught by at least one new test: rescue lead not pinned, added line's span not shifted on a re-sectioned song, every section sent back, stage ignoring the returned lines, no origin check, parens never read. Graph rebuilt: 8828 nodes, 22144 edges. Not run: any GPU run or library read (Phase 2). Built as the amendment reads, with these places where the spec left a free hand: `_Rescue` takes `offset` as a keyword defaulting to None; `joint_stats.backing` is recorded whenever the sheet has a group and a transcript (even a list with no words) was given, with `line_id` and `tokens` None for a dropped group; `align_song`'s first pass moved into `_first_pass` and its per-section align into `_align_section`, unchanged, so the section pass and the re-made sections share one path; the gaining sections are wrapped in the same `progress` as the first pass. "The D7 amendment", "Commits". |
