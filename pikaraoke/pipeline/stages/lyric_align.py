@@ -44,6 +44,7 @@ import srt
 from tqdm import tqdm
 
 from pikaraoke.lib import alignment_capture, lrclib, lrclib_fill, ytasr
+from pikaraoke.lib.backing_vocals import show_parens
 from pikaraoke.lib.cue_align import SOURCE_REALIGN, align_song
 from pikaraoke.lib.evidence_veto import veto_uncorroborated_lines
 from pikaraoke.lib.ffmpeg import probe_duration
@@ -286,6 +287,12 @@ class LyricAlignStage(BaseStage):
 
         if fills:
             line_objects = lrclib_fill.apply_fills(line_objects, fills)
+
+        if lyrics_path is not None:
+            # The aligner and the matchers saw the lines without parentheses; the karaoke
+            # shows the ones a line's display text carries. Transcribe mode's words are the
+            # transcriber's own, with no lyric line to take them from.
+            line_objects = show_parens(line_objects, lyrics_lines, align_lines)
 
         ass_content = self._generate_ass(line_objects)
         srt_content = self._generate_srt(line_objects) if write_srt else None

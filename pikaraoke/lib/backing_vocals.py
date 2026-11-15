@@ -1,4 +1,5 @@
-"""Which of a sheet's parenthetical groups were sung.
+"""Parentheses on karaoke lines: which of a caption or LRC sheet's groups were sung, and
+showing the parentheses a line's display text carries.
 
 Caption and LRC sheets put backing vocals in parentheses ("(oh, oh, oh)") beside stage
 directions ("(upbeat music)"). The cue cleaners delete both; :func:`judge` tells them apart by
@@ -8,7 +9,8 @@ window. The rule, its pad and its vocable list are the ones measured and ruled a
 from the measuring script, not re-derived.
 
 Pure functions over the sheet's groups (:func:`pikaraoke.lib.srt_cues.sheet_parens`) and the
-transcript, so the aligner never sees a parenthesis.
+transcript, so the aligner never sees a parenthesis. :func:`show_parens` puts them back on the
+words afterwards, for Genius and custom lines too, whose display text keeps them.
 """
 
 import re
@@ -184,3 +186,63 @@ def _text_key(text: str) -> str:
     """A group's text as its repeats spell it: lower case, spacing and punctuation but
     apostrophes dropped."""
     return " ".join(re.sub(r"[^\w' ]+", " ", text.lower()).split())
+
+
+def show_parens(
+    line_objects: list[dict], display_lines: Sequence[str], align_lines: Sequence[str]
+) -> list[dict]:
+    """The line objects with each word's text as its display line writes it, parentheses
+    included. Only ``word`` changes, never a time.
+
+    The aligner and the matchers see a line's align text, which has no parentheses, so a word's
+    text is one of its align tokens. A line whose display text equals its align text is left as
+    it is. Otherwise the display tokens are paired with the align tokens in order, equal or
+    equal once ``(`` and ``)`` are removed (a token of only parentheses sticks to its
+    neighbour: ``(`` to the next token, ``)`` to the previous), and each word, in order, takes
+    the display form of the next align token equal to it. A line that does not pair, and a word
+    no token is left for, keep their text.
+    """
+    return [
+        _show_line(obj, display_lines[obj["line_id"]], align_lines[obj["line_id"]])
+        for obj in line_objects
+    ]
+
+
+def _show_line(obj: dict, display: str, align: str) -> dict:
+    if not obj["words"] or display == align:
+        return obj
+    align_tokens = align.split()
+    forms = _display_forms(display.split(), align_tokens)
+    if forms is None:
+        return obj
+    words: list[dict] = []
+    cursor = 0
+    for word in obj["words"]:
+        try:
+            at = align_tokens.index(word["word"], cursor)
+        except ValueError:
+            words.append(word)
+            continue
+        words.append({**word, "word": forms[at]})
+        cursor = at + 1
+    return {**obj, "words": words}
+
+
+def _display_forms(display: list[str], align: list[str]) -> list[str] | None:
+    """The display tokens joined up so there is one per align token, None when they do not pair."""
+    forms: list[str] = []
+    opener = ""
+    for token in display:
+        if token.strip("()"):
+            forms.append(opener + token)
+            opener = ""
+        elif forms and set(token) == {")"}:
+            forms[-1] += token
+        else:
+            opener += token
+    if opener and forms:
+        forms[-1] += opener
+    paired = len(forms) == len(align) and all(
+        form.replace("(", "").replace(")", "") == token for form, token in zip(forms, align)
+    )
+    return forms if paired else None

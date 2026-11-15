@@ -1,6 +1,6 @@
 """Tests for the backing-vocal keep rule (lib/backing_vocals.py)."""
 
-from pikaraoke.lib.backing_vocals import ORIGINS, Verdict, judge
+from pikaraoke.lib.backing_vocals import ORIGINS, Verdict, judge, show_parens
 from pikaraoke.lib.library_regen import LRC_ORIGIN, MOVIE_ORIGIN
 from pikaraoke.lib.srt_cues import ParenCue, ParenGroup
 
@@ -177,3 +177,75 @@ class TestOrigins:
     def test_the_origins_are_caption_and_lrclib_and_not_movie(self):
         assert ORIGINS == {"srt", LRC_ORIGIN}
         assert MOVIE_ORIGIN not in ORIGINS
+
+
+def _line(line_id: int, *words: str, start: float = 1.0) -> dict:
+    """A line object with its words timed 0.5 s apart, as the aligner leaves them."""
+    timed = [
+        {"word": w, "start": start + 0.5 * i, "end": start + 0.5 * i + 0.4}
+        for i, w in enumerate(words)
+    ]
+    return {"line_id": line_id, "text": "", "words": timed, "start": start, "source": "x"}
+
+
+def _shown(display: str, align: str, *words: str) -> list[str]:
+    [out] = show_parens([_line(0, *words)], [display], [align])
+    return [w["word"] for w in out["words"]]
+
+
+class TestShowParens:
+    def test_a_genius_line_shows_its_parentheses_and_keeps_every_time(self):
+        line = _line(0, "I", "can't", "help", "Falling")
+        [out] = show_parens([line], ["(I can't help) Falling"], ["I can't help Falling"])
+        assert [w["word"] for w in out["words"]] == ["(I", "can't", "help)", "Falling"]
+        assert [(w["start"], w["end"]) for w in out["words"]] == [
+            (w["start"], w["end"]) for w in line["words"]
+        ]
+        assert {k: v for k, v in out.items() if k != "words"} == {
+            k: v for k, v in line.items() if k != "words"
+        }
+
+    def test_the_input_line_objects_are_not_changed(self):
+        line = _line(0, "oh", "oh")
+        show_parens([line], ["oh (oh)"], ["oh oh"])
+        assert [w["word"] for w in line["words"]] == ["oh", "oh"]
+
+    def test_a_lone_open_paren_sticks_to_the_next_token_and_a_lone_close_to_the_previous(self):
+        assert _shown("( oh ) hey", "oh hey", "oh", "hey") == ["(oh)", "hey"]
+        assert _shown("oh ( oh )", "oh oh", "oh", "oh") == ["oh", "(oh)"]
+
+    def test_a_paren_at_the_lines_end_joins_the_last_token(self):
+        assert _shown("hey (", "hey", "hey") == ["hey("]
+        assert _shown(") hey", "hey", "hey") == [")hey"]
+
+    def test_a_word_the_aligner_dropped_leaves_the_others_on_their_own_tokens(self):
+        assert _shown("(I can't help) Falling", "I can't help Falling", "I", "help", "Falling") == [
+            "(I",
+            "help)",
+            "Falling",
+        ]
+
+    def test_an_echo_of_the_leads_word_takes_each_form_in_order(self):
+        assert _shown("oh (oh)", "oh oh", "oh", "oh") == ["oh", "(oh)"]
+        assert _shown("(oh) oh", "oh oh", "oh", "oh") == ["(oh)", "oh"]
+
+    def test_a_word_with_no_token_left_keeps_its_text(self):
+        assert _shown("(oh) hey", "oh hey", "oh", "hey", "yeah") == ["(oh)", "hey", "yeah"]
+
+    def test_a_line_whose_display_equals_its_align_text_is_left_alone(self):
+        line = _line(0, "(heeyyy]", "hey")
+        [out] = show_parens([line], ["(heeyyy] hey"], ["(heeyyy] hey"])
+        assert out is line
+
+    def test_a_line_with_no_words_is_left_alone(self):
+        interp = {"line_id": 0, "text": "", "words": [], "start": 4.0, "end": 5.0}
+        assert show_parens([interp], ["(oh) hey"], ["oh hey"]) == [interp]
+
+    def test_a_line_that_does_not_pair_keeps_its_text(self):
+        assert _shown("Hello (oh) there", "Hello there", "Hello", "there") == ["Hello", "there"]
+        assert _shown("(oh) there", "ah there", "ah", "there") == ["ah", "there"]
+
+    def test_lines_are_found_by_their_line_id(self):
+        lines = [_line(2, "hey"), _line(0, "oh")]
+        out = show_parens(lines, ["(oh)", "x", "(hey)"], ["oh", "x", "hey"])
+        assert [o["words"][0]["word"] for o in out] == ["(hey)", "(oh)"]

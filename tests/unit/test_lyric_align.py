@@ -288,6 +288,51 @@ class TestJointRoute:
         assert start_secs >= 14.0, f"expected start near 15s; got {start_secs}"
 
 
+class TestShowParensWiring:
+    """A line's display text keeps its parentheses on the karaoke words; no time changes."""
+
+    @staticmethod
+    def _ass(tmp_path, lyrics: str) -> str:
+        tmp_path.mkdir()
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        ctx.artifacts["lyrics_path"].write_text(lyrics, encoding="utf-8")
+        words = [
+            {"word": w, "start": 1.0 + 0.5 * i, "end": 1.4 + 0.5 * i}
+            for i, w in enumerate(["I", "can't", "help", "Falling"])
+        ]
+        worker.align_refine.return_value = words
+        worker.transcribe_words.return_value = words
+        stage.run(ctx)
+        ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
+        return ass_path.read_text(encoding="utf-8")
+
+    def test_the_joint_route_shows_a_lines_parentheses_at_unchanged_times(self, tmp_path):
+        with_parens = self._ass(tmp_path / "with", "(I can't help) Falling\n")
+        bare = self._ass(tmp_path / "bare", "I can't help Falling\n")
+        assert "(I" in with_parens and "help)" in with_parens
+        assert with_parens.replace("(I", "I").replace("help)", "help") == bare
+
+    def test_transcribe_mode_does_not_go_through_it(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        del ctx.artifacts["lyrics_path"]
+        worker.transcribe_refine.return_value = [
+            {
+                "text": "(hi)",
+                "words": [{"word": "hi", "start": 0.0, "end": 1.0}],
+                "start": 0.0,
+                "end": 1.0,
+            }
+        ]
+        show = MagicMock()
+        monkeypatch.setattr(la_mod, "show_parens", show)
+
+        stage.run(ctx)
+
+        show.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # Windowed re-align second pass (joint route)
 # ---------------------------------------------------------------------------
