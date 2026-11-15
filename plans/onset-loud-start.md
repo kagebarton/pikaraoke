@@ -6,9 +6,11 @@ ear; Claude Opus 5.5 reads his labels off. Phases 2-4: spec by Claude Opus 5.5
 
 **Status: GATE S passed 2026-11-10 (Results row 5). Phases 2-4 specced 2026-11-14. O1
 ruled the same day: (a), transcribe-timed lines are left out of the new exit (Results row
-7). Sonnet's 2a-2c still wait on Fable's read of "Uncertain" 2-6. No production code has
-changed. The ten `.onsetfix.ass` files are still in the library (2b moves them out once
-its check passes).**
+7). Fable's read of "Uncertain" done and ruled by Ken 2026-11-15 ("Read and ruling",
+Results row 8): four changes, all written into 2a-2c below. Next: Sonnet builds the
+reference dump, 2a, 2b, 2b2 and 2c, then stops. No production code has changed. The ten
+`.onsetfix.ass` files are still in the library (2b moves them out once its check
+passes).**
 
 ## Goal
 
@@ -143,9 +145,13 @@ score is 2, at the limit. One line shows no pattern; the rule stands as built.
 
 ## Phases 2-4
 
-Spec by Opus 5.5, 2026-11-14, for Sonnet 5.5. Order: O1 is ruled ((a), below), Fable
-reads "Uncertain" 2-6, then Sonnet builds 2a-2c and stops. Phase 3 is Ken's; Phase 4
-follows it.
+Spec by Opus 5.5, 2026-11-14, for Sonnet 5.5; amended 2026-11-15 from Fable's read, as
+Ken ruled it ("Read and ruling"). Order: the reference dump, 2a, 2b (the check passes at
+593, then the after-files move out), 2b2 (the guard; the check then reads 589), 2c, stop.
+Phase 3 is Ken's; Phase 4 follows it.
+
+2b must run before any regen touches `~/pikaraoke-songs`: its pass needs the 147
+cue-align bundles of 11-10 as they are (all unchanged on 2026-11-15).
 
 ### The rule, as GATE S passed it
 
@@ -165,6 +171,26 @@ The probe's `rise_start`, `heard_near` and `with_rule`, moved into the snap unch
   existing counter come out as at schema 11 on the same input. Given no heard words, the
   pass is today's.
 
+2a and 2b build this rule exactly, so the check can tie it to the 11-10 record. 2b2 then
+adds the one condition ruled on 2026-11-15 (a first word also heard earlier).
+
+### Before 2a: the reference dump
+
+Scratch, not committed; run at the commit before 2a, with `onset_snap.py` untouched. It
+closes the one place 2b would compare the new code with itself: `with_rule` calls the real
+snap, which 2a refactors, so a moved line's word-1 end and the line before it would
+otherwise be checked only by the ten after-files, at centisecond resolution.
+
+- Copy the cache as in 2b. For every cue-route bundle with an envelope in the copy
+  (`np.load` only, never a decode): `replay_song`, and for each song it returns,
+  `with_rule(before, song_rows(bundle, env, before, after), env)`.
+- Write, by song stem in sorted order, each line's `line_id`, `start`, `end` and each
+  word's `start` and `end` to
+  `~/.pikaraoke/tmp/onset_loud_start_check/reference_before.json` (`json.dumps`). Expect
+  133 songs.
+- After 2b's commit, run the same script to `reference_after.json`. `cmp` must find the
+  two equal. Log both runs in one Results row. On a difference, stop and report.
+
 ### 2a. The on-time exit searches and keeps a move the transcriber hears
 
 Files: `pikaraoke/lib/onset_snap.py`, `tests/unit/test_onset_snap.py`. Commit
@@ -181,7 +207,10 @@ Files: `pikaraoke/lib/onset_snap.py`, `tests/unit/test_onset_snap.py`. Commit
   passes it through beside `heard_words`.
 - Normalise the heard words once per call into `(start, token)` pairs, not once per line.
   `_heard_near(pairs, first_word, t)` is the probe's `heard_near`; an empty token is
-  false.
+  false. Its test is `abs(start - t) <= HEARD_AGREE_S`, written that way, with `t` the new
+  start exactly as the search returns it. No range test, bisect or rounding: on the record
+  11 heard copies lie 0.25 s from the new start to within float rounding, 10 of them
+  agreeing (block R8), so another form of the test changes the 593.
 - Keep one copy of the search and the move. The fired path now does the rise, clamp,
   shift floor and moved copy inline. Factor them into helpers both paths call: one
   returns the exit (no rise, below the floor, or the new start), one builds the moved
@@ -217,11 +246,14 @@ test, never at the exact 0.25 s edge:
    without, as the probe's `TestWithRule` shows.
 10. `snap_line_edges` on test 9's lines with the moved line's source in
     `heard_timed_sources`: equal to the call without heard words.
+11. Test 1's line with the heard `w0` 0.2 s before the doubted start: moves, as in test 1.
+    Tests 1-4 all place the heard word after the new start.
 
 Mutation checks, file restored after each. Each must fail at least one test: tolerance
 0.35; token comparison dropped; the on-time path counting into `n_snapped`;
 `snap_line_edges` not passing `heard_words` on; the `heard_timed_sources` exclusion
-removed; `snap_line_edges` not passing `heard_timed_sources` on.
+removed; `snap_line_edges` not passing `heard_timed_sources` on; the heard test made
+one-sided (`start - t` in place of `abs(start - t)`).
 
 ### 2b. The CPU check
 
@@ -230,6 +262,12 @@ Commit `feat(scripts): the onset probe checks the snap's new exit against its ru
 
 - New flag `--check`, in an argparse mutually exclusive group with `--listen`.
   `--listen` rewrites the ten after-files the check reads.
+- Under `--check` nothing is decoded. A cue-route bundle with no envelope in `<out>/env`
+  is not replayed, and is counted and named on its own line of Table E, apart from the
+  songs left out. The library has grown past the record: on 2026-11-15 it holds 177
+  cue-route bundles, 147 with an envelope in the record's cache (the 133 and the 14) and
+  30 without (all written 2026-11-12). Decoding those here would add songs the record
+  does not have, on this box's decode.
 - For each song replayed exactly, run the new code:
   `onset_snap.snap_line_edges(before, "", env=env, doubted_sources=DOUBTED,
   heard_words=bundle.get("transcribe_words"), heard_timed_sources=HEARD_TIMED)`, where
@@ -246,6 +284,7 @@ Commit `feat(scripts): the onset probe checks the snap's new exit against its ru
   - agreed lines (`agreed` summed)
   - songs where those two differ, named
   - after-files found, and how many equal
+  - cue-route bundles with no envelope in the cache, not replayed, named
 - `replay_song`, `rise_start`, `heard_near`, `with_rule` and `AGREE_S` stay as they are.
   They are the reference this check compares against, as `onset_branch` is for the gates.
   `replay_song` passes no heard words, so it still reproduces schema-11 bundles, and
@@ -272,7 +311,9 @@ Pass, all of:
   row equal R1 and R4. `cmp` finds the new `rows.json` equal to
   `~/probes/onset_loud_start/rows.json`.
 - Table E: 133 compared, 133 equal, 593 moved, 593 agreed, none differing; 10 after-files
-  found, 10 equal.
+  found, 10 equal; 30 bundles with no envelope, not replayed (more if songs were added
+  after 2026-11-15; none may be a bundle written before 2026-11-10 12:00).
+- The reference dump: `reference_after.json` equal to `reference_before.json`.
 
 Results row 6 already shows that this replay, with that cache, reproduces the record's
 593 lines and rises. So a failure here is in the build, not the inputs. On a failure,
@@ -290,6 +331,72 @@ owed:
    trials.
    Any in `D:\Shared\pikaraoke-songs\karaoke\` on Windows are Ken's to delete (Phase 3).
 4. Rerunning `--check` afterwards finds 0 after-files; that is expected.
+
+### 2b2. A first word also heard earlier keeps its start
+
+Ruled by Ken 2026-11-15 ("Read and ruling"). Built only after 2b's check has passed at
+593 and the after-files have been compared. Files: `pikaraoke/lib/onset_snap.py`,
+`tests/unit/test_onset_snap.py`, `scripts/onset_loud_start_probe.py`,
+`tests/unit/test_onset_loud_start_probe.py`. Commit
+`feat(onset_snap): a first word the transcriber also heard earlier keeps its start`.
+
+Why: on the record 4 of the 593 moves pass an earlier heard copy of the first word and
+are agreed by a later one (block R8). All four are lines whose second word is the first
+word again; the move leaves the first word a sliver before the second. None was on the
+GATE S sheet. The guard only takes moves away, so those lines keep the start that ships
+today.
+
+- The rule: an on-time line with a rise and an agreeing heard word does not move when
+  some heard word equal to its first word starts at or after the claimed start, before
+  the new start, and does not itself agree:
+  `w1s <= start < new_start and not abs(start - new_start) <= HEARD_AGREE_S`. The
+  agreement expression is 2a's, so one test decides both.
+- `onset_snap`: `_heard_earlier(pairs, first_word, w1s, t)` beside `_heard_near`, called
+  on the on-time path only. A held line is appended untouched and counted in
+  `n_heard_earlier`, a new stat beside `n_heard_snapped`. Doubted lines and the fired path
+  never consult it. The on-time paragraph of `snap_line_onsets`'s docstring says so.
+- The probe: its own copy, `heard_earlier(transcribe_words, first_word, start, t)`,
+  beside `heard_near`. `song_rows`'s `agreed` becomes `rise is not None and
+  heard_near(...) and not heard_earlier(...)`. Table B's fourth row is named "a heard
+  first word within 0.25 s of the rise and none earlier, no cue anchor". Table E gains
+  "lines held by an earlier heard copy" (`n_heard_earlier` summed). `heard_near`,
+  `rise_start`, `with_rule` and `replay_song` stay as they are. The module docstring's
+  sentence on the rule under test gains the condition.
+
+Tests in `test_onset_snap.py`, continuing 2a's numbering. Tests 12-14 use
+`test_on_time_word_before_pause_untouched`'s envelope and spans with word 2 given word
+1's text (build the words by hand; `_line` names them `w0`, `w1`). The start the line
+gets when doubted is computed in the test, as in 2a:
+
+12. One heard copy, at word 2's start: the line moves to the doubted start. This is the
+    fault, and shows tests 13-14 are not passing for want of a move.
+13. That copy and one 0.1 s after the claimed start: untouched (`out[0] is obj`),
+    `n_heard_earlier == 1`, `n_heard_snapped == 0`.
+14. The copy at word 2's start and one 0.3 s before the claimed start: moves. The
+    previous line's word does not hold this one.
+15. Test 1's line with two heard `w0`, 0.2 s before and 0.2 s after the doubted start:
+    moves. A copy before the new start that agrees does not hold it.
+
+Mutation checks, as in 2a: the guard removed (fails 13); its lower bound dropped (fails
+14); "does not itself agree" dropped (fails 15).
+
+Probe test: a `song_rows` row whose line has an earlier heard copy and an agreeing one
+has `agreed` false; without the earlier copy, true.
+
+Then rerun 2b's command. Pass, all of:
+
+- Replayed exactly: 133, the same 14 left out. Tables A-C equal R1. Table B's fourth row:
+  589 moved, 589 with heard, 519 closer, 24 same, 46 further, 407 early now within 0.3 s.
+- Table E: 133 compared, 133 equal, 589 moved, 589 agreed, none differing, 4 held by an
+  earlier heard copy.
+- `rows.json` differs from `~/probes/onset_loud_start/rows.json` only in `agreed`, on four
+  rows (a scratch compare, logged): Backstreet Boys - Quit Playing Games (With My Heart)
+  `Ug88HO2mg44` line 58; Jessie J - Domino `UJtB55MaoD0` lines 17 and 60; Queen - Bohemian
+  Rhapsody `fJ9rUzIMcZQ` line 33.
+- After-files: 0 found. If 2b's cleanup is still owed (drive not mounted): 10 found, 9
+  equal, and Bohemian Rhapsody's differs, since it holds line 33's move.
+
+The reference dump is not rerun: `with_rule` and the snap's search are as 2b left them.
 
 ### 2c. The stage passes the heard words; schema 12
 
@@ -311,9 +418,10 @@ Files: `pikaraoke/pipeline/stages/lyric_align.py`, `pikaraoke/lib/alignment_capt
   v11's: a milestone bump (run-affecting), no field renamed or removed;
   `output_line_timings` move, so regen treats v11 bundles as stale. Say what changed: the
   onset snap moves a line it took as on time when the transcriber heard its first word
-  within 0.25 s of a later rise (this plan). Additive: `joint_stats.edge_snap.onset` gains
-  `n_heard_snapped` and `heard_snaps`. The bump rides with the wiring, so no `dev` commit
-  writes the new output under the old number.
+  within 0.25 s of a later rise and did not also hear it earlier in the line (this plan).
+  Additive: `joint_stats.edge_snap.onset` gains `n_heard_snapped`, `heard_snaps` and
+  `n_heard_earlier`. The bump rides with the wiring, so no `dev` commit writes the new
+  output under the old number.
 
 Tests:
 
@@ -343,6 +451,12 @@ Then stop.
 
 - Before it, Ken deletes any `.onsetfix.ass` from `D:\Shared\pikaraoke-songs\karaoke\` and
   checks out the branch on the Windows box.
+- Regenerate from this branch as cut: it does not hold `backing_vocal_lines`. Schema 12
+  makes every bundle stale, so a regen on a base that holds that branch adds its backing
+  lines to every affected song, ahead of its GATE B regen decision, and mixes them into
+  this read. If the order does flip, the read splits cue songs by whether the v12 bundle
+  has a kept group in `joint_stats.backing` (that plan's "Landing order" carries the same
+  note).
 - `uv run python scripts/regen_alignment_bundles.py D:\Shared\pikaraoke-songs --dry-run`
   should list every bundle as `v11` (234 in this box's library on 11-14). Then run it with
   `--yes`. Old files go under `regen_backups/<UTC>/`.
@@ -350,7 +464,7 @@ Then stop.
   bundles and the backup's v11 bundles, tabulate:
   - songs and lines
   - `n_snapped` at v11 and at v12
-  - `n_heard_snapped` at v12
+  - `n_heard_snapped` and `n_heard_earlier` at v12
   - the ten songs with the most heard moves
 - Logged as a Results row with the raw table.
 - What to expect: a fresh whisper run moves a different exact set, but the cue route
@@ -360,12 +474,16 @@ Then stop.
 
 ### 4. Land on `dev`
 
-- Copy onto `dev`, in order, with their messages: `b054f918`, `ad8b51af`, then 2a, 2b, 2c
-  and any fix commits. Leave out the plan-only commits (`02906b91`, `a817be32`,
+- Copy onto `dev`, in order, with their messages: `b054f918`, `ad8b51af`, then 2a, 2b,
+  2b2, 2c and any fix commits. Leave out the plan-only commits (`02906b91`, `a817be32`,
   `56dce3c7`, and this spec's).
 - If `cue_heard_rescue` landed first, the two stale-sentence edits conflict: keep both
   uses. Its `align_song(..., heard_words=...)` change sits near this branch's snap call.
   Replay this branch onto it, then rerun the full suite on `dev`.
+- `scripts/cue_heard_probe.py` on `cue_heard_rescue` replays bundles through
+  `snap_line_edges` with no heard words. Whichever branch lands second gives that call the
+  bundle's `transcribe_words` and the stage's `heard_timed_sources`; without them its
+  replay cannot reproduce a v12 bundle that has a heard move.
 - `plans/open-issues.md`, in its own commit on `dev`: strike the "Onset snap" entry with
   `~~ ~~` and add a line pointing at `archive/onset_loud_start`.
 - Push `dev`. Retire the branch as `archive/onset_loud_start` per CLAUDE.md.
@@ -425,6 +543,58 @@ Options:
    the new code with itself?
 6. **Regen before landing** (this spec) or after.
 
+### Read and ruling (2026-11-15)
+
+Fable 5.2's read of O1, the six items above, 2a-2c for exactness, and the contact with
+`backing_vocal_lines`. Read-only; counts in Results row 8 / block R8. Ken ruled the same
+day: all four changes taken.
+
+By item:
+
+1. **Holds.** An align-won line's word times are copied from the forced aligner's words
+   (`_align_line_object`). The transcriber scores which candidate wins and where a
+   re-align span opens, and a re-aligned line keeps its own sub-match's source.
+   `cue_heard_rescue` adds no line source. No change.
+2. **Kept as passed.** An agreeing word is within 0.25 s of the new start by construction,
+   so these moves are at most that far past where the transcriber heard the word. 6 of
+   the 57 are in the after-file songs; none of the 19.
+3. **Holds.** Row 12's first word is not repeated and no heard copy is passed over, so
+   nothing in the transcript marks it. No change.
+4. **Holds.** Only the probe reads `n_snapped`. One reader to fix at landing:
+   `cue_heard_probe.py` (Phase 4).
+5. **Partly self-comparing.** A moved line's start is checked against the probe's own
+   `rise_start`, and unmoved lines against the record's `rows.json`. A moved line's
+   word-1 end and the extension of the line before it pass through the refactored code on
+   both sides. Change 3.
+6. **Regen before landing, kept.** Results row 7 already gives the joint route a first
+   figure (138 moves over 45 songs).
+
+The four changes (Ken: take all four):
+
+1. **2b skips a bundle with no envelope in the cache.** Without it the check decodes 30
+   songs the record does not have and cannot report 133. Written into 2b.
+2. **The repeated-first-word guard**, as its own commit after 2b passes at 593. Written
+   as 2b2. Bohemian Rhapsody line 33 can be heard with its after-file at about 3:06 until
+   2b's cleanup; the guard does not wait on that.
+3. **The reference dump before 2a.** Written as "Before 2a".
+4. **A heard word before the new start agrees** (2a test 11, and its mutation check).
+
+Also written in: the exact form of the heard test (2a), since 10 of the 593 turn on float
+rounding at the 0.25 s edge.
+
+From the code only, for `backing_vocal_lines` (written into that plan's "Landing order",
+`backing_vocal_lines` branch, same day):
+
+- An echo line after its lead is not agreed by the lead's heard copy in normal placement:
+  the lead's first word starts a line earlier, and a copy more than 0.1 s before the
+  echo's claimed start cannot agree with any start the search returns. It can only when
+  the echo was placed on top of its lead.
+- A line that starts with an echo of its own next word is 2b2's case. The guard holds it
+  only when the transcriber heard both copies.
+- An echo the transcriber never heard, with a loud claimed start, is never moved by this
+  exit. It is searched only if its start is quiet or its source is doubted.
+- The regen order: see Phase 3.
+
 ## Results log
 
 | # | Date | Phase | What ran | Raw result |
@@ -436,6 +606,7 @@ Options:
 | 5 | 2026-11-10 | GATE S | Ken's ear on Windows; labels in the sheet's artifact database (`https://claude.ai/artifact/RLMm6PcTbWzFHcedjqHGVK`, collection `labels`), read by Opus 5.5 | Block R5 below |
 | 6 | 2026-11-14 | spec | Opus 5.5, scratch (not kept), CPU on the Linux box (`kenskaraoke`): the probe's `replay_song` and `song_rows` over `~/pikaraoke-songs`, reading a copy of `/media/ken/Data/probes/onset_loud_start/env/` (no decode), restricted to the 133 songs in that folder's `rows.json`; agreeing heard words are those equal by `_normalize_token` to the line's first word and within `AGREE_S` of `rise`. Joint counts from every joint bundle's `joint_stats.{transcribe,align,ytasr}_won` | Block R6 below |
 | 7 | 2026-11-14 | O1 | Fable 5.2, scratch (not kept), CPU on the Linux box, library read-only. Each joint bundle replayed: pass 1 by `match_words_to_lines_joint_with_stats` over the bundle's `words`, `transcribe_words`, knobs and the adopted ASR json3 (found by video id), checked against `selected_source` and `pass1_line_timings`; windowed re-align by `replay_span` + `merge_spans` over the captured spans; the veto; `snap_line_edges`. A song counts when every worded line's start and end fall within 0.011 s of `output_line_timings` (LRCLIB-filled lines left out), word counts are equal and `n_snapped` is equal. Envelopes decoded on this box from the library's stems, so not the bundles' decode. Then the probe's `onset_branch`, `rise_start` and `heard_near` on each worded line before the snap, by its final `source` | Block R7 below |
+| 8 | 2026-11-15 | read | Fable 5.2, scratch (not kept), CPU on the Linux box, library and record read-only (`/media/ken/Data` not mounted; a copy of `~/probes/onset_loud_start/` `env/` and `rows.json` was read). No replay: counts are over the record's `rows.json` rows joined to each song's bundle in `~/pikaraoke-songs/alignment_debug` (`transcribe_words`, `lyrics.align_lines`), tokens by `_normalize_token`; a heard copy is a transcribe word equal to the line's first word. Library inventory from the bundles' `method_used`, file mtimes and the cache's file names | Block R8 below |
 
 **R1** (the probe's stdout, verbatim)
 
@@ -623,3 +794,71 @@ shipped subtitle file exactly: 133 songs)
 | step | -3 | -2 | -1 | 0 | +1 | +2 | +3 |
 |---|---|---|---|---|---|---|---|
 | heard words | 14 | 24 | 27 | 70 | 36 | 29 | 18 |
+
+**R8** (the read, scratch)
+
+- Library on 11-15: 234 bundles, all schema 11; 177 cue-align. Cue-align bundles by file
+  date: 11-05 24, 11-06 64, 11-07 19, 11-08 7, 11-09 33, 11-12 30. With an envelope in
+  the record's cache: 147 (the record's 133 and 14 others); without: 30. Record songs
+  whose bundle was written after 2026-11-10 12:00: 0. After-files in
+  `~/pikaraoke-songs/karaoke/`: 10.
+- Heard copies 0.25 s from the rise, over the 1213 on-time lines with a rise (within 1e-9
+  s of the edge: 11; no other copy is within 2 ms of it). `agrees` is
+  `abs(start - rise) <= 0.25` as the probe computes it:
+
+| song | line | heard start | rise | `abs(start - rise)` | agrees |
+|---|---|---|---|---|---|
+| `pj6FCKm8dhM` | 37 | 134.2 | 134.45 | 0.25 | yes |
+| `0LSYuZRSGcY` | 72 | 162.2 | 161.95 | 0.25 | yes |
+| `6HCUoMgviwU` | 7 | 24.8 | 25.05 | 0.25 | yes |
+| `6HCUoMgviwU` | 26 | 87.9 | 88.15 | 0.25 | yes |
+| `K0ibBPhiaG0` | 25 | 134.84 | 135.09 | 0.25 | yes |
+| Flight of the Conchords (2007) - Business Time | 51 | 149.3 | 149.54999999999998 | 0.24999999999997158 | yes |
+| `uuZE_IRwLNI` | 68 | 253.7 | 253.95 | 0.25 | yes |
+| KPop Demon Hunters (2025) - What It Sounds Like | 11 | 33.7 | 33.95 | 0.25 | yes |
+| `Eo-KmOd3i7s` | 15 | 64.7 | 64.95 | 0.25 | yes |
+| NSYNC - Paradise | 11 | 98.3 | 98.55000000000001 | 0.2500000000000142 | no |
+| `gAYL5H46QnQ` | 43 | 147.1 | 147.35 | 0.25 | yes |
+
+- The 593 agreed lines, by their words:
+
+| condition | lines |
+|---|---|
+| word 2 equal to word 1 | 9 |
+| word 2 or word 3 equal to word 1 | 21 |
+| one-word line | 5 |
+| new start within 0.1 s of word 2's start | 5 |
+| every agreeing heard copy at or after word 2's start less 0.1 s | 16 |
+| the same, and word 2 equal to word 1 | 2 |
+| every agreeing copy nearer the shipped start (row 6's 57), in an after-file song | 6 |
+| every agreeing copy at or before the shipped start (row 6's 19), in an after-file song | 0 |
+
+- Agreed lines with a heard copy that does not agree and starts before the new start, by
+  where the copy may start from:
+
+| the copy starts | lines | of them, word 2 equal to word 1 |
+|---|---|---|
+| after the claimed start | 4 | 4 |
+| at or after the claimed start | 4 | 4 |
+| from 0.10 s before the claimed start | 4 | 4 |
+| from 0.25 s before the claimed start | 4 | 4 |
+
+- The four lines, the same under each row:
+
+| song | line | shipped start | new start | word 2's start | earlier heard copies | agreeing heard copy | Table B verdict |
+|---|---|---|---|---|---|---|---|
+| Backstreet Boys - Quit Playing Games (With My Heart) `Ug88HO2mg44` | 58 | 166.127 | 166.85 | 167.07 | 166.18, 166.48 | 167.06 | further |
+| Jessie J - Domino `UJtB55MaoD0` | 17 | 51.624 | 52.00 | 52.27 | 51.66 | 52.08 | further |
+| Jessie J - Domino `UJtB55MaoD0` | 60 | 194.584 | 195.65 | 195.86 | 194.64 | 195.62 | further |
+| Queen - Bohemian Rhapsody `fJ9rUzIMcZQ` | 33 | 190.65 | 191.55 | 191.67 | 190.97 | 191.66 | further |
+
+- None of the four is a Table D line. Bohemian Rhapsody is the one after-file song among
+  them. Its transcript there: the word at 190.97-191.52 and again at 191.66-192.32.
+- Table B's fourth row with the four left out: 589 moved, 589 with heard, 519 closer, 24
+  same, 46 further, 407 early now within 0.3 s. Songs with a moved line: 125, as before.
+- Table D row 12 (`otxTf5hZ0Yw` line 100): word 2's start 249.07; first word not repeated;
+  no heard copy between the shipped start and the new one.
+- Other readers of the snap: `n_snapped` and `snaps` are read by this probe only.
+  `scripts/cue_heard_probe.py` on `cue_heard_rescue` calls `snap_line_edges` (line 298).
+  `generate_ass` does not read `source`. The cue route's line sources are `cue_align`,
+  `cue_align_fill` and `cue_align_line`, on this branch and on `cue_heard_rescue`.
