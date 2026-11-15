@@ -47,19 +47,27 @@ Approach:
    re-sections the whole song on offset-shifted cues when the fitted lead
    exceeds the slice pad -- past that, every section window provably clips its
    leading words.
+4. Backing vocals ("(oh, oh)" in a caption or LRC sheet) the transcriber heard join
+   the song's lines after the first pass (:func:`pikaraoke.lib.backing_vocals.judge`):
+   the words of an inline group go into their line and its section is aligned again,
+   and a cue that is only a group becomes a line with no words, which the rescue times
+   as it times any line the section align could not.
 """
 
 import copy
 import logging
-from collections.abc import Callable, Iterable
+from collections import Counter
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from statistics import median
 
 import numpy as np
 
+from pikaraoke.lib.backing_vocals import Backed, Verdict, judge, with_backing
 from pikaraoke.lib.heard_lines import confirms, heard_lines, runs_heard
 from pikaraoke.lib.joint_match import _tokenise_lines
 from pikaraoke.lib.onset_snap import HOP_S, MIN_REF_DB, SUSTAIN_NEAR_DB, _sung_level_ref
+from pikaraoke.lib.srt_cues import ParenCue
 from pikaraoke.lib.token_align import (
     INSTANT_WORD_DUR_S,
     MIN_LINE_COVERAGE,
@@ -170,7 +178,9 @@ SOURCE = "cue_align"
 # than the audio align (mirrors the SRT prior's "filled" tag).
 SOURCE_FILL = "cue_align_fill"
 # Provenance for a bad line recovered by a narrow per-line re-align over its
-# offset-corrected cue window -- real audio timing, unlike SOURCE_FILL.
+# offset-corrected cue window -- real audio timing, unlike SOURCE_FILL. A backing-vocal
+# line added to the song (a caption cue of only "(oh, oh)") is timed by this retry too, so
+# it carries the tag.
 SOURCE_REALIGN = "cue_align_line"
 
 
@@ -516,6 +526,7 @@ class _Rescue:
         realign: Callable[[int, float, float], list[dict] | None] | None,
         env: np.ndarray | None,
         pad_s: float,
+        offset: float | None = None,
     ):
         self.cue_spans = cue_spans
         self.display_lines = display_lines
@@ -525,8 +536,16 @@ class _Rescue:
         self.realign = realign
         self.env = env
         self.pad_s = pad_s
-        self.offset = fit_offset(
-            line_objects, cue_spans, align_lines, drift_gap_s=drift_gap_s, min_anchors=min_anchors
+        self.offset = (
+            fit_offset(
+                line_objects,
+                cue_spans,
+                align_lines,
+                drift_gap_s=drift_gap_s,
+                min_anchors=min_anchors,
+            )
+            if offset is None
+            else offset
         )
         self.line_toks = _tokenise_lines(align_lines)
         self.repeat_slacks = _repeat_detection_slacks(self.line_toks, cue_spans)
@@ -796,6 +815,7 @@ def repace_bad_lines(
     env: np.ndarray | None = None,
     pad_s: float = SECTION_PAD_S,
     heard_words: list[dict] | None = None,
+    offset: float | None = None,
 ) -> tuple[list[dict], dict]:
     """Rescue the lines the align could not place, from their cue spans.
 
@@ -851,6 +871,9 @@ def repace_bad_lines(
     failed alignment, not a word, so it is re-timed like one the aligner dropped. A fill's
     words were never aligned, so it keeps them as paced.
 
+    ``offset`` is the display lead when the caller already has it (the song's lines changed
+    since it was fitted); ``None`` fits it here.
+
     Returns ``(line_objects, stats)``. ``cue_spans`` is indexed by ``line_id``.
     """
     rescue = _Rescue(
@@ -866,6 +889,7 @@ def repace_bad_lines(
         realign=realign,
         env=env,
         pad_s=pad_s,
+        offset=offset,
     )
     out: list[dict] = []
     for obj in line_objects:
@@ -1260,6 +1284,147 @@ def _line_object(lid: int, text: str, words: list[dict], *, source: str = SOURCE
     }
 
 
+def _shifted_spans(
+    cue_spans: Sequence[tuple[float, float]], offset: float
+) -> list[tuple[float, float]]:
+    """``cue_spans`` moved ``offset`` s onto the audio clock, none before the start."""
+    return [(max(0.0, c0 + offset), max(0.0, c0 + offset, c1 + offset)) for c0, c1 in cue_spans]
+
+
+def _align_section(
+    section: Section,
+    display_lines: Sequence[str],
+    align_lines: Sequence[str],
+    spans: list[tuple[float, float]],
+    slice_align: Callable[[float, float, str, str], list[dict] | None],
+) -> list[dict]:
+    """Force-align one section's window once and split the words back to its lines."""
+    sub_text = "\n".join(align_lines[lid] for lid in section.line_ids)
+    words = slice_align(
+        section.t0, section.t1, sub_text, f"section lines {section.lid_lo}-{section.lid_hi}"
+    )
+    return split_section_to_lines(section, words or [], display_lines, align_lines, spans)
+
+
+def _first_pass(
+    cue_spans: list[tuple[float, float]],
+    display_lines: Sequence[str],
+    align_lines: Sequence[str],
+    duration: float | None,
+    slice_align: Callable[[float, float, str, str], list[dict] | None],
+    show_progress: Callable[[list[Section]], Iterable[Section]],
+    pad_s: float,
+) -> tuple[list[dict], list[Section], list[tuple[float, float]], float, bool]:
+    """The section align of every line on its cue span, and the display lead it shows.
+
+    When the lead exceeds ``pad_s``, past which every section window provably clips its
+    leading words, the cues are moved onto the audio clock and the song is aligned once more.
+    Returns the line objects, their sections, the spans they were aligned on, the first
+    pass's lead and whether the song was re-sectioned.
+    """
+
+    def align_pass(spans: list[tuple[float, float]]) -> tuple[list[dict], list[Section]]:
+        sections = segment_by_gaps(spans, duration=duration)
+        logger.info("cue-align: %d cues -> %d sections", len(spans), len(sections))
+        objs: list[dict] = []
+        for section in show_progress(sections):
+            objs.extend(_align_section(section, display_lines, align_lines, spans, slice_align))
+        return objs, sections
+
+    line_objects, sections = align_pass(cue_spans)
+    spans = cue_spans
+    offset = fit_offset(line_objects, cue_spans, align_lines)
+    resectioned = abs(offset) > pad_s
+    if resectioned:
+        # Beyond the pad, every section window provably clips its leading words; shift the
+        # cues onto the audio clock and re-align once.
+        logger.info(
+            "cue-align: display lead %+.2fs exceeds pad %.2fs; re-sectioning", offset, pad_s
+        )
+        spans = _shifted_spans(cue_spans, offset)
+        line_objects, sections = align_pass(spans)
+    return line_objects, sections, spans, offset, resectioned
+
+
+def _join_backing(
+    backed: Backed,
+    line_objects: list[dict],
+    sections: list[Section],
+    spans: list[tuple[float, float]],
+    display_lines: Sequence[str],
+    align_lines: Sequence[str],
+    slice_align: Callable[[float, float, str, str], list[dict] | None],
+    show_progress: Callable[[list[Section]], Iterable[Section]],
+) -> tuple[list[dict], list[Section]]:
+    """The first pass's lines with the kept backing vocals in, in the song's new line ids.
+
+    Only a section holding a line that gained words goes back to the aligner, on its own
+    window with the new text; every other line object is the first pass's, untouched. An
+    added line has no words, which is what the section pass gives a line it could not time,
+    so the rescue times it. Returns the lines and the sections sent back (in today's ids).
+    """
+    gained_display, gained_align = backed.old_texts(display_lines, align_lines)
+    gaining = [
+        section
+        for section in sections
+        if any(gained_align[lid] != align_lines[lid] for lid in section.line_ids)
+    ]
+    by_old = {obj["line_id"]: obj for obj in line_objects}
+    for section in show_progress(gaining):
+        for obj in _align_section(section, gained_display, gained_align, spans, slice_align):
+            by_old[obj["line_id"]] = obj
+    joined = [
+        _line_object(new, backed.display_lines[new], [])
+        if old is None
+        else {**by_old[old], "line_id": new}
+        for new, old in enumerate(backed.old_line_ids)
+    ]
+    return joined, gaining
+
+
+def _backing_record(verdicts: list[Verdict], backed: Backed | None, sent: list[Section]) -> dict:
+    """What the bundle keeps of the backing-vocal step: every group's verdict and, for a kept
+    one, its line and align tokens ``[first, end)`` in the song's new ids; with a keep, each
+    line's id in today's list (None for an added line) and the sections sent back to the
+    aligner as ``[lid_lo, lid_hi]`` in new ids."""
+    groups = []
+    for v in verdicts:
+        place = backed.placed.get((v.cue, v.group)) if backed else None
+        groups.append(
+            {
+                "cue": v.cue,
+                "group": v.group,
+                "kind": v.kind,
+                "verdict": v.verdict,
+                "share": v.share,
+                "line_id": place.line_id if place else None,
+                "tokens": [place.first, place.end] if place else None,
+            }
+        )
+    record: dict = {"groups": groups}
+    if backed is not None:
+        new_id = {old: new for new, old in enumerate(backed.old_line_ids) if old is not None}
+        record["old_line_ids"] = backed.old_line_ids
+        record["aligned_sections"] = [[new_id[s.lid_lo], new_id[s.lid_hi]] for s in sent]
+    return record
+
+
+def _log_backing(verdicts: list[Verdict], backed: Backed | None, sent: list[Section]) -> None:
+    def tally(kept: bool) -> str:
+        counts = Counter(v.verdict for v in verdicts if v.kept == kept)
+        detail = ", ".join(f"{n} {name}" for name, n in sorted(counts.items()))
+        return f"{sum(counts.values())} ({detail})"
+
+    added = 0 if backed is None else backed.old_line_ids.count(None)
+    logger.info(
+        "cue-align backing vocals: kept %s, dropped %s; %d line(s) added, %d section(s) re-aligned",
+        tally(True),
+        tally(False),
+        added,
+        len(sent),
+    )
+
+
 def align_song(
     cue_spans: list[tuple[float, float]],
     display_lines: list[str],
@@ -1271,7 +1436,8 @@ def align_song(
     env: np.ndarray | None = None,
     progress: Callable[[list[Section]], Iterable[Section]] | None = None,
     heard_words: list[dict] | None = None,
-) -> tuple[list[dict], dict, dict]:
+    parens: Sequence[ParenCue] = (),
+) -> tuple[list[dict], dict, dict, tuple[list[str], list[str]]]:
     """Windowed-align one song from its 1:1 per-line cue spans.
 
     The cue-align driver: segment the cues into silence-bounded sections
@@ -1289,69 +1455,83 @@ def align_song(
     its singing stops (:func:`repace_bad_lines`); ``None`` keeps the caption windows.
     ``heard_words`` (the transcriber's words for the song) let the rescue keep a line the
     transcriber confirms; ``None`` leaves the cue in charge.
+    ``parens`` (the sheet's parenthetical groups, :func:`srt_cues.sheet_parens`) are judged
+    by ``heard_words`` once the first pass has fitted the display lead, and the kept ones join
+    the song's lines (:func:`_join_backing`): an inline group's words go into their line, a
+    cue of only a group becomes a line of its own. The rescue then runs on those lines with
+    the lead the first pass gives today's lines. Without ``parens`` or ``heard_words``, or
+    with nothing kept, every step and every aligner call is as without them.
     All GPU/ffmpeg I/O lives behind ``slice_align``, so this stays pure and
     ``test_cue_align`` can drive it with a stub aligner. Display is injected the
     same way: ``progress`` wraps the per-pass section list (e.g. ``tqdm``) so
     the caller owns the terminal; ``None`` iterates silently.
 
-    Returns ``(line_objects, stats, cue_inputs)``; ``stats`` carries the section
-    count, the fitted offset, whether a re-section fired, and the repace sub-stats.
+    Returns ``(line_objects, stats, cue_inputs, lines)``; ``stats`` carries the section
+    count, the fitted offset, whether a re-section fired, the repace sub-stats and, when
+    the step ran, ``backing`` (:func:`_backing_record`). ``lines`` is the
+    ``(display_lines, align_lines)`` the line objects were timed against: the inputs, or
+    with a keep the song's new lines, whose ids the line objects use.
     ``cue_inputs`` is what the rescue consumed, copied out so a replay re-runs
     :func:`repace_bad_lines` and the edge snaps after it without the aligner:
     ``spans``, the cue spans it was given (shifted by the first pass's offset when the
     song re-sectioned); ``sections``, the line objects the section align produced
-    before any rescue; and ``realigns``, one ``{line_id, w0, w1, words}`` per one-line
-    re-align in call order (``words`` is the aligner's raw result, None when it failed).
+    before any rescue (an added line with no words); ``realigns``, one
+    ``{line_id, w0, w1, words}`` per one-line re-align in call order (``words`` is the
+    aligner's raw result, None when it failed); and, with a keep, ``rescue_offset``, the
+    display lead the rescue was given instead of fitting one.
     """
     show_progress = progress or (lambda sections: sections)
 
-    def align_pass(spans: list[tuple[float, float]]) -> tuple[list[dict], list[Section]]:
-        sections = segment_by_gaps(spans, duration=duration)
-        logger.info("cue-align: %d cues -> %d sections", len(spans), len(sections))
-        objs: list[dict] = []
-        for section in show_progress(sections):
-            sub_text = "\n".join(align_lines[lid] for lid in section.line_ids)
-            words = slice_align(
-                section.t0, section.t1, sub_text, f"section lines {section.lid_lo}-{section.lid_hi}"
-            )
-            objs.extend(
-                split_section_to_lines(section, words or [], display_lines, align_lines, spans)
-            )
-        return objs, sections
+    line_objects, sections, spans, offset, resectioned = _first_pass(
+        cue_spans, display_lines, align_lines, duration, slice_align, show_progress, pad_s
+    )
 
-    line_objects, sections = align_pass(cue_spans)
-    spans = cue_spans
-    offset = fit_offset(line_objects, cue_spans, align_lines)
-    resectioned = abs(offset) > pad_s
-    if resectioned:
-        # Beyond the pad, every section window provably clips its leading
-        # words; shift the cues onto the audio clock and re-align once.
-        logger.info(
-            "cue-align: display lead %+.2fs exceeds pad %.2fs; re-sectioning", offset, pad_s
+    verdicts = (
+        judge(parens, cue_spans, heard_words, offset) if parens and heard_words is not None else []
+    )
+    backed = (
+        with_backing(display_lines, align_lines, cue_spans, parens, verdicts)
+        if any(v.kept for v in verdicts)
+        else None
+    )
+    timed_display, timed_align, timed_spans = display_lines, align_lines, spans
+    pinned: float | None = None
+    sent: list[Section] = []
+    if backed is not None:
+        # The lead today's lines give, which the new lines would otherwise shift.
+        pinned = fit_offset(line_objects, spans, align_lines)
+        line_objects, sent = _join_backing(
+            backed,
+            line_objects,
+            sections,
+            spans,
+            display_lines,
+            align_lines,
+            slice_align,
+            show_progress,
         )
-        spans = [
-            (max(0.0, c0 + offset), max(0.0, c0 + offset, c1 + offset)) for c0, c1 in cue_spans
-        ]
-        line_objects, sections = align_pass(spans)
+        timed_display, timed_align = backed.display_lines, backed.align_lines
+        timed_spans = _shifted_spans(backed.spans, offset) if resectioned else backed.spans
 
     realigns: list[dict] = []
 
     def realign(lid: int, w0: float, w1: float) -> list[dict] | None:
-        words = slice_align(w0, w1, align_lines[lid], f"line {lid}")
+        words = slice_align(w0, w1, timed_align[lid], f"line {lid}")
         realigns.append({"line_id": lid, "w0": w0, "w1": w1, "words": copy.deepcopy(words)})
         return words
 
     sections_aligned = copy.deepcopy(line_objects)
     line_objects, repace_stats = repace_bad_lines(
         line_objects,
-        spans,
-        display_lines,
-        align_lines,
+        timed_spans,
+        timed_display,
+        timed_align,
         duration=duration,
         realign=realign,
         env=env,
         pad_s=pad_s,
         heard_words=heard_words,
+        offset=pinned,
     )
     stats = {
         "n_sections": len(sections),
@@ -1359,5 +1539,10 @@ def align_song(
         "resectioned": resectioned,
         "repace": repace_stats,
     }
-    cue_inputs = {"spans": list(spans), "sections": sections_aligned, "realigns": realigns}
-    return line_objects, stats, cue_inputs
+    cue_inputs = {"spans": list(timed_spans), "sections": sections_aligned, "realigns": realigns}
+    if verdicts:
+        stats["backing"] = _backing_record(verdicts, backed, sent)
+        _log_backing(verdicts, backed, sent)
+    if pinned is not None:
+        cue_inputs["rescue_offset"] = pinned
+    return line_objects, stats, cue_inputs, (timed_display, timed_align)

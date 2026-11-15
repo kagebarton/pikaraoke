@@ -1,5 +1,7 @@
 """Unit tests for the cue-anchored windowed alignment core (pure logic)."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -15,6 +17,7 @@ from pikaraoke.lib.cue_align import (
     split_section_to_lines,
 )
 from pikaraoke.lib.onset_snap import HOP_S
+from pikaraoke.lib.srt_cues import ParenCue, ParenGroup
 from pikaraoke.lib.token_align import INSTANT_WORD_DUR_S
 
 
@@ -394,6 +397,19 @@ class TestRepaceBadLines:
         out, stats = repace_bad_lines(objs, cue_spans, lines, lines, min_anchors=4)
         assert stats["offset_s"] == 0.0  # one anchor < 4 -> no offset
         assert out[1]["start"] == 5.0  # raw cue start
+
+    def test_a_given_offset_is_used_and_not_fitted(self):
+        # Four lines aligned 0.5 s late fit a lead of 0.5; a hidden fifth is filled from its
+        # cue moved by whichever lead the caller gave.
+        objs, cues, lines = _anchor_lines(4, offset=0.5)
+        cues.append((8.0, 10.0))
+        lines.append("ee ff")
+        objs.append(_line(4, "ee ff"))
+
+        fitted_out, fitted = repace_bad_lines(objs, cues, lines, lines)
+        given_out, given = repace_bad_lines(objs, cues, lines, lines, offset=0.0)
+        assert fitted["offset_s"] == 0.5 and fitted_out[4]["start"] == 8.5
+        assert given["offset_s"] == 0.0 and given_out[4]["start"] == 8.0
 
     def test_display_only_bad_line_stays_hidden(self):
         objs, cues, lines = _anchor_lines(4)
@@ -1486,7 +1502,9 @@ class TestAlignSong:
 
     def test_clean_song_uses_aligned_words_one_pass(self):
         aligner = _stub_aligner(lambda *_: _on_cue_words())
-        objs, stats, _inputs = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner)
+        objs, stats, _inputs, _lines = align_song(
+            _SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner
+        )
 
         assert [o["line_id"] for o in objs] == [0, 1, 2, 3]
         assert all(o["source"] == SOURCE for o in objs)
@@ -1503,7 +1521,7 @@ class TestAlignSong:
         # The last line is held to 9.0, two seconds past its cue: only a rescue follows it.
         aligner = _stub_aligner(lambda *_: _on_cue_words())
         env = _env(12.0, [(0.0, 9.0)])
-        _objs, stats, _inputs = align_song(
+        _objs, stats, _inputs, _lines = align_song(
             _SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env
         )
 
@@ -1519,7 +1537,7 @@ class TestAlignSong:
 
         aligner = _stub_aligner(words_for)
         env = _env(12.0, [(0.0, 9.0)])
-        objs, stats, _inputs = align_song(
+        objs, stats, _inputs, _lines = align_song(
             _SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env
         )
 
@@ -1539,7 +1557,7 @@ class TestAlignSong:
 
         aligner = _stub_aligner(words_for)
         env = _env(12.0, [(0.0, 9.0)])
-        objs, _stats, inputs = align_song(
+        objs, _stats, inputs, _lines = align_song(
             _SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env
         )
 
@@ -1556,7 +1574,9 @@ class TestAlignSong:
 
     def test_a_failed_realign_is_recorded_as_none(self):
         aligner = _stub_aligner(lambda *_: None)
-        _objs, _stats, inputs = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner)
+        _objs, _stats, inputs, _lines = align_song(
+            _SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner
+        )
 
         assert [r["line_id"] for r in inputs["realigns"]] == [0, 1, 2, 3]
         assert all(r["words"] is None for r in inputs["realigns"])
@@ -1570,7 +1590,7 @@ class TestAlignSong:
 
         aligner = _stub_aligner(words_for)
         env = _env(12.0, [(0.0, 9.0)])
-        objs, _stats, inputs = align_song(
+        objs, _stats, inputs, _lines = align_song(
             _SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner, env=env
         )
         objs[0]["words"][0]["start"] = 99.0  # a caller editing its lines must not change the record
@@ -1583,7 +1603,9 @@ class TestAlignSong:
         # Aligner reports every line ~1.5 s late (> SECTION_PAD_S): the driver
         # re-sections once on offset-shifted cues, after which the words match.
         aligner = _stub_aligner(lambda *_: _on_cue_words(shift=1.5))
-        objs, stats, inputs = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner)
+        objs, stats, inputs, _lines = align_song(
+            _SONG_CUES, _SONG_LINES, _SONG_LINES, 12.0, aligner
+        )
 
         assert stats["resectioned"] is True
         assert stats["offset_s"] == pytest.approx(1.5, abs=0.05)
@@ -1598,7 +1620,9 @@ class TestAlignSong:
         # Aligner can place nothing: every line is rescued by a per-line realign
         # (also None) and then filled from its cue span.
         aligner = _stub_aligner(lambda *_: None)
-        objs, stats, _inputs = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner)
+        objs, stats, _inputs, _lines = align_song(
+            _SONG_CUES, _SONG_LINES, _SONG_LINES, 8.0, aligner
+        )
 
         assert all(o["source"] == SOURCE_FILL for o in objs)
         assert stats["repace"]["n_repaced"] == 4
@@ -1610,7 +1634,232 @@ class TestAlignSong:
         # duration=None (stem duration unreadable) must not crash; the fill
         # windows simply lose their audio-end clamp.
         aligner = _stub_aligner(lambda *_: None)
-        objs, stats, _inputs = align_song(_SONG_CUES, _SONG_LINES, _SONG_LINES, None, aligner)
+        objs, stats, _inputs, _lines = align_song(
+            _SONG_CUES, _SONG_LINES, _SONG_LINES, None, aligner
+        )
 
         assert [o["line_id"] for o in objs] == [0, 1, 2, 3]
         assert all(o["source"] == SOURCE_FILL for o in objs)
+
+
+# Five lines in two sections: lines 0-2 (gaps of 1 s) and lines 3-4, 4 s later.
+_B_LINES = ["hold me now", "never let go", "stay with me", "take my hand", "walk away"]
+_B_CUES = [(0.0, 2.0), (3.0, 5.0), (6.0, 8.0), (12.0, 14.0), (15.0, 17.0)]
+
+
+def _at(start: float, n: int) -> list[tuple[float, float]]:
+    """``n`` words from ``start``, 0.5 s apart and 0.4 s long."""
+    return [(start + 0.5 * k, start + 0.5 * k + 0.4) for k in range(n)]
+
+
+def _sung(shift: float = 0.0, **over) -> dict:
+    """Each line of the song sung at its cue (``shift`` s late), by its text; ``over`` adds
+    or replaces lines, a list of word spans or a function of the window ``(t0, t1)``."""
+    script = {line: _at(cue[0] + shift, len(line.split())) for line, cue in zip(_B_LINES, _B_CUES)}
+    return script | {k.replace("_", " "): v for k, v in over.items()}
+
+
+def _singer(script: dict):
+    """A slice_align stub that sings each line of the text as ``script`` says and drops the
+    lines it holds nothing for, as the aligner drops what it cannot time."""
+
+    def words_for(_t0, _t1, text, _label):
+        words = []
+        for line in text.split("\n"):
+            spec = script.get(line)
+            spans = spec(_t0, _t1) if callable(spec) else spec
+            words += [
+                {"word": tok, "start": s, "end": e}
+                for tok, (s, e) in zip(line.split(), spans or ())
+            ]
+        return words or None
+
+    return _stub_aligner(words_for)
+
+
+def _backing_run(script, parens=(), heard=(), **kwargs):
+    aligner = _singer(script)
+    lines = list(_B_LINES)
+    objs, stats, inputs, timed = align_song(
+        list(_B_CUES), lines, list(lines), 20.0, aligner, heard_words=heard, parens=parens, **kwargs
+    )
+    return SimpleNamespace(objs=objs, stats=stats, inputs=inputs, timed=timed, aligner=aligner)
+
+
+def _echo(index: int, span: tuple[float, float], before: int, text: str = "oh, oh") -> ParenCue:
+    """A cue of only ``(text)``, captioned between lines, to go before line ``before``."""
+    return ParenCue(index, span, False, before, (ParenGroup(text, 0),))
+
+
+def _inline(index: int, line: int, at: int, text: str) -> ParenCue:
+    return ParenCue(index, _B_CUES[line], True, line, (ParenGroup(text, at),))
+
+
+_ECHO_SPAN = (5.2, 5.8)  # between lines 1 and 2, touching neither
+
+
+class TestAlignSongBacking:
+    """Kept backing vocals join the song's lines and are timed with them."""
+
+    def test_no_parens_no_transcript_or_nothing_kept_is_the_song_as_before(self):
+        base = _backing_run(_sung())
+        stage_direction = _echo(2, _ECHO_SPAN, 2, "upbeat music")
+        sung = _echo(2, _ECHO_SPAN, 2)
+        for parens, heard in [
+            ([stage_direction], []),  # judged and dropped
+            ([sung], None),  # no transcript: not judged
+            ([], []),
+        ]:
+            run = _backing_run(_sung(), parens, heard)
+            assert run.objs == base.objs
+            assert run.aligner.calls == base.aligner.calls
+            assert run.timed == (_B_LINES, _B_LINES)
+            assert run.inputs == base.inputs
+            assert {k: v for k, v in run.stats.items() if k != "backing"} == base.stats
+        assert "backing" not in _backing_run(_sung(), [sung], None).stats
+        dropped = _backing_run(_sung(), [stage_direction], []).stats["backing"]
+        assert dropped["groups"][0]["verdict"] == "not_heard"
+        assert dropped["groups"][0]["line_id"] is None and "old_line_ids" not in dropped
+
+    def test_an_inline_keep_sends_only_its_section_back_with_the_echo_words_bare(self):
+        base = _backing_run(_sung())
+        hey = _inline(5, 4, 2, "hey")
+        run = _backing_run(
+            _sung(**{"walk_away_hey": _at(15.0, 3)}),
+            [hey],
+            [{"word": "hey", "start": 16.0, "end": 16.4}],
+        )
+
+        # Two section calls as before, then the second section again on its unchanged window.
+        window = base.aligner.calls[1][:2]
+        assert [c[:3] for c in run.aligner.calls] == [
+            base.aligner.calls[0][:3],
+            base.aligner.calls[1][:3],
+            (*window, "take my hand\nwalk away hey"),
+        ]
+        assert run.objs[:3] == base.objs[:3]
+        assert run.objs[4]["text"] == "walk away (hey)"
+        assert [w["word"] for w in run.objs[4]["words"]] == ["walk", "away", "hey"]
+        assert run.objs[4]["source"] == SOURCE
+        assert run.timed == (
+            [*_B_LINES[:4], "walk away (hey)"],
+            [*_B_LINES[:4], "walk away hey"],
+        )
+        backing = run.stats["backing"]
+        assert backing["old_line_ids"] == [0, 1, 2, 3, 4] and backing["aligned_sections"] == [
+            [3, 4]
+        ]
+        assert backing["groups"][0]["line_id"] == 4 and backing["groups"][0]["tokens"] == [2, 3]
+        assert "rescue_offset" in run.inputs
+
+    def test_a_paren_only_keep_inside_a_section_is_one_line_call_and_no_section_call(self):
+        base = _backing_run(_sung())
+        run = _backing_run(
+            _sung(**{"oh,_oh": [(5.25, 5.45), (5.5, 5.7)]}), [_echo(2, _ECHO_SPAN, 2)]
+        )
+
+        assert run.aligner.calls[:2] == base.aligner.calls
+        (call,) = run.aligner.calls[2:]
+        assert call[2] == "oh, oh" and call[3] == "line 2"
+        assert call[:2] == pytest.approx((5.2 - 0.75, 5.8 + 0.75))
+        echo = run.objs[2]
+        assert (echo["line_id"], echo["text"], echo["source"]) == (2, "(oh, oh)", SOURCE_REALIGN)
+        assert [w["word"] for w in echo["words"]] == ["oh,", "oh"]
+        # The lines after it are the same lines, renumbered.
+        for new, old in [(3, 2), (4, 3), (5, 4)]:
+            assert run.objs[new] == {**base.objs[old], "line_id": new}
+        assert run.stats["backing"]["old_line_ids"] == [0, 1, None, 2, 3, 4]
+        assert run.stats["backing"]["aligned_sections"] == []
+        assert run.stats["backing"]["groups"][0]["tokens"] == [0, 2]
+
+    def test_the_rescue_is_given_the_added_line_with_no_words_and_the_lead(self):
+        run = _backing_run(
+            _sung(**{"oh,_oh": [(5.25, 5.45), (5.5, 5.7)]}), [_echo(2, _ECHO_SPAN, 2)]
+        )
+
+        assert [len(o["words"]) for o in run.inputs["sections"]] == [3, 3, 0, 3, 3, 2]
+        assert run.inputs["sections"][2]["text"] == "(oh, oh)"
+        assert run.inputs["spans"][2] == _ECHO_SPAN and len(run.inputs["spans"]) == 6
+        assert run.inputs["rescue_offset"] == 0.0
+        assert [r["line_id"] for r in run.inputs["realigns"]] == [2]
+        assert run.stats["repace"]["realigned_line_ids"] == [2]
+
+    def test_a_paren_only_keep_in_the_gap_between_two_sections_merges_neither(self):
+        base = _backing_run(_sung())
+        run = _backing_run(
+            _sung(**{"oh,_oh": [(9.6, 9.8), (10.0, 10.2)]}), [_echo(2, (9.5, 10.5), 3)]
+        )
+
+        assert run.aligner.calls[:2] == base.aligner.calls  # both windows as before
+        assert [c[3] for c in run.aligner.calls[2:]] == ["line 3"]
+        assert run.objs[:3] == base.objs[:3]
+        assert run.objs[3]["text"] == "(oh, oh)"
+        assert [o["line_id"] for o in run.objs[4:]] == [4, 5]
+        assert run.stats["backing"]["old_line_ids"] == [0, 1, 2, None, 3, 4]
+        assert run.stats["n_sections"] == 2
+
+    def test_an_added_line_the_aligner_gives_nothing_for_is_paced_across_its_cue(self):
+        run = _backing_run(_sung(), [_echo(2, _ECHO_SPAN, 2)])
+
+        echo = run.objs[2]
+        assert echo["source"] == SOURCE_FILL
+        assert echo["start"] == pytest.approx(5.2) and echo["end"] <= 5.8 + 1e-6
+        assert [w["word"] for w in echo["words"]] == ["oh,", "oh"]
+
+    def test_an_added_line_that_starts_on_the_line_before_is_cut_to_start_after_it(self):
+        script = _sung(
+            never_let_go=[(3.0, 3.4), (3.5, 3.9), (4.9, 5.3)],
+            **{"oh,_oh": [(5.0, 5.5), (5.55, 5.75)]},
+        )
+        run = _backing_run(script, [_echo(2, _ECHO_SPAN, 2)])
+
+        assert run.objs[1]["end"] == 5.3
+        assert run.objs[2]["source"] == SOURCE_REALIGN
+        assert run.objs[2]["start"] == pytest.approx(5.3)
+
+    def test_an_added_line_heard_two_seconds_before_its_cue_is_aimed_there_first(self):
+        heard = [
+            {"word": "oh", "start": 3.2, "end": 3.4},
+            {"word": "oh", "start": 3.5, "end": 3.7},
+        ]
+        script = _sung(**{"oh,_oh": lambda t0, _t1: [(3.25, 3.45), (3.5, 3.7)] if t0 < 4 else None})
+        run = _backing_run(script, [_echo(2, _ECHO_SPAN, 2)], heard)
+
+        first = run.aligner.calls[2]
+        assert first[:2] == pytest.approx((3.2 - 0.75, 3.8 + 0.75))
+        repace = run.stats["repace"]
+        assert repace["heard_aimed_line_ids"] == [2] and repace["heard_aimed_kept_line_ids"] == [2]
+        assert run.objs[2]["source"] == SOURCE_REALIGN and run.objs[2]["start"] == 3.25
+
+    def test_a_one_word_added_line_is_never_aimed_where_its_word_was_heard(self):
+        heard = [{"word": "yeah", "start": 3.2, "end": 3.5}]
+        script = _sung(yeah=lambda t0, _t1: [(3.25, 3.5)] if t0 < 4 else [(5.3, 5.6)])
+        run = _backing_run(script, [_echo(2, _ECHO_SPAN, 2, "yeah")], heard)
+
+        assert run.stats["repace"]["heard_aimed_line_ids"] == []
+        assert [c[:2] for c in run.aligner.calls[2:]] == [pytest.approx((4.45, 6.55))]
+
+    def test_the_rescue_keeps_the_lead_of_todays_lines_though_the_regained_section_would_move_it(
+        self,
+    ):
+        # Lines 2-4 are 0.4 s late, so the lead is 0.4 s. Their section aligned again with the
+        # echo comes back on time, and a lead fitted on those lines would be 0.0.
+        late = _sung()
+        for line, cue in list(zip(_B_LINES, _B_CUES))[2:]:
+            late[line] = _at(cue[0] + 0.4, len(line.split()))
+        late["walk away hey"] = _at(15.0, 3)
+        run = _backing_run(late, [_inline(5, 4, 2, "hey")], [])
+
+        assert run.stats["offset_s"] == pytest.approx(0.4, abs=0.01)
+        assert run.inputs["rescue_offset"] == pytest.approx(0.4, abs=0.01)
+        assert run.stats["repace"]["offset_s"] == pytest.approx(0.4, abs=0.01)
+
+    def test_a_re_sectioned_song_shifts_the_added_lines_span_with_the_others(self):
+        script = _sung(shift=1.5, **{"oh,_oh": [(6.75, 6.95), (7.0, 7.2)]})
+        run = _backing_run(script, [_echo(2, _ECHO_SPAN, 2)])
+
+        assert run.stats["resectioned"] is True
+        spans = run.inputs["spans"]
+        assert spans[2] == pytest.approx((5.2 + 1.5, 5.8 + 1.5))
+        assert spans[3] == pytest.approx((6.0 + 1.5, 8.0 + 1.5))
+        assert run.objs[2]["source"] == SOURCE_REALIGN
