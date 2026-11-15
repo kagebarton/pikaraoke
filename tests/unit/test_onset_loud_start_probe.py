@@ -237,34 +237,82 @@ class TestLoadEnv:
         assert env.tolist() == [1.0, 2.0]
 
 
-class TestCheckSong:
-    def _case(self):
-        # Line 1 claims 1.2 s on line 0's held note; its voice rises at 2.2 s, and the
-        # transcriber heard its first word at 2.3 s.
-        env = _env(6.0, [(0.3, 1.5, -28.0), (2.2, 4.5, -28.0)])
-        before = [
-            _line((0.3, 0.6), (0.6, 1.2), source="cue_align"),
-            {**_line((1.2, 1.6), (2.5, 2.7), (3.0, 4.0), source="cue_align"), "line_id": 1},
-        ]
-        shipped, _ = snap_line_edges(before, "", env=env, doubted_sources=probe.DOUBTED)
-        bundle = {
-            "joint_stats": {"repace": {"offset_s": 0.0}},
-            "cue_inputs": {"spans": [(0.3, 1.2), (1.2, 4.0)]},
-            "transcribe_words": [{"word": "w0", "start": 2.3, "end": 2.6}],
-        }
-        return bundle, env, before, probe.song_rows(bundle, env, before, shipped)
+def _song_case(*heard: tuple[float]) -> tuple[dict, np.ndarray, list[dict], list[dict]]:
+    """A two-line song whose line 1 claims 1.2 s on line 0's held note; its voice rises at
+    2.2 s. ``heard`` are the starts of the transcriber's "w0" words."""
+    env = _env(6.0, [(0.3, 1.5, -28.0), (2.2, 4.5, -28.0)])
+    before = [
+        _line((0.3, 0.6), (0.6, 1.2), source="cue_align"),
+        {**_line((1.2, 1.6), (2.5, 2.7), (3.0, 4.0), source="cue_align"), "line_id": 1},
+    ]
+    shipped, _ = snap_line_edges(before, "", env=env, doubted_sources=probe.DOUBTED)
+    bundle = {
+        "joint_stats": {"repace": {"offset_s": 0.0}},
+        "cue_inputs": {"spans": [(0.3, 1.2), (1.2, 4.0)]},
+        "transcribe_words": [{"word": "w0", "start": t, "end": t + 0.3} for t in heard],
+    }
+    return bundle, env, before, probe.song_rows(bundle, env, before, shipped)
 
+
+class TestHeardEarlier:
+    def test_a_copy_from_the_claimed_start_up_to_the_new_start_that_is_not_near_it(self):
+        heard = [{"word": "Never", "start": 1.3}]
+
+        assert probe.heard_earlier(heard, "never", 1.2, 2.15)
+
+    @pytest.mark.parametrize("start", [1.1, 2.0, 2.2])
+    def test_a_copy_before_the_claimed_start_or_near_or_after_the_new_start_is_not(self, start):
+        assert not probe.heard_earlier([{"word": "never", "start": start}], "never", 1.2, 2.15)
+
+    def test_another_word_is_not(self):
+        assert not probe.heard_earlier([{"word": "mind", "start": 1.3}], "never", 1.2, 2.15)
+
+
+class TestSongRowsAgreed:
+    def test_an_agreeing_copy_agrees(self):
+        _, _, _, song = _song_case(2.3)
+
+        assert [row["agreed"] for row in song] == [False, True]
+
+    def test_an_earlier_copy_as_well_holds_the_line(self):
+        _, _, _, song = _song_case(1.3, 2.3)
+
+        assert [row["agreed"] for row in song] == [False, False]
+
+
+class TestCheckSong:
     def test_the_new_snap_equals_the_rule(self, tmp_path):
-        bundle, env, before, song = self._case()
+        bundle, env, before, song = _song_case(2.3)
 
         result = probe.check_song(
             bundle, env, before, song, tmp_path / "none.onsetfix.ass", PipelineConfig()
         )
 
-        assert result == {"lines_equal": True, "moved": 1, "agreed": 1, "after_file": None}
+        assert result == {
+            "lines_equal": True,
+            "moved": 1,
+            "agreed": 1,
+            "held": 0,
+            "after_file": None,
+        }
+
+    def test_a_line_held_by_an_earlier_copy_is_counted_and_equals_the_rule(self, tmp_path):
+        bundle, env, before, song = _song_case(1.3, 2.3)
+
+        result = probe.check_song(
+            bundle, env, before, song, tmp_path / "none.onsetfix.ass", PipelineConfig()
+        )
+
+        assert result == {
+            "lines_equal": True,
+            "moved": 0,
+            "agreed": 0,
+            "held": 1,
+            "after_file": None,
+        }
 
     def test_a_difference_from_the_rule_is_found_and_named(self, monkeypatch, tmp_path):
-        bundle, env, before, song = self._case()
+        bundle, env, before, song = _song_case(2.3)
         rule = probe.with_rule
 
         def shifted(lines, rows, env):
@@ -284,7 +332,7 @@ class TestCheckSong:
         )
 
     def test_the_after_file_is_compared_with_the_new_output(self, tmp_path):
-        bundle, env, before, song = self._case()
+        bundle, env, before, song = _song_case(2.3)
         config = PipelineConfig()
         fixed = tmp_path / "song.onsetfix.ass"
         lines, _ = snap_line_edges(
@@ -307,9 +355,9 @@ class TestCheckSong:
 class TestCheckReport:
     def test_counts_and_stems_only(self):
         checks = {
-            "a": {"lines_equal": True, "moved": 2, "agreed": 2, "after_file": True},
-            "b": {"lines_equal": True, "moved": 1, "agreed": 2, "after_file": False},
-            "c": {"lines_equal": True, "moved": 0, "agreed": 0, "after_file": None},
+            "a": {"lines_equal": True, "moved": 2, "agreed": 2, "held": 1, "after_file": True},
+            "b": {"lines_equal": True, "moved": 1, "agreed": 2, "held": 0, "after_file": False},
+            "c": {"lines_equal": True, "moved": 0, "agreed": 0, "held": 0, "after_file": None},
         }
 
         text = probe.check_report(checks, ["x", "y"])
@@ -317,13 +365,14 @@ class TestCheckReport:
         assert "- songs compared: 3\n" in text
         assert "- songs whose lines equal the probe's rule: 3\n" in text
         assert "- lines the new code moved: 3\n- agreed lines: 4\n" in text
+        assert "- lines held by an earlier heard copy: 1\n" in text
         assert "- songs where those two differ: 1\n  - differs: b\n" in text
         assert "- after-files found: 2; equal: 1\n  - differs: b\n" in text
         assert "not replayed: 2\n  - x\n  - y\n" in text
 
     def test_clean_run_says_none(self):
         text = probe.check_report(
-            {"a": {"lines_equal": True, "moved": 1, "agreed": 1, "after_file": None}}, []
+            {"a": {"lines_equal": True, "moved": 1, "agreed": 1, "held": 0, "after_file": None}}, []
         )
 
         assert "- songs where those two differ: none\n" in text

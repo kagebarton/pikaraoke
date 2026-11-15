@@ -357,6 +357,9 @@ class TestSnapLineOnsets:
 HELD_NOTE = [(0.0, 1.5, -28.0), (2.2, 4.5, -28.0)]
 HELD_SPANS = [(1.2, 1.6), (2.5, 2.7), (3.0, 4.0)]
 DOUBTED = frozenset({"cue_align_line"})
+# The first word is loud at its claimed start; the voice comes back at word 2.
+REPEATED_NOTES = [(0.0, 1.5, -28.0), (2.5, 3.5, -28.0)]
+REPEATED_SPANS = [(1.2, 1.5), (2.5, 2.8), (3.0, 3.5)]
 
 
 def _heard(*words: tuple[str, float]) -> list[dict]:
@@ -370,6 +373,14 @@ def _doubted_start(env: np.ndarray, spans: list[tuple[float, float]]) -> float:
 
 
 class TestHeardLoudStart:
+    @pytest.fixture
+    def repeated(self):
+        # Word 2 repeats word 1: an on-time word followed by a pause, then the same word.
+        env = _env(5.0, REPEATED_NOTES)
+        obj = _line(*REPEATED_SPANS, source="cue_align", line_id=3)
+        obj["words"][1]["word"] = "w0"
+        return env, obj, _doubted_start(env, REPEATED_SPANS)
+
     @pytest.fixture
     def held(self):
         env = _env(5.0, HELD_NOTE)
@@ -483,6 +494,52 @@ class TestHeardLoudStart:
         assert stats["n_heard_snapped"] == 0
         # The exclusion is the only thing holding it.
         assert snap_line_onsets([obj], "", env, heard_words=heard)[1]["n_heard_snapped"] == 1
+
+    def test_a_line_with_the_same_word_twice_that_is_heard_once_still_moves(self, repeated):
+        env, obj, doubted = repeated
+
+        out, stats = snap_line_onsets([obj], "", env, heard_words=_heard(("w0", 2.5)))
+
+        assert out[0]["words"][0]["start"] == doubted
+        assert stats["n_heard_snapped"] == 1
+
+    def test_an_earlier_heard_copy_of_the_first_word_keeps_the_start(self, repeated):
+        env, obj, _ = repeated
+
+        out, stats = snap_line_onsets([obj], "", env, heard_words=_heard(("w0", 1.3), ("w0", 2.5)))
+
+        assert out[0] is obj
+        assert stats["n_heard_earlier"] == 1
+        assert stats["n_heard_snapped"] == 0
+
+    def test_a_heard_copy_before_the_claimed_start_does_not_hold_it(self, repeated):
+        env, obj, doubted = repeated
+
+        out, stats = snap_line_onsets([obj], "", env, heard_words=_heard(("w0", 0.9), ("w0", 2.5)))
+
+        assert out[0]["words"][0]["start"] == doubted
+        assert stats["n_heard_earlier"] == 0
+
+    def test_a_copy_before_the_new_start_that_agrees_does_not_hold_it(self, held):
+        env, obj, doubted = held
+
+        out, stats = snap_line_onsets(
+            [obj], "", env, heard_words=_heard(("w0", doubted - 0.2), ("w0", doubted + 0.2))
+        )
+
+        assert out[0]["words"][0]["start"] == doubted
+        assert stats["n_heard_earlier"] == 0
+
+    def test_a_doubted_line_ignores_an_earlier_heard_copy(self, repeated):
+        env, _, doubted = repeated
+        obj = _line(*REPEATED_SPANS, source="cue_align_line")
+        obj["words"][1]["word"] = "w0"
+
+        out, stats = snap_line_onsets([obj], "", env, DOUBTED, _heard(("w0", 1.3)))
+
+        assert out[0]["words"][0]["start"] == doubted
+        assert stats["n_snapped"] == 1
+        assert stats["n_heard_earlier"] == 0
 
 
 # ---------------------------------------------------------------------------
