@@ -12,7 +12,17 @@ from pikaraoke.lib.alignment_capture import SCHEMA_VERSION, output_line_timings
 from pikaraoke.lib.cue_align import SOURCE_REALIGN
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
 from pikaraoke.lib.library_regen import LRC_ORIGIN, MOVIE_ORIGIN
+from pikaraoke.lib.lrc_auto_pick import UNCLAIMED, Entry
+from pikaraoke.lib.lrc_auto_timing import (
+    ERROR,
+    NO_PICK,
+    NO_RECORDS,
+    PICKED,
+    SEARCH_FAILED,
+    AutoCheck,
+)
 from pikaraoke.lib.srt_provenance import is_generated, mark_generated
+from pikaraoke.lib.srt_slice_fit import FITS, REFUSED, SliceFit
 from pikaraoke.lib.windowed_realign import merge_spans, replay_span
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage
@@ -184,7 +194,7 @@ def _no_ffprobe(monkeypatch):
     monkeypatch.setattr("pikaraoke.pipeline.stages.lyric_align.probe_duration", lambda _path: None)
 
 
-def _make_stage_and_ctx(tmp_path, *, dereverb_yield_wpm=0.0):
+def _make_stage_and_ctx(tmp_path, *, dereverb_yield_wpm=0.0, auto_lrc_timing=False):
     from pikaraoke.pipeline.context import StageContext
 
     cfg = PipelineConfig()
@@ -202,7 +212,12 @@ def _make_stage_and_ctx(tmp_path, *, dereverb_yield_wpm=0.0):
         {"word": "world", "start": 1.0, "end": 2.0},
     ]
 
-    stage = LyricAlignStage(whisper_worker=worker, config=cfg, stem_worker=MagicMock())
+    stage = LyricAlignStage(
+        whisper_worker=worker,
+        config=cfg,
+        stem_worker=MagicMock(),
+        auto_lrc_timing=auto_lrc_timing,
+    )
 
     song_path = tmp_path / "song.mp4"
     song_path.write_bytes(b"")
@@ -909,6 +924,237 @@ class TestBackingVocalsWiring:
 def _read_bundle(ctx) -> dict:
     path = ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json"
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+class TestAutoLrcTiming:
+    """An armed stage checks LRCLIB for a Genius song that would go joint; a record that
+    passes the bar times it on the cue route, anything else leaves it on joint as today."""
+
+    GENIUS = {"id": 7, "title": "Some Song", "artist": "Artist"}
+    # The picked record's sheet, and what the check's fit turned it into.
+    SHEET = TestBackingVocalsWiring.SHEET
+    HEARD = TestBackingVocalsWiring.HEARD
+    RECORD = {
+        "id": 4,
+        "trackName": "Some Song",
+        "artistName": "Artist",
+        "albumName": "Album",
+        "duration": 30.0,
+        "syncedLyrics": "[00:10.00] glowing river (hey)\n[00:14.00] phantom parade\n",
+    }
+    FETCHED_LRC = "[lrclib_id:1]\n[00:01.00] what the download fetched\n"
+
+    @classmethod
+    def result(cls, outcome: str) -> AutoCheck:
+        if outcome == PICKED:
+            fit = SliceFit(FITS, srt=cls.SHEET)
+            return AutoCheck(PICKED, "Some Song Artist", (Entry(cls.RECORD, fit, None, 1),))
+        if outcome == NO_PICK:
+            refused = Entry(cls.RECORD, SliceFit(REFUSED), UNCLAIMED, 1)
+            return AutoCheck(NO_PICK, "Some Song Artist", (refused,))
+        return AutoCheck(outcome, "Some Song Artist")
+
+    def _make(
+        self,
+        tmp_path,
+        monkeypatch,
+        outcome=PICKED,
+        *,
+        armed=True,
+        origin="genius",
+        genius=True,
+        lrclib_fill=True,
+        duration=30.0,
+    ):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path, auto_lrc_timing=armed)
+        stage._config.lrclib_fill = lrclib_fill
+        ctx.artifacts["lyrics_origin"] = origin
+        if genius:
+            ctx.artifacts["genius"] = self.GENIUS
+        if duration:
+            ctx.artifacts["media_duration_s"] = duration
+        # The lyrics stage's .lrc, which a pick overwrites and nothing else touches.
+        lyrics = ctx.song_path.parent / "lyrics"
+        lyrics.mkdir()
+        (lyrics / f"{ctx.song_path.stem}.lrc").write_text(self.FETCHED_LRC, encoding="utf-8")
+
+        slice_start = {}
+
+        def ffmpeg(cmd, _ctx, _phase):
+            slice_start["t0"] = float(cmd[cmd.index("-ss") + 1])
+
+        def align(*, lyrics_text, **_kwargs):
+            sung = TestBackingVocalsWiring.SUNG
+            return [
+                {"word": tok, "start": s - slice_start["t0"], "end": e - slice_start["t0"]}
+                for line in lyrics_text.split("\n")
+                for tok, (s, e) in zip(line.split(), sung.get(line, ()))
+            ]
+
+        worker.align_refine.side_effect = align
+        worker.transcribe_words.return_value = self.HEARD
+        monkeypatch.setattr(la_mod, "run_ffmpeg", ffmpeg)
+        monkeypatch.setattr(la_mod, "_wav_duration", lambda _p: 30.0)
+        monkeypatch.setattr(la_mod, "decode_env_db", lambda *_a, **_k: None)
+        check = MagicMock(return_value=self.result(outcome))
+        monkeypatch.setattr(la_mod.lrc_auto_timing, "check", check)
+        return stage, ctx, worker, check
+
+    @staticmethod
+    def _lyrics(ctx) -> Path:
+        return ctx.song_path.parent / "lyrics"
+
+    def test_a_pick_times_the_song_on_the_cue_route_from_the_records_own_sheet(
+        self, tmp_path, monkeypatch
+    ):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker, check = self._make(tmp_path, monkeypatch)
+        joint = MagicMock()
+        monkeypatch.setattr(la_mod, "match_words_to_lines_joint_with_stats", joint)
+
+        stage.run(ctx)
+
+        joint.assert_not_called()
+        worker.transcribe_words.assert_called_once()  # the gate's one call, shared by the check
+        check.assert_called_once_with(self.GENIUS, self.HEARD, 30.0)
+        assert ctx.artifacts["lyrics_origin"] == "lrclib_auto_srt"
+        assert ctx.artifacts["lyric_method"] == "lrclib_auto_srt+cue_align"
+        stem = ctx.song_path.stem
+        assert (self._lyrics(ctx) / f"{stem}.lrclib-auto.srt").read_text(encoding="utf-8") == (
+            self.SHEET
+        )
+        lrc = (self._lyrics(ctx) / f"{stem}.lrc").read_text(encoding="utf-8")
+        assert "[lrclib_id:4]" in lrc and self.RECORD["syncedLyrics"] in lrc
+        assert not list(ctx.tmp_dir.glob("*.srt"))  # moved, not copied
+
+    def test_the_bundle_records_the_pick_the_genius_song_and_the_sheet(self, tmp_path, monkeypatch):
+        stage, ctx, _worker, _check = self._make(tmp_path, monkeypatch)
+
+        stage.run(ctx)
+
+        bundle = _read_bundle(ctx)
+        decisions = bundle["pipeline_decisions"]
+        assert decisions["method_used"] == "cue_align"
+        assert decisions["lrclib_auto"]["outcome"] == "picked"
+        assert decisions["lrclib_auto"]["pick"]["id"] == 4
+        assert bundle["lyrics"]["origin"] == "lrclib_auto_srt"
+        assert bundle["lyrics"]["genius"] == self.GENIUS
+        assert bundle["lyrics"]["source_path"] == f"lyrics/{ctx.song_path.stem}.lrclib-auto.srt"
+        assert bundle["transcribe_words"] == self.HEARD
+
+    def test_a_pick_is_timed_with_the_gates_words_and_none_of_the_sheets_parentheses(
+        self, tmp_path, monkeypatch
+    ):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, _worker, _check = self._make(tmp_path, monkeypatch)
+        align = MagicMock(wraps=la_mod.align_song)
+        monkeypatch.setattr(la_mod, "align_song", align)
+
+        stage.run(ctx)
+
+        assert align.call_args.kwargs["parens"] == []
+        assert align.call_args.kwargs["heard_words"] == self.HEARD
+        bundle = _read_bundle(ctx)
+        assert bundle["lyrics"]["lines"] == ["glowing river", "phantom parade"]
+        assert "backing" not in bundle["joint_stats"]
+        ass = (ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass").read_text(
+            encoding="utf-8"
+        )
+        assert "(hey)" not in ass
+
+    @pytest.mark.parametrize("outcome", [NO_PICK, NO_RECORDS, SEARCH_FAILED, ERROR])
+    def test_any_other_outcome_leaves_the_song_on_joint_with_nothing_written(
+        self, tmp_path, monkeypatch, outcome
+    ):
+        stage, ctx, worker, _check = self._make(tmp_path, monkeypatch, outcome)
+        # The joint route reads the Genius text and the worker's words, not the sheet's.
+        worker.align_refine.side_effect = None
+        worker.align_refine.return_value = worker.transcribe_words.return_value = [
+            {"word": "hello", "start": 1.0, "end": 1.4},
+            {"word": "world", "start": 1.5, "end": 1.9},
+        ]
+
+        stage.run(ctx)
+
+        worker.align_refine.assert_called_once()
+        worker.transcribe_words.assert_called_once()
+        assert ctx.artifacts["lyrics_origin"] == "genius"
+        assert ctx.artifacts["lyric_method"] == "genius+joint"
+        assert sorted(p.name for p in self._lyrics(ctx).iterdir()) == [f"{ctx.song_path.stem}.lrc"]
+        lrc = self._lyrics(ctx) / f"{ctx.song_path.stem}.lrc"
+        assert lrc.read_text(encoding="utf-8") == self.FETCHED_LRC
+        bundle = _read_bundle(ctx)
+        assert bundle["pipeline_decisions"]["method_used"] == "joint"
+        assert bundle["pipeline_decisions"]["lrclib_auto"]["outcome"] == outcome
+        assert bundle["lyrics"]["origin"] == "genius"
+
+    @pytest.mark.parametrize(
+        "options",
+        [
+            {"armed": False},
+            {"origin": "override"},
+            {"genius": False},
+            {"lrclib_fill": False},
+        ],
+        ids=["not armed", "not a genius pick", "no genius song", "lrclib off"],
+    )
+    def test_the_check_is_never_made_unless_every_condition_holds(
+        self, tmp_path, monkeypatch, options
+    ):
+        stage, ctx, _worker, check = self._make(tmp_path, monkeypatch, **options)
+
+        stage.run(ctx)
+
+        check.assert_not_called()
+        assert "lrclib_auto" not in _read_bundle(ctx)["pipeline_decisions"]
+        assert not [p for p in self._lyrics(ctx).iterdir() if p.suffix == ".srt"]
+
+    def test_a_caption_song_is_not_checked(self, tmp_path, monkeypatch):
+        stage, ctx, _worker, check = self._make(tmp_path, monkeypatch, origin="srt")
+        subs = ctx.song_path.parent / "subtitles"
+        subs.mkdir()
+        caption = subs / f"{ctx.song_path.stem}.en.srt"
+        caption.write_text(self.SHEET, encoding="utf-8")
+        ctx.artifacts["lyrics_path"] = caption
+
+        stage.run(ctx)
+
+        check.assert_not_called()
+        assert ctx.artifacts["lyric_method"] == "srt+cue_align"
+
+    def test_a_video_with_no_length_goes_joint_and_the_bundle_says_the_check_failed(
+        self, tmp_path, monkeypatch
+    ):
+        stage, ctx, worker, check = self._make(tmp_path, monkeypatch, duration=None)
+        worker.align_refine.side_effect = None
+        worker.align_refine.return_value = worker.transcribe_words.return_value = [
+            {"word": "hello", "start": 1.0, "end": 1.4},
+            {"word": "world", "start": 1.5, "end": 1.9},
+        ]
+
+        stage.run(ctx)
+
+        check.assert_not_called()
+        assert ctx.artifacts["lyric_method"] == "genius+joint"
+        assert _read_bundle(ctx)["pipeline_decisions"]["lrclib_auto"]["outcome"] == "error"
+
+    def test_a_cue_align_failure_after_a_pick_leaves_lyrics_as_it_was(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, _worker, _check = self._make(tmp_path, monkeypatch)
+        monkeypatch.setattr(la_mod, "align_song", MagicMock(side_effect=RuntimeError("boom")))
+
+        with pytest.raises(RuntimeError, match="boom"):
+            stage.run(ctx)
+
+        assert sorted(p.name for p in self._lyrics(ctx).iterdir()) == [f"{ctx.song_path.stem}.lrc"]
+        lrc = self._lyrics(ctx) / f"{ctx.song_path.stem}.lrc"
+        assert lrc.read_text(encoding="utf-8") == self.FETCHED_LRC
+        assert not (ctx.song_path.parent / "karaoke").exists()
 
 
 class TestEdgeSnapHeardWords:
