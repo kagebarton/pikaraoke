@@ -163,6 +163,11 @@ class Backed:
     old_line_ids: list[int | None]
     placed: dict[tuple[int, int], GroupLine]
 
+    @property
+    def added_line_ids(self) -> list[int]:
+        """The ids, in the new list, of the lines added for a cue of only a group."""
+        return [new for new, old in enumerate(self.old_line_ids) if old is None]
+
     def old_texts(
         self, display_lines: Sequence[str], align_lines: Sequence[str]
     ) -> tuple[list[str], list[str]]:

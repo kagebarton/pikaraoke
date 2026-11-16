@@ -57,7 +57,7 @@ Approach:
 import copy
 import logging
 from collections import Counter
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass
 from statistics import median
 
@@ -527,8 +527,10 @@ class _Rescue:
         env: np.ndarray | None,
         pad_s: float,
         offset: float | None = None,
+        added_lines: Collection[int] = (),
     ):
         self.cue_spans = cue_spans
+        self.added_lines = frozenset(added_lines)
         self.display_lines = display_lines
         self.drift_gap_s = drift_gap_s
         self.max_word_dur = max_word_dur
@@ -665,7 +667,11 @@ class _Rescue:
         for it there: heard with its first token among the matched, at least
         :data:`HEARD_SHIFT_S` from ``cue start + offset``, and not in a run of identical
         lines the transcriber did not hear in full (no re-align there can be confirmed).
-        Else None."""
+        Never for an added line: an echo's words are its lead's or a repeat's, so the heard
+        match can deal them to another line's audio, and the line was kept on its own cue
+        window, the one place to look for it. Else None."""
+        if lid in self.added_lines:
+            return None
         heard = self.heard[lid]
         if heard is None or not heard.first or not self.run_heard[lid]:
             return None
@@ -816,6 +822,7 @@ def repace_bad_lines(
     pad_s: float = SECTION_PAD_S,
     heard_words: list[dict] | None = None,
     offset: float | None = None,
+    added_lines: Collection[int] = (),
 ) -> tuple[list[dict], dict]:
     """Rescue the lines the align could not place, from their cue spans.
 
@@ -843,7 +850,10 @@ def repace_bad_lines(
     start bound included, and that result is kept only if it passes the checks below
     against the moved span and the transcriber confirms it; otherwise the line takes the
     cue-aimed retry as before. Without heard words, or for a line the transcriber did not
-    hear, the cue decides as before.
+    hear, the cue decides as before. ``added_lines`` (the ids of the lines added to the song
+    for a backing vocal) are never looked for where heard: such a line was kept on the
+    evidence of its own cue window, and an echo's words are its lead's or a repeat's, so
+    the heard match can deal them to another line's audio. They take the cue-aimed retry.
 
     Each bad, partial or crammed line is rescued in two steps:
     ``realign(lid, w0, w1)`` -- an injected narrow per-line forced align over
@@ -890,6 +900,7 @@ def repace_bad_lines(
         env=env,
         pad_s=pad_s,
         offset=offset,
+        added_lines=added_lines,
     )
     out: list[dict] = []
     for obj in line_objects:
@@ -1430,7 +1441,7 @@ def _log_backing(verdicts: list[Verdict], backed: Backed | None, sent: list[Sect
         detail = ", ".join(f"{n} {name}" for name, n in sorted(counts.items()))
         return f"{sum(counts.values())} ({detail})"
 
-    added = 0 if backed is None else backed.old_line_ids.count(None)
+    added = 0 if backed is None else len(backed.added_line_ids)
     logger.info(
         "cue-align backing vocals: kept %s, dropped %s; %d line(s) added, %d section(s) re-aligned",
         tally(True),
@@ -1474,8 +1485,10 @@ def align_song(
     by ``heard_words`` once the first pass has fitted the display lead, and the kept ones join
     the song's lines (:func:`_join_backing`): an inline group's words go into their line, a
     cue of only a group becomes a line of its own. The rescue then runs on those lines with
-    the lead the first pass gives today's lines. Without ``parens`` or ``heard_words``, or
-    with nothing kept, every step and every aligner call is as without them.
+    the lead the first pass gives today's lines, and is told which are the added ones, which
+    it never looks for where the transcriber heard them (:func:`repace_bad_lines`). Without
+    ``parens`` or ``heard_words``, or with nothing kept, every step and every aligner call is
+    as without them.
     All GPU/ffmpeg I/O lives behind ``slice_align``, so this stays pure and
     ``test_cue_align`` can drive it with a stub aligner. Display is injected the
     same way: ``progress`` wraps the per-pass section list (e.g. ``tqdm``) so
@@ -1547,6 +1560,7 @@ def align_song(
         pad_s=pad_s,
         heard_words=heard_words,
         offset=pinned,
+        added_lines=[] if backed is None else backed.added_line_ids,
     )
     stats = {
         "n_sections": len(sections),

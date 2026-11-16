@@ -634,13 +634,6 @@ parentheses too. Record: `plans/backing-vocal-lines.md` on branch
   counts it among the re-aligned or paced lines, and a paced one toward the 15%
   guessed-lines share (`POOR_GUESSED_SHARE`), so a song can read as poor from
   new lines alone.
-- **The rescue's rule B can aim an added line at another copy of its words.** An
-  echo's words are its lead's (or a chorus repeat's), and the heard match deals
-  each heard word to one token over the whole song, so a heard-aimed keep on an
-  added line can land on another line's audio, 1.5 s or more from its cue, which
-  the keep rule never tested. Reported at that plan's GATE B; if a keep lands on
-  another line's words, the change is that an added line is never heard-aimed
-  ("The D7 amendment", "How the rescue treats an added line").
 - **Re-aligning a section for an echo can cost another line its held last
   word.** A section goes back to the aligner when one of its lines gains a kept
   group, and its other lines are re-made with it. Where the aligner returns a
