@@ -50,13 +50,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pikaraoke.lib import onset_snap  # noqa: E402
 from pikaraoke.lib.cue_align import SOURCE_REALIGN, repace_bad_lines  # noqa: E402
 from pikaraoke.lib.get_platform import get_temp_directory  # noqa: E402
+from pikaraoke.lib.joint_match import SOURCE_TRANSCRIBE  # noqa: E402
 from pikaraoke.lib.token_align import _normalize_token  # noqa: E402
 from pikaraoke.pipeline.config import PipelineConfig  # noqa: E402
 from pikaraoke.pipeline.stages.lyric_align import generate_ass  # noqa: E402
 
 DOUBTED = frozenset({SOURCE_REALIGN})
-# The probe's copy of the line sources whose times the stage takes from the heard words.
-HEARD_TIMED = frozenset({"transcribe"})
+# The line sources whose times the stage takes from the heard words, as the stage passes them.
+HEARD_TIMED = frozenset({SOURCE_TRANSCRIBE})
 
 # A heard first word is looked for this far either side of the line's cue start.
 HEARD_WINDOW_S = 3.0
