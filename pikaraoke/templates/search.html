@@ -548,7 +548,7 @@ $("#add-queue-link").trigger("click");
 					song_url: songUrl,
 					song_title: songTitle || "",
 					song_added_by: getUserCookie() || "",
-					queue: $("#add-to-queue-search").is(":checked"),
+					queue: $("#add-to-queue-direct").is(":checked"),
 				}),
 				success: function () {
 					$btn.removeClass("is-loading").addClass("is-success")
