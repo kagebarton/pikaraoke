@@ -257,6 +257,29 @@ def test_card_offers_add_to_queue_only_for_a_library_copy(mock_get, client):
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_a_card_carries_its_channel_for_the_lyrics_search(mock_get, client):
+    """The page sends the channel with the title; a channel with a quote must not break the tag."""
+    results = [
+        _result("Some Song", "aaaaaaaaaaa", channel='Dave "D" Band'),
+        _result("Other Song", "bbbbbbbbbbb", channel=""),
+    ]
+
+    body = _search_body(client, mock_get, results, _karaoke_with_library([]))
+
+    first, second = re.findall(r"<li data-ytID=[^>]*>", body)
+    assert 'data-ytChannel="Dave &#34;D&#34; Band"' in first
+    assert 'data-ytChannel=""' in second
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_a_show_more_card_carries_its_channel_too(mock_get, client):
+    results = _filler(30) + [_result("Late Song", "lateaaaaaaa", channel="Late Channel")]
+    resp, _ = _more_body(client, mock_get, results)
+
+    assert 'data-ytChannel="Late Channel"' in resp.get_data(as_text=True)
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
 def test_the_artists_official_video_and_audio_come_first_with_a_badge(mock_get, client):
     lyrics = _result("Rick Astley - Never Gonna Give You Up (Lyrics)", "lyricsaaaaa")
     audio = _result(

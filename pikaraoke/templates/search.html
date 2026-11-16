@@ -667,11 +667,14 @@ $("#add-queue-link").trigger("click");
 //          link to reveal Custom Search / Raw Transcription). No Genius
 //          search is performed.
 //        - too sparse, or the check couldn't run → say so, then as below.
-//      - srt_available=false → run Genius search using the active title
-//        (falls back to the page's search term) and populate dropdown with
-//        Genius results + Custom Search + Raw Transcription.
+//      - srt_available=false → run the Genius search for the video (its title,
+//        channel and the page's search term; the server works out what to ask)
+//        and populate dropdown with Genius results + Custom Search + Raw
+//        Transcription. The server says which hit is safe to preselect; with
+//        none, the dropdown opens on "Choose the lyrics".
 
 var _activeYtTitle = "";
+var _activeYtChannel = "";
 var _activeYtId = "";
 var _activeSrtAvailable = false;
 var CAPTION_NOTES = {
@@ -679,6 +682,7 @@ var CAPTION_NOTES = {
   sparse: {{ _("This video's caption is too sparse to be lyrics.") | tojson }},
   failed: {{ _("Could not check the caption.") | tojson }},
 };
+var CHOOSE_LYRICS = {{ _("Choose the lyrics") | tojson }};
 
 function resetLyricsSection() {
   $("#lyrics-section").addClass("is-hidden");
@@ -707,13 +711,19 @@ function showSrtPrimary() {
   $("#lyrics-more-options").removeClass("is-hidden");
 }
 
-function populateLyricsDropdown(data) {
+// found is the route's answer: {hits, preselect, query}.
+function populateLyricsDropdown(found) {
   var $sel = $("#lyrics-dropdown").empty();
   $("#lyrics-loading").addClass("is-hidden");
 
-  if (data.length) {
+  if (found.hits.length) {
+    // Nothing safe to preselect: the first option asks for a choice and Download
+    // stays hidden until a hit or another option is chosen.
+    if (found.preselect === null) {
+      $sel.append($("<option>").val("").text(CHOOSE_LYRICS).prop("disabled", true).prop("selected", true));
+    }
     var $genius = $('<optgroup label="Genius.com Results">');
-    data.forEach(function (item) {
+    found.hits.forEach(function (item) {
       $genius.append($("<option>").val(item.id).text(item.title + " — " + item.artist));
     });
     $sel.append($genius);
@@ -733,44 +743,39 @@ function populateLyricsDropdown(data) {
   $sel.append($other);
 
   $("#lyrics-select-wrap").removeClass("is-hidden");
-  // Trigger change so download-button visibility matches the auto-selected option.
+  if (found.preselect !== null) $sel.val(String(found.preselect));
+  // Trigger change so download-button visibility matches the selected option.
   // With no Genius hits, the first option is "Custom Search..." which the change
   // handler reveals (and focuses) — matches the previous empty-state UX.
   $("#lyrics-dropdown").trigger("change");
 }
 
-function runLyricsSearch(query, fallback) {
+// params is {title, channel, typed} for the video, or {q} for what was typed.
+function runLyricsSearch(params) {
   $("#lyrics-section").removeClass("is-hidden");
   $("#lyrics-loading").removeClass("is-hidden");
   $("#lyrics-select-wrap").addClass("is-hidden");
   $("#lyrics-empty").addClass("is-hidden");
   $("#lyrics-custom-search").addClass("is-hidden");
   $("#lyrics-dropdown").empty();
-  var shouldFallback = fallback && fallback.trim() && fallback.trim() !== query.trim();
   $.ajax({
     url: "{{ url_for('search.lyrics_search') }}",
     type: "get",
-    data: { q: query },
-    success: function (data) {
-      if (!data.length && shouldFallback) {
-        runLyricsSearch(fallback);
-        return;
-      }
-      populateLyricsDropdown(data);
-    },
+    data: params,
+    success: populateLyricsDropdown,
     error: function () {
-      if (shouldFallback) {
-        runLyricsSearch(fallback);
-        return;
-      }
-      populateLyricsDropdown([]);
+      populateLyricsDropdown({ hits: [], preselect: null });
     },
   });
 }
 
+// The channel is always sent, even empty: it is how the server knows this is the search page.
 function searchLyricsForActiveVideo() {
-  var searchTerm = sessionStorage.getItem("pikaraoke_search_term") || "";
-  runLyricsSearch(_activeYtTitle, searchTerm);
+  runLyricsSearch({
+    title: _activeYtTitle,
+    channel: _activeYtChannel,
+    typed: sessionStorage.getItem("pikaraoke_search_term") || "",
+  });
 }
 
 // Offer the video's caption only once it passes the length gate; a sparse
@@ -822,6 +827,10 @@ $(document).on("change.search", "#lyrics-dropdown", function () {
     $("#lyrics-custom-search").removeClass("is-hidden");
     $("#lyrics-download-wrap").addClass("is-hidden");
     $("#lyrics-custom-input").focus();
+  } else if (!val) {
+    // "Choose the lyrics": nothing picked yet.
+    $("#lyrics-custom-search").addClass("is-hidden");
+    $("#lyrics-download-wrap").addClass("is-hidden");
   } else {
     $("#lyrics-custom-search").addClass("is-hidden");
     $("#lyrics-download-wrap").removeClass("is-hidden");
@@ -832,7 +841,7 @@ $(document).on("change.search", "#lyrics-dropdown", function () {
 function doCustomLyricsSearch() {
   var query = $("#lyrics-custom-input").val().trim();
   if (!query) return;
-  runLyricsSearch(query);
+  runLyricsSearch({ q: query });
 }
 
 $(document).on("click.search", "#lyrics-custom-btn", doCustomLyricsSearch);
@@ -949,6 +958,7 @@ function openPreviewModal($li) {
   const videoUrl = $li.attr("value") || $li.find(".img-wrapper").data("url");
 
   _activeYtTitle = $li.attr("data-yttitle") || "";
+  _activeYtChannel = $li.attr("data-ytchannel") || "";
   _activeYtId = $li.attr("data-ytid") || "";
 
   document.getElementById("modal-video-title").textContent = _activeYtTitle;
