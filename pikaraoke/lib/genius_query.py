@@ -394,9 +394,15 @@ def ladder(parsed: Parsed) -> list[str]:
     return queries
 
 
+def _queries(parsed: Parsed) -> list[str]:
+    """The ladder, or the text itself when nothing in it reads as a song: what a search box
+    starts with is then what is searched."""
+    return ladder(parsed) or [q for q in [parsed.raw.strip()] if q]
+
+
 def start_query(text: str) -> str:
     """The first query for a title, for a search box to start with; the text when nothing reads."""
-    return next(iter(ladder(parse(text))), text)
+    return next(iter(_queries(parse(text))), "")
 
 
 # --- Matching and order -------------------------------------------------------------------------
@@ -522,7 +528,8 @@ def find_song(
     max_calls: int,
 ) -> Found:
     """Ask the ladder's queries in order, at most ``max_calls``, stopping after the first that
-    returns a hit safe to preselect; then order the merged hits.
+    returns a hit safe to preselect; then order the merged hits. A title with nothing in it
+    that reads as a song asks the title itself, as ``start_query`` shows it.
 
     ``typed`` is the search the guest ran on YouTube: one more query after the title's own,
     asked only when a call is left, nothing has stopped the ladder and it is not a rewording of
@@ -539,7 +546,7 @@ def find_song(
             merged.setdefault(hit.id, hit)
         return any(_confident(hit, parsed) for hit in hits)
 
-    for query in ladder(parsed)[:max_calls]:
+    for query in _queries(parsed)[:max_calls]:
         if ask(query):
             break
     else:

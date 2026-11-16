@@ -217,9 +217,21 @@ def test_at_most_eight_hits_are_kept():
     assert [h.id for h in found.hits] == [12, 11, 10, 9, 8, 7, 6, 5]
 
 
-def test_nothing_that_reads_asks_nothing_and_shows_the_text():
-    found = gq.find_song(FakeSearch({}), "Official Video", max_calls=3)
-    assert (found.hits, found.preselect, found.query) == ([], None, "Official Video")
+def test_a_title_with_nothing_that_reads_asks_the_title_as_its_box_shows_it():
+    hits = [_hit(1, "Official Video", "Someone", views=0)]
+    search = FakeSearch({"Official Video": hits, "official video someone": []})
+    found = gq.find_song(search, "  Official Video ", typed="official video someone", max_calls=3)
+    assert search.asked == ["Official Video", "official video someone"]
+    assert search.asked[0] == gq.start_query("  Official Video ")
+    assert ([h.id for h in found.hits], found.preselect) == ([1], None)
+
+
+@pytest.mark.parametrize("text", ["", "   "])
+def test_an_empty_title_asks_nothing(text):
+    search = FakeSearch({})
+    found = gq.find_song(search, text, max_calls=3)
+    assert (search.asked, found.hits, found.preselect) == ([], [], None)
+    assert gq.start_query(text) == ""
 
 
 # --- The typed term -----------------------------------------------------------------------------
