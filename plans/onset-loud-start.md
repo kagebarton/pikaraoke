@@ -690,6 +690,7 @@ From the code only, for `backing_vocal_lines` (written into that plan's "Landing
 | 11 | 2026-11-15 | 2b2 | Sonnet 5.5, same command and inputs at `0e08ee3e`; then a scratch compare of its `rows.json` with the record's | Block R11 below |
 | 12 | 2026-11-15 | 2c, close | Sonnet 5.5. Mutation checks, full suite, pre-commit, `graphify update .` at `a89f8ead` | Block R12 below |
 | 13 | 2026-11-16 | review | Opus 5.5. `/code-review high 4001f57f..a89f8ead`, three finders (one per Self-Review axis), borderline findings checked against this plan; Ken took the three Easy fixes and the refactor. Then 2b's `--check` command at `4b411cbc`, `--out` a scratch folder whose `env` links to `~/.pikaraoke/tmp/onset_loud_start_check/env`; mutation check, full suite, `graphify update .` | Block R13 below |
+| 14 | 2026-11-16 | 3 | Sonnet 5.5, GPU on the Linux box (RTX 2060), worktree at `97bd57f3`, `models/` symlinked in, app not running. `scripts/regen_alignment_bundles.py ~/pikaraoke-songs --dry-run`, then `--yes`, with the 13 `--song` patterns of the sample. Then a read-only scratch script (not kept) over the 13 new bundles in `~/pikaraoke-songs/alignment_debug` and the v11 ones in `regen_backups/20261116T160237Z/alignment_debug` | Block R14 below |
 
 **R1** (the probe's stdout, verbatim)
 
@@ -1084,3 +1085,58 @@ and keys): 4 rows differ, in `agreed` only, true to false:
 - Full suite at `4b411cbc`: 3644 passed (3643 + `TestMain`).
 - Commits landing on `dev` (Phase 4), after `a89f8ead`: `fb9bdf9f`, `3ac2d781`,
   `0d740fc7`, `4b411cbc`.
+
+**R14** (Phase 3, the 13-song regen and its read)
+
+- Dry run: 13 songs, every plan a reuse (`reuse srt (from video)` 3, `reuse genius` 4,
+  `reuse genius+ytasr` 3, `movie subtitles` 1, `LRCLIB timing` 1, `custom sheet` 1); no
+  caption fetch, no Genius prompt.
+- Run (11:02:38 to 11:31:31 local, about 29 minutes): `Done. succeeded=13 failed=0
+  skipped=0`. Backup `regen_backups/20261116T160237Z/`. The one warning is ONNX's "CUDAExecutionProvider
+  not available". LRCLIB backfill ran for the 7 genius-origin songs: `pXNd2V88d60` had no
+  `.lrc` and LRCLIB returned "no synced match", so no file was written and its bundle has no
+  `lrclib_fill`; the other six had one.
+- Wiring, all 13: `schema_version` 12 (11 in the backup), `n_heard_snapped`, `heard_snaps`
+  and `n_heard_earlier` present, `n_heard_snapped == len(heard_snaps)`, `n_fired ==
+  n_snapped + n_no_rise + n_below_min_shift`, the song's `.ass` in `karaoke/` newer than
+  the run's start, `n_lines` equal to v11's.
+- Cue route (`n_snapped` is the exit's own count, which does not include the heard moves):
+
+| song | lines | `n_snapped` v11 | `n_snapped` v12 | `n_heard_snapped` | `n_heard_earlier` | 11-10 moves | heard move min / median / max (s) |
+|---|---|---|---|---|---|---|---|
+| `pj6FCKm8dhM` | 63 | 15 | 15 | 6 | 0 | 6 | 0.20 / 0.51 / 0.71 |
+| `fJ9rUzIMcZQ` | 65 | 13 | 13 | 9 | 1 | 9 | 0.23 / 0.90 / 1.15 |
+| `xFYQQPAOz7Y` | 93 | 10 | 12 | 7 | 0 | 8 | 0.17 / 0.20 / 0.24 |
+| `MiraOCjABn8` | 92 | 12 | 12 | 7 | 0 | 7 | 0.15 / 0.31 / 0.58 |
+| Rent (2005) - I'll Cover You | 42 | 8 | 8 | 1 | 0 | 0 | 0.85 / 0.85 / 0.85 |
+| total | 355 | 58 | 60 | 30 | 1 | 30 | |
+
+- Joint route:
+
+| song | lines | `n_snapped` v11 | `n_snapped` v12 | `n_heard_snapped` | `n_heard_earlier` | heard move min / median / max (s) |
+|---|---|---|---|---|---|---|
+| `aBt8fN7mJNg` | 44 | 9 | 9 | 2 | 0 | 0.93 / 1.10 / 1.27 |
+| `hvvjiE4AdUI` | 44 | 25 | 24 | 3 | 0 | 0.22 / 0.38 / 3.86 |
+| `ZrX1XKtShSI` | 53 | 17 | 17 | 12 | 0 | 0.29 / 0.64 / 1.10 |
+| `GI6CfKcMhjY` | 66 | 3 | 6 | 3 | 0 | 0.30 / 0.52 / 0.56 |
+| `1YiAzyCzZzw` | 75 | 4 | 3 | 0 | 0 | |
+| `pXNd2V88d60` | 71 | 10 | 10 | 2 | 0 | 1.54 / 1.56 / 1.58 |
+| `22QYya-LGDY` | 55 | 13 | 13 | 8 | 0 | 0.15 / 0.82 / 1.15 |
+| `rEXhAMtbaec` | 32 | 9 | 10 | 0 | 0 | |
+| total | 440 | 90 | 92 | 30 | 0 | |
+
+  30 heard moves over 8 songs, 3.75 a song (R7's replay: 138 over 45, 3.1); the plan's
+  band is 12 to 49 over the eight.
+- The two songs the plan names, looked at in the bundles:
+  - Rent - I'll Cover You, line 4 ("Be my lover"): one heard move of 0.854 s, to 15.43. The
+    transcript has "Be" at 15.44 (the same words in the v11 and v12 runs). v11's final
+    start was 15.32; 11-10's replay had no move there.
+  - Bohemian Rhapsody: `n_heard_earlier` 1, `n_heard_snapped` 9 (11-10: 9).
+- The largest joint move, `hvvjiE4AdUI` line 34 ("In the City of Fallen Angels where the
+  ocean meets the sand"), 3.859 s: 180.716 to 184.575. The forced align had "In" at 180.72
+  and "the" at 184.78; the transcript has "in" at 184.64, "the" at 184.76. v11's final start
+  for the line was 180.716.
+- Not separated here: the v11 to v12 differences in `n_snapped` (`xFYQQPAOz7Y` +2,
+  `GI6CfKcMhjY` +3, `1YiAzyCzZzw` -1, `hvvjiE4AdUI` -1, `rEXhAMtbaec` +1) come from a fresh
+  whisper run and from a heard move freeing room for the line before it; the bundles do not
+  split the two. Nothing was listened to.
