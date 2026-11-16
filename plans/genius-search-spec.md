@@ -6,7 +6,7 @@ same day. GATE G is read by Opus, then Ken (Fable only if Opus is unsure which r
 hit is, and only while Fable is available, to 2026-11-16: "Rulings on the gate", 5).
 
 Status: **Phases 0-4 done 2026-11-16 (Results log rows 2-13); `/code-review` on Phases 1-4
-(Ken runs it) and its fixes come next, then Phase 5.** Does not
+run and its fixes landed the same day (row 14); Phase 5 is next.** Does not
 wait for `search_official_captions` (Ken, 2026-11-15). Ken ruled the review's four gate
 questions on 2026-11-15 ("Rulings on the gate").
 
@@ -94,13 +94,13 @@ class Parsed:            # builder.py's Parsed, same fields
 
 @dataclass(frozen=True)
 class Found:
-    hits: list[GeniusHit]    # at most 8, in the order to list them
+    hits: list[GeniusHit]    # at most 8 (genius.HITS_LISTED), in the order to list them
     preselect: int | None    # hits[0].id when it is safe to preselect, else None
-    query: str               # what a search box shows: the first query asked
 
 def parse(text: str, channel: str = "") -> Parsed
 def ladder(parsed: Parsed) -> list[str]
 def start_query(text: str) -> str      # ladder(parse(text))[0], or the text when the ladder is empty
+                                       # (find_song then asks that text: review fix, row 14)
 def find_song(search: Callable[[str], list[GeniusHit]], text: str, *,
               channel: str = "", typed: str = "", max_calls: int) -> Found
 
@@ -232,13 +232,14 @@ is judged on raw titles, and on these pages the admin sees the query and the hit
 ## The route (`/lyrics_search`)
 
 Two forms, one route. Both answer `{"hits": [{id, title, artist, year}], "preselect": id or
-null, "query": str}`; always 200, empty `hits` when Genius is off or finds nothing.
+null}`; always 200, empty `hits` when Genius is off or finds nothing. (A `query` field was
+dropped by the review fixes, row 14: no page read it.)
 
 - `?title=...` with optional `channel` and `typed`: `find_song`. The search page always
   sends `channel` (empty when YouTube gave none), and that is how the route knows to allow
   three calls; without the parameter it allows two.
 - `?q=...`: what someone typed. One Genius call with the text trimmed and otherwise as
-  typed, Genius's order, `preselect` null, `query` the text.
+  typed, Genius's order, `preselect` null.
 
 `clean_genius_query` and its tests are deleted; nothing else calls it. `clean_search_query`
 stays in `metadata_parser.py` for its other callers. `default_query` keeps its one remaining
@@ -259,11 +260,14 @@ is chosen (ruling B). No hits: as today, straight to Custom Search. Custom Searc
 **Pick pass page (`pick_pass.html`).** The box starts with `song.query`, now from
 `start_query`. A search with the box unchanged sends `title` (the song's file name without
 the ID, which the view supplies); an edited box sends `q`. A preselect becomes
-`picker.selected`. Each hit shows its year.
+`picker.selected`, unless the song's own Genius pick is listed (the admin's pick in this
+run, then the recorded one): that one is selected instead (review fix, row 14). Each hit
+shows its year.
 
 **Repair page (`song_repair.html`).** The Genius box starts with the same `start_query`
 text instead of empty (item 7). It does not search until asked, as today. Unchanged box
-sends `title`, edited sends `q`. A preselect ticks that hit's radio. Each hit shows its
+sends `title`, edited sends `q`. A preselect ticks that hit's radio, unless the bundle's
+recorded pick is listed: that one is ticked instead (review fix, row 14). Each hit shows its
 year. The "current" tag on the bundle's recorded pick stays.
 
 **Command-line prompt (`scripts/genius_prompt.py`).** The first search for a song is
@@ -616,3 +620,4 @@ that ported them.
 | 11 | 2026-11-16 | Phase 3, step 3 | Prompt (`5eca345c`). `ask_lyrics_source` starts from `start_query(file_title(song))`; the box text equal to that start text is `find_song` on the file title (`LIBRARY_CALLS`, 20 hits a query), anything else is one `genius.search(query)` (8 hits) with nothing marked, the same rule as the pages. A preselected hit prints `<- Enter`, the choose prompt reads `Enter=1, ...`, and Enter takes it; with no mark Enter at the choose prompt searches again as before. `HELP` says so, and `scripts/README.md` describes the new default and drops its "default query underperforms" limitation. The hit line is still `Title - Artist`; the year is Phase 4. `test_genius_prompt.py` rewritten for `GeniusHit` fakes (`find_song` reads `primary_artist` and `views`) and calls as `(query, limit)`: 15 tests, 7 new. `test_regen_alignment_bundles.py`'s fake hit became a `GeniusHit` and its `search` got `limit=8` (it drives the real prompt). Three throwaway breaks (Enter no longer takes the mark; typed text also runs the ladder; no mark printed) each failed a test; file restored. | this file, "The four places"; `git show 5eca345c` |
 | 12 | 2026-11-16 | Phase 3 | Steps 1-3 done: `2da2e7d7`, `e1ddf4b6`, `5eca345c`; the three pages and the prompt read the route's `{hits, preselect, query}` again (row 7's broken dropdowns are repaired). Full suite at `5eca345c`, env `pik`: 3682 passed (3667 + 2 + 6 + 7), 0 failed, 47 s. `routes/search.py`, `genius.py`, `genius_query.py` and `official_rank.py` untouched; no word added to any list. No Genius or YouTube call by any step or check (every Genius answer was a fake; Chrome aborted every request outside 127.0.0.1; the titles used by hand were made up or library-style, none of the gate's thirty). `graphify update` not run: `graphify-out/` exists only in the main checkout, not this worktree. Not pushed; `origin/genius_search_accuracy` is still at `6dcfb89b`. | `git log 2cfa2ab7..HEAD` |
 | 13 | 2026-11-16 | Phase 4 | The year shown per hit, all four places, one commit (`42adbb7d`). The route's `year` (an int, or null when Genius has none) is appended when it is non-empty and left off otherwise. Search page: option text `Title — Artist (Year)`, inline in `populateLyricsDropdown`. Pick pass and Repair: the muted artist line reads `Artist (Year)` through one new helper, `libraryPages.byline`, in `library-pages.js` (both pages already load it; `search.html` does not, so it has its own one-line copy). Prompt: `Title - Artist (Year)`, the year before the `<- Enter` mark; `scripts/README.md`'s sample line and one sentence say so. 1 new test (`test_genius_prompt.py`: a hit with a year, the marked one first, and one with no year); a throwaway line that dropped the year failed it; line restored. The JS has no test harness, so the three pages were driven in headless Chrome as in rows 9-10, two throwaway scripts in scratch, not committed (the search page on the old harness's fake Genius and canned rows; pick pass and Repair on the suite's `Env` with a fake Genius): search page, 4 checks (a sure match lists `Never Gonna Give You Up — Rick Astley (1987)` and `… (Live) — Rick Astley (2000)`; a cover lists one dated hit; a typed search lists a hit with no year as `Together Forever — Rick Astley`, no parentheses; no page errors); pick pass and Repair, 5 checks (both list `Rick Astley (1987)`, `Rick Astley (2000)`; both list a no-year hit as `Typed Artist`; no page errors). Every request outside 127.0.0.1 was aborted; the titles were made up, none of the gate's thirty. Full suite at `42adbb7d`, env `pik`: 3683 passed (3682 + 1), 0 failed, 48 s. Pre-commit on the changed files: all hooks passed. **Seen, not touched:** the confirmation lines after a pick (`Genius: Title · Artist` on the pick pass, `Genius pick: Title · Artist.` on Repair) read the stored pick's `title` and `artist`, which carry no year; they are not hit lists. `routes/search.py`, `genius.py`, `genius_query.py` and `official_rank.py` untouched; no word added to any list. `graphify update` not run (no `graphify-out/` in this worktree). No Genius or YouTube call by any step or check. Not pushed; `origin/genius_search_accuracy` is still at `6dcfb89b`. | this file, "The four places"; `git show 42adbb7d` |
+| 14 | 2026-11-16 | Review fixes | `/code-review high eb8d4be0..3743f4f2` (three finders, one per Self-Review axis), run by Ken; 9 findings, triaged in chat, every recommendation ratified by Ken the same day. Fixed, in order: (1) search page race, the row 9 "seen, not touched" (`097d8b36`): `_lyricsSeq` is bumped by each search and each `resetLyricsSection`, and an answer is shown only when it is the latest; with the preselect a stale answer had arrived with Download shown and the other video's hit selected. (2) The empty ladder (`da4afc2a`): a title with nothing that reads ("Official Video", "Karaoke", emoji only) asked Genius nothing while its box showed the title; `find_song` now asks the trimmed title, the same text `start_query` gives; an empty or blank title still asks nothing. No fixture title has an empty ladder (checked over all 382), so every frozen run is unchanged. (3) `genius.HITS_LISTED = 8` (`1d929376`), read by `GeniusClient.search`'s default and `find_song`'s cut; `MAX_HITS` gone. (4) The route's `query` field and `Found.query` dropped (`2f2cd01d`): no page read them. (5) `libraryPages.geniusParams` (`097f6654`): the unchanged-box rule once for the pick pass and Repair; the prompt keeps its own (it calls `find_song`, not the route). (6) `libraryPages.geniusSelected` (`b16ab269`): when the answer has a preselect and the song's own Genius pick is listed (pick pass: the admin's pick in this run, then the recorded `genius_id`; Repair: `CURRENT_GENIUS_ID`), that one is selected instead; a typed search still selects nothing. "The four places" amended. From open issues, same triage: (7) the direct box's Add to queue tick (`62702d65`); (8) `library_tools.is_whole_number` for the three int-not-bool checks (`df2d1159`). Logged, not fixed (`335fe75e`): a failing Genius now costs the title search up to three 15 s calls, added to open-issues "A service outage reads as no results". Dropped: the typed term asked only within the call limit (ruled in "The typed term"); `search.html`'s own year format (row 13). The `_typed` half of open-issues' custom-sheet leftovers no longer applies and is struck there. Tests: the empty-ladder test replaced by 1 + 2 (title asked as its box shows it, with the typed term after; blank titles ask nothing); the route tests drop `query`; a throwaway return to the bare ladder failed the new test; file restored. The JS has no test harness, so it was driven in headless Chrome as in rows 9-10, from throwaway scripts in scratch, not committed. Search page (fake Genius, one answer delayed 2.5 s): a slow answer for a closed video does not replace the next video's dropdown or selection, does not fill a closed modal, and still shows when its own video is reopened; with no results on the page the direct box queues when ticked and not when unticked. Run against the unfixed page, both bugs reproduced (the slow answer took over the next video's dropdown; a ticked direct box sent `queue: false`). Pick pass and Repair (the suite's `Env`): the 19 checks of row 10 all pass after (5) and (6); `geniusSelected` in the page, 6 cases; Repair ticks the listed recorded pick over the preselect and the preselect when the recorded pick is not listed; a run's pick pass selects the song's recorded pick on first open, the admin's pick after Change, and nothing for a typed search listing both. Against the pages before (6), the run pick pass selected the preselect over the recorded pick. No page errors in any run. Full suite at `df2d1159`, env `pik`: 3685 passed (3683 + 2), 0 failed, 48 s. Pre-commit on the changed files: all hooks passed. No Genius or YouTube call by any step or check; no title used is one of the gate's thirty. Not pushed; `origin/genius_search_accuracy` is still at `6dcfb89b`. | this file, "The route", "The four places"; `git log 3743f4f2..335fe75e` |
