@@ -1159,8 +1159,15 @@ and keys): 4 rows differ, in `agreed` only, true to false:
   Words changed against v12, by time of 11 ms or more or by word: `22QYya-LGDY` 0 (linux to
   linux); Rent - I'll Cover You 24 of 221 (linux to linux); the Windows ones 5 to 88 of 340
   to 777 where the counts match. All four stacked-line cases above are Windows captures.
-  Not tested: a second run on this box of the same song, so the machine is not shown to be
-  the cause. R7 left 12 joint bundles undiagnosed for a final line time that differs from
-  the bundle, among them `hvvjiE4AdUI`, `aBt8fN7mJNg` and `ZrX1XKtShSI`. For
+  A second run of `hvvjiE4AdUI` on this box (`--song`, 16:39 UTC, same worktree and library;
+  its backup `regen_backups/20261116T163956Z` holds the first run's files): `transcribe_words`
+  and `words` (455 each) equal to the first run's, pass 1 equal, final line timings equal,
+  the same three heard moves. Against the Windows v11: 36 of 455 heard words and 101 of 455
+  aligned words differ, in both runs. So the pipeline repeats on this box with the same code
+  and inputs; what differs from the v11 capture is not run-to-run noise. Machine, GPU stack
+  or the stems it read are not told apart; Rent - I'll Cover You (linux 11-07) also differs
+  from today's run, so a change in time on this box is not ruled out either.
+  R7 left 12 joint bundles undiagnosed for a final line time that differs from the bundle,
+  among them `hvvjiE4AdUI`, `aBt8fN7mJNg` and `ZrX1XKtShSI`. For
   `plans/open-issues.md` at landing: a joint song's lines can stack on one instant (zero
   length) when the heard words shift; not caused by this branch (pass 1).
