@@ -683,8 +683,12 @@ var CAPTION_NOTES = {
   failed: {{ _("Could not check the caption.") | tojson }},
 };
 var CHOOSE_LYRICS = {{ _("Choose the lyrics") | tojson }};
+// Bumped by each lyrics search and each reset, so only the latest search's answer is shown:
+// a slow answer for a video already closed must not fill the next video's dropdown.
+var _lyricsSeq = 0;
 
 function resetLyricsSection() {
+  _lyricsSeq++;
   $("#lyrics-section").addClass("is-hidden");
   $("#lyrics-caption-note").addClass("is-hidden").text("");
   $("#lyrics-loading").addClass("is-hidden");
@@ -753,6 +757,7 @@ function populateLyricsDropdown(found) {
 
 // params is {title, channel, typed} for the video, or {q} for what was typed.
 function runLyricsSearch(params) {
+  var seq = ++_lyricsSeq;
   $("#lyrics-section").removeClass("is-hidden");
   $("#lyrics-loading").removeClass("is-hidden");
   $("#lyrics-select-wrap").addClass("is-hidden");
@@ -763,9 +768,11 @@ function runLyricsSearch(params) {
     url: "{{ url_for('search.lyrics_search') }}",
     type: "get",
     data: params,
-    success: populateLyricsDropdown,
+    success: function (found) {
+      if (seq === _lyricsSeq) populateLyricsDropdown(found);
+    },
     error: function () {
-      populateLyricsDropdown({ hits: [], preselect: null });
+      if (seq === _lyricsSeq) populateLyricsDropdown({ hits: [], preselect: null });
     },
   });
 }
