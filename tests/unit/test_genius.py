@@ -72,6 +72,15 @@ class TestGeniusClientConstruction:
 # ---------------------------------------------------------------------------
 
 
+def _search(results: list[dict], **kwargs) -> list[GeniusHit]:
+    """What ``GeniusClient.search`` returns when Genius answers with these song results."""
+    with patch("pikaraoke.lib.genius.lyricsgenius.Genius") as mock_cls:
+        mock_cls.return_value.search.return_value = {
+            "sections": [{"hits": [{"type": "song", "result": r} for r in results]}]
+        }
+        return GeniusClient(api_token="tok").search("query", **kwargs)
+
+
 class TestGeniusClientSearch:
     """GeniusClient.search() returns [] on failure; filters by type and blocked term."""
 
@@ -255,6 +264,71 @@ class TestGeniusClientSearch:
 
             hits = client.search("query", limit=3)
             assert len(hits) == 3
+
+    def test_search_reads_primary_artist_year_and_views(self):
+        (hit,) = _search(
+            [
+                {
+                    "id": 1,
+                    "title": "For the First Time in Forever",
+                    "artist_names": "Kristen Bell & Idina Menzel",
+                    "primary_artist": {"name": "Kristen Bell"},
+                    "release_date_components": {"year": 2013, "month": 11, "day": 25},
+                    "stats": {"pageviews": 12345},
+                    "instrumental": False,
+                }
+            ]
+        )
+        assert hit == GeniusHit(
+            id=1,
+            title="For the First Time in Forever",
+            artist="Kristen Bell & Idina Menzel",
+            primary_artist="Kristen Bell",
+            year=2013,
+            views=12345,
+        )
+
+    def test_search_defaults_what_genius_leaves_out(self):
+        """No year, no views, no primary artist: the hit is kept, read as None, 0 and ''."""
+        bare = {"id": 1, "title": "Song", "artist_names": "Artist"}
+        nulls = {
+            "id": 2,
+            "title": "Song",
+            "artist_names": "Artist",
+            "primary_artist": None,
+            "release_date_components": None,
+            "stats": None,
+        }
+        empties = {**bare, "id": 3, "release_date_components": {"year": None}, "stats": {}}
+        hits = _search([bare, nulls, empties])
+        assert [(h.primary_artist, h.year, h.views) for h in hits] == [("", None, 0)] * 3
+
+    def test_search_drops_deleted_artist_pages(self):
+        hits = _search(
+            [
+                {"id": 1, "title": "Song", "artist_names": "Deleted Artist"},
+                {"id": 2, "title": "Song", "artist_names": "Someone & deleted artist"},
+                {"id": 3, "title": "Song", "artist_names": "Real Artist"},
+            ]
+        )
+        assert [h.id for h in hits] == [3]
+
+    def test_search_drops_instrumental_pages(self):
+        hits = _search(
+            [
+                {"id": 1, "title": "Song", "artist_names": "A", "instrumental": True},
+                {"id": 2, "title": "Song", "artist_names": "B", "instrumental": False},
+                {"id": 3, "title": "Song", "artist_names": "C"},
+            ]
+        )
+        assert [h.id for h in hits] == [2, 3]
+
+    def test_dropped_pages_do_not_count_toward_the_limit(self):
+        """A caller asking for 2 gets 2 usable pages, not what is left of the first 2 asked."""
+        results = [{"id": 1, "title": "Song", "artist_names": "Deleted Artist"}] + [
+            {"id": i, "title": "Song", "artist_names": f"Artist {i}"} for i in range(2, 6)
+        ]
+        assert [h.id for h in _search(results, limit=2)] == [2, 3]
 
     def test_search_returns_empty_on_exception(self):
         with patch("pikaraoke.lib.genius.lyricsgenius.Genius") as mock_cls:
