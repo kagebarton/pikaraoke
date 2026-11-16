@@ -44,6 +44,7 @@ from pikaraoke.lib.library_tools import (
     PLAYLIST_ONE_VIDEO,
     PLAYLIST_UNREADABLE,
     PLAYLIST_VIDEO_IN_LIST,
+    REPAIR_SOURCES,
     RUN_LABELS,
     LibraryTools,
     LrcTimingRefused,
@@ -1025,6 +1026,8 @@ class TestRepair:
             ({"source": "genius", "genius_id": 7, "lrclib_id": 5}, "LRCLIB didn't return"),
             ({"source": "lyrics-from-the-moon"}, "Unknown lyric source"),
             ({"source": "lrclib_edited"}, "Unknown lyric source"),
+            ({"source": "lrclib_auto"}, "Unknown lyric source"),
+            ({"source": "lrclib_auto_edited"}, "Unknown lyric source"),
         ],
     )
     def test_a_repair_that_cannot_start_changes_nothing(
@@ -4365,6 +4368,11 @@ class TestAddPlaylist:
         download.processing.enqueue.assert_not_called()
 
 
+class TestRepairSources:
+    def test_nobody_repairs_to_an_automatic_or_edited_sheet(self):
+        assert REPAIR_SOURCES == ("caption", "genius", "custom", "movie", "lrclib", "transcribe")
+
+
 class TestNowSource:
     """``_now``: where a song stands today, from the sheet on disk; an edit names its source."""
 
@@ -4376,7 +4384,12 @@ class TestNowSource:
 
     @pytest.mark.parametrize(
         "kind, source",
-        [("caption_edited", "captions"), ("movie_edited", "movie"), ("lrclib_edited", "lrclib")],
+        [
+            ("caption_edited", "captions"),
+            ("movie_edited", "movie"),
+            ("lrclib_edited", "lrclib"),
+            ("lrclib_auto_edited", "lrclib"),
+        ],
     )
     def test_an_edited_sheet_names_its_source_and_says_so(self, tmp_path, kind, source):
         now = self.now(tmp_path, lambda folder, stem: write_edited_sheet(folder, stem, kind))
@@ -4388,9 +4401,10 @@ class TestNowSource:
         [
             (partial(write_movie_sheet, text=WORDS_SRT), "movie"),
             (partial(write_lrc_sheet, text=WORDS_SRT), "lrclib"),
+            (partial(write_edited_sheet, kind="lrclib_auto"), "lrclib"),
             (write_sheet, "custom"),
         ],
-        ids=["movie", "lrclib", "custom"],
+        ids=["movie", "lrclib", "lrclib_auto", "custom"],
     )
     def test_a_plain_sheet_is_as_it_was(self, tmp_path, write, source):
         assert self.now(tmp_path, write) == {"source": source}
