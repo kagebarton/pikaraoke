@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from pikaraoke.lib import library_regen, lrclib
+from pikaraoke.lib.genius import GeniusHit
 from pikaraoke.pipeline.config import PipelineConfig
 
 # scripts/ is not a package — load the module straight from its file. It must
@@ -318,8 +319,8 @@ class TestResetWithNewGeniusPick:
         temp_dir = tmp_path / "tmp"
         temp_dir.mkdir()
 
-        hit = SimpleNamespace(id=10, title="New", artist="B")
-        genius = SimpleNamespace(_token="tok", search=lambda query, limit: [hit])
+        hit = GeniusHit(id=10, title="New", artist="B")
+        genius = SimpleNamespace(_token="tok", search=lambda query, limit=8: [hit])
         monkeypatch.setattr(regen, "_make_genius", lambda: genius)
         monkeypatch.setattr(regen, "get_temp_directory", lambda: str(temp_dir))
         monkeypatch.setattr(library_regen, "download_manual_en_subs", lambda url, dest, stem: None)

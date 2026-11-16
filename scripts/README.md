@@ -70,10 +70,17 @@ backfill only ever fills in what's absent.
    ```
    <song name>
      search query [<default>] or s/t/k: <enter, edit, or s/t/k>
-     1) Title - Artist
+     1) Title - Artist  <- Enter
      ...
-     choose [1-N/s/t/k or new query]:
+     choose [Enter=1, 1-N/s/t/k or new query]:
    ```
+
+   The default is the file name read as a title (artist, film and
+   year pulled out, junk words dropped). Enter searches with it: up to
+   two Genius queries, best first, and a hit that is surely the song
+   is marked `<- Enter`, which then takes it. Text you type is searched
+   as typed, in Genius's order, with nothing marked. With no mark,
+   Enter at the choose prompt searches again.
 
    Options: numbered hit picks Genius lyrics; `s` = use local SRT;
    `t` = transcribe (no reference lyrics); `k` = skip song entirely;
@@ -331,9 +338,6 @@ owns the "which subset for which missing set" logic. Not done yet.
   scan is idempotent, so a `--resume` would mostly just be re-running
   the tool. (Choices live in memory, not on disk, so nothing stale is
   left behind.)
-- **Genius search query default** is `clean_search_query(stem - yt_id)`,
-  which sometimes underperforms vs. just the title. Could try a few
-  variants (title-only, title+primary-artist) and merge results.
 - **No SRT-only generation.** The pipeline writes ASS and SRT together
   from the same line objects; you can't generate `.srt` without also
   rewriting `.ass`. Acceptable for now.
