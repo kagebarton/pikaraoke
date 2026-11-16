@@ -33,6 +33,8 @@ logger = logging.getLogger(__name__)
 
 # Hits Genius returns per query. A caller that must not lose any of them passes it as ``limit``.
 HITS_PER_QUERY = 20
+# Hits a list shows: a typed search's, and the title search's after ordering.
+HITS_LISTED = 8
 
 # ---------------------------------------------------------------------------
 # Exception
@@ -114,7 +116,7 @@ class GeniusClient:
 
     # -- Search -------------------------------------------------------------
 
-    def search(self, query: str, limit: int = 8) -> list[GeniusHit]:
+    def search(self, query: str, limit: int = HITS_LISTED) -> list[GeniusHit]:
         """Search Genius for songs.  Returns ``[]`` on any failure.
 
         Filters: type == "song"; drops Genius's own accounts (translations in
