@@ -12,6 +12,7 @@ if not hasattr(werkzeug, "__version__"):
     werkzeug.__version__ = "3.0.0"
 
 from pikaraoke.lib.genius import GeniusClient, GeniusHit
+from pikaraoke.lib.genius_query import ladder, parse
 from pikaraoke.lib.library_regen import CaptionCheck
 from pikaraoke.routes.search import search_bp
 
@@ -57,75 +58,120 @@ def _get_karaoke(app):
 
 
 class TestLyricsSearch:
-    """GET /lyrics_search?q=<query> → JSON list of {id, title, artist}."""
+    """GET /lyrics_search: ``?title=`` finds the song a video is of, ``?q=`` searches as typed."""
 
-    @patch("pikaraoke.routes.search.get_karaoke_instance")
-    def test_empty_query_returns_empty_list(self, mock_get_k, client):
-        mock_get_k.return_value = _get_karaoke(client.application)
-        resp = client.get("/lyrics_search?q=")
-        assert resp.status_code == 200
-        assert resp.json == []
+    TITLE = "Rick Astley - Never Gonna Give You Up (Official Video)"  # a three-rung ladder
+    SURE = GeniusHit(
+        id=1,
+        title="Never Gonna Give You Up",
+        artist="Rick Astley",
+        primary_artist="Rick Astley",
+        year=1987,
+        views=5000,
+    )
 
-    @patch("pikaraoke.routes.search.get_karaoke_instance")
-    def test_missing_query_returns_empty_list(self, mock_get_k, client):
-        mock_get_k.return_value = _get_karaoke(client.application)
-        resp = client.get("/lyrics_search")
-        assert resp.status_code == 200
-        assert resp.json == []
-
-    @patch("pikaraoke.routes.search.get_karaoke_instance")
-    def test_empty_token_returns_empty_list(self, mock_get_k, client):
-        """GeniusClient with empty token returns [] — always 200, never gated (DD2)."""
-        mock_get_k.return_value = _get_karaoke(client.application)
-        resp = client.get("/lyrics_search?q=rick+astley")
-        assert resp.status_code == 200
-        assert resp.json == []
-
-    @patch("pikaraoke.routes.search.get_karaoke_instance")
-    def test_with_hits_returns_json(self, mock_get_k, client):
-        """When Genius returns hits, route serializes them as JSON."""
-        k = _get_karaoke(client.application)
-        # Replace genius_client with one that returns hits
-        k.genius_client = MagicMock(spec=GeniusClient)
-        k.genius_client.search.return_value = [
-            GeniusHit(id=100, title="Never Gonna Give You Up", artist="Rick Astley"),
-            GeniusHit(id=200, title="Together Forever", artist="Rick Astley"),
-        ]
-        mock_get_k.return_value = k
-
-        resp = client.get("/lyrics_search?q=rick+astley")
-        assert resp.status_code == 200
-        data = resp.json
-        assert len(data) == 2
-        assert data[0]["id"] == 100
-        assert data[0]["title"] == "Never Gonna Give You Up"
-        assert data[0]["artist"] == "Rick Astley"
-
-    @patch("pikaraoke.routes.search.clean_genius_query")
-    @patch("pikaraoke.routes.search.get_karaoke_instance")
-    def test_uses_clean_genius_query(self, mock_get_k, mock_clean, client):
-        """Route calls clean_genius_query instead of regex_tidy (DD8)."""
+    @pytest.fixture
+    def genius(self, client):
+        """The app's Genius client, replaced by one that finds nothing and records its calls."""
         k = _get_karaoke(client.application)
         k.genius_client = MagicMock(spec=GeniusClient)
         k.genius_client.search.return_value = []
-        mock_get_k.return_value = k
-        mock_clean.return_value = "cleaned query"
+        with patch("pikaraoke.routes.search.get_karaoke_instance", return_value=k):
+            yield k.genius_client
 
-        client.get("/lyrics_search?q=rick+astley+karaoke")
-        mock_clean.assert_called_once_with("rick astley karaoke")
-        k.genius_client.search.assert_called_once_with("cleaned query")
+    @staticmethod
+    def _queries(genius) -> list[str]:
+        return [call.args[0] for call in genius.search.call_args_list]
+
+    def test_no_query_answers_empty_without_asking_genius(self, client, genius):
+        for url in ("/lyrics_search", "/lyrics_search?q=", "/lyrics_search?q=+&title="):
+            resp = client.get(url)
+            assert resp.status_code == 200
+            assert resp.json == {"hits": [], "preselect": None, "query": ""}
+        genius.search.assert_not_called()
 
     @patch("pikaraoke.routes.search.get_karaoke_instance")
-    def test_search_failure_returns_empty(self, mock_get_k, client):
-        """Genius search failure returns [] — never 500 (graceful degradation)."""
-        k = _get_karaoke(client.application)
-        k.genius_client = MagicMock(spec=GeniusClient)
-        k.genius_client.search.return_value = []  # GeniusClient.search returns [] on failure
-        mock_get_k.return_value = k
+    def test_genius_off_answers_empty_hits(self, mock_get_k, client):
+        """A client with no token finds nothing for either form; the route still answers 200."""
+        mock_get_k.return_value = _get_karaoke(client.application)
+        typed = client.get("/lyrics_search?q=rick+astley")
+        assert typed.status_code == 200
+        assert typed.json == {"hits": [], "preselect": None, "query": "rick astley"}
 
-        resp = client.get("/lyrics_search?q=test")
+        found = client.get("/lyrics_search", query_string={"title": self.TITLE, "channel": ""})
+        assert found.status_code == 200
+        assert found.json["hits"] == []
+        assert found.json["preselect"] is None
+        assert found.json["query"] == ladder(parse(self.TITLE))[0]
+
+    def test_typed_text_is_one_call_as_typed_in_genius_order(self, client, genius):
+        genius.search.return_value = [
+            GeniusHit(id=200, title="Together Forever", artist="Rick Astley", year=1988),
+            GeniusHit(id=100, title="Never Gonna Give You Up", artist="Rick Astley"),
+        ]
+        resp = client.get("/lyrics_search", query_string={"q": "  Rick Astley Karaoke_(HD) 🎤  "})
+
+        genius.search.assert_called_once_with("Rick Astley Karaoke_(HD) 🎤")
         assert resp.status_code == 200
-        assert resp.json == []
+        assert resp.json == {
+            "hits": [
+                {"id": 200, "title": "Together Forever", "artist": "Rick Astley", "year": 1988},
+                {
+                    "id": 100,
+                    "title": "Never Gonna Give You Up",
+                    "artist": "Rick Astley",
+                    "year": None,
+                },
+            ],
+            "preselect": None,
+            "query": "Rick Astley Karaoke_(HD) 🎤",
+        }
+
+    def test_title_with_channel_asks_three_calls_of_twenty_hits(self, client, genius):
+        rungs = ladder(parse(self.TITLE))
+        assert len(rungs) >= 3
+
+        resp = client.get("/lyrics_search", query_string={"title": self.TITLE, "channel": "Rick"})
+
+        assert self._queries(genius) == rungs[:3]
+        assert {call.kwargs["limit"] for call in genius.search.call_args_list} == {20}
+        assert resp.json["query"] == rungs[0]
+
+    def test_empty_channel_still_means_the_search_page(self, client, genius):
+        client.get("/lyrics_search", query_string={"title": self.TITLE, "channel": ""})
+        assert len(self._queries(genius)) == 3
+
+    def test_title_without_channel_asks_two_calls(self, client, genius):
+        client.get("/lyrics_search", query_string={"title": self.TITLE})
+        assert self._queries(genius) == ladder(parse(self.TITLE))[:2]
+
+    def test_typed_term_is_asked_last_and_only_when_a_call_is_left(self, client, genius):
+        typed = "never gonna give you up lyrics"
+        short = "Never Gonna Give You Up"  # two rungs with this channel: a third call is left
+        args = {"title": short, "channel": "Rick Astley", "typed": typed}
+        client.get("/lyrics_search", query_string=args)
+        assert self._queries(genius) == [*ladder(parse(short, "Rick Astley")), typed]
+
+        genius.search.reset_mock()  # three rungs use every call the search page allows
+        client.get("/lyrics_search", query_string={**args, "title": self.TITLE})
+        assert typed not in self._queries(genius)
+
+    def test_a_sure_first_hit_is_preselected_and_ends_the_search(self, client, genius):
+        genius.search.return_value = [self.SURE]
+        resp = client.get("/lyrics_search", query_string={"title": self.TITLE, "channel": ""})
+
+        assert len(self._queries(genius)) == 1
+        assert resp.json == {
+            "hits": [
+                {"id": 1, "title": "Never Gonna Give You Up", "artist": "Rick Astley", "year": 1987}
+            ],
+            "preselect": 1,
+            "query": ladder(parse(self.TITLE))[0],
+        }
+
+    def test_title_wins_when_both_are_sent(self, client, genius):
+        client.get("/lyrics_search", query_string={"title": self.TITLE, "q": "something typed"})
+        assert "something typed" not in self._queries(genius)
 
 
 # ---------------------------------------------------------------------------

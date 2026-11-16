@@ -1,4 +1,4 @@
-"""Lyric line parsing, per-line normalization, and Genius query cleaner.
+"""Lyric line parsing and per-line normalization.
 
 ``parse_lyric_lines`` splits raw Genius lyrics text into per-line dicts,
 producing a display ``text`` (parens preserved) and an ``align_text``
@@ -19,17 +19,12 @@ now fetched with ``remove_section_headers=True``, so no header parsing
 is required upstream. Any stray bracket-only lines that still slip
 through are silently skipped here — including the ones Genius wraps
 across several physical lines, which are rejoined before parsing.
-
-Also contains :func:`clean_genius_query` — a light query cleaner for the
-``/lyrics_search`` route that preserves parenthetical and bracketed
-content, unlike :func:`regex_tidy` which drops trailing junk brackets.
 """
 
 from __future__ import annotations
 
 import re
 
-from pikaraoke.lib.metadata_parser import EMOJI_PATTERN, NOISE_PATTERN
 from pikaraoke.lib.token_align import fold_homoglyphs
 
 _HEADER_RE = re.compile(r"^\s*\[[^\]]*\]\s*$")
@@ -195,21 +190,3 @@ def parse_lyric_lines(lyrics_text: str) -> list[dict]:
         align_text = " ".join(display.replace("(", "").replace(")", "").split())
         result.append({"text": display, "align_text": align_text})
     return result
-
-
-def clean_genius_query(query: str) -> str:
-    """Light-clean a Genius search query, preserving parenthetical content.
-
-    Unlike :func:`regex_tidy` (which drops trailing junk brackets such as
-    ``"(Official Video)"``), this function only strips emoji and YouTube
-    noise words — it preserves all parenthetical and bracketed content so
-    the Genius API can match the full title.
-
-    Reuses ``EMOJI_PATTERN`` and ``NOISE_PATTERN`` from
-    :mod:`pikaraoke.lib.metadata_parser`.
-    """
-    cleaned = EMOJI_PATTERN.sub("", query)
-    cleaned = cleaned.replace("_", " ")
-    cleaned = NOISE_PATTERN.sub("", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    return cleaned
