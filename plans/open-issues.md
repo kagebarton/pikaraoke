@@ -641,6 +641,39 @@ parentheses too. Record: `plans/backing-vocal-lines.md` on branch
   the keep rule never tested. Reported at that plan's GATE B; if a keep lands on
   another line's words, the change is that an added line is never heard-aimed
   ("The D7 amendment", "How the rescue treats an added line").
+- **Re-aligning a section for an echo can cost another line its held last
+  word.** A section goes back to the aligner when one of its lines gains a kept
+  group, and its other lines are re-made with it. Where the aligner returns a
+  line's last word shorter or later than before, the end snap that used to
+  stretch it to the note's release may not fire, so the word ends seconds early
+  with no echo near it. 4 old lines in 34 songs at that plan's GATE B (NSYNC -
+  Thinking Of You 3:54, 5.7 s; three of about 1.1 s). Accepted (Ken,
+  2026-11-15): the same re-align fixed two lines that were 6 s off. The fix, if
+  wanted, is to keep every non-gaining line's first-pass words when its section
+  is re-aligned, which gives those two back.
+- **A group kept only because it repeats elsewhere can lead a line it was not
+  sung in.** Leave the Door Open 3:46: `(Tell me that you're coming through)
+  for you`, kept on a repeat elsewhere (nothing heard in its own cue), is placed
+  first and "for you" lands 1.6 s later than before. Ken (2026-11-15): "for
+  you" is roughly right, but he would rather the group were not in that line.
+  Not ruled as a change. The candidate: do not keep a group on consistency
+  alone when it leads its line (13 inline groups are kept on consistency; this
+  is the one found worse).
+- **An echo the aligner cannot find can cost its line a good retry.** Takedown
+  2:46, `I'ma take it down (oh, da-da-da, down, ooh)`: the first pass puts the
+  line 4.3 s before its cue, on `dev` as well, where the words come back clean
+  and a clean line is trusted outside its cue (the transcript hears it on the
+  cue, so rule B has nothing to look for). With the echo joined the line is
+  squeezed and gets a retry, which finds the lead on its cue with high
+  confidence and parks the echo's last word 0.2 s past the end bound, so the
+  whole retry is refused and the line stays early. Ken (2026-11-16): it starts
+  at 2:46 and is shown quite early; logged, nothing built. 28 retries on lines
+  with a kept group ran past the end bound at that plan's GATE B; this is the
+  one where the lead it found was seconds from what shipped. Two candidates,
+  each a change to what the rescue keeps and needing its own replay: judge
+  such a retry on the lead's words when only the echo overruns; or give a
+  clean line a retry when it sits seconds off its cue and the transcript hears
+  it on the cue, which fixes the line on `dev` too.
 - **A group after a dialogue dash or song star is dropped as unplaced.**
   `srt_cues._group_at` gives up on a group when the text before it has no
   letter, which also catches a mark the cleaner removes ("- (hey) go",

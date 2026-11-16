@@ -17,7 +17,10 @@ row 17). Reviewed 2026-11-15 and its findings fixed in `87d24ee2`, the rest logg
 `plans/open-issues.md` (Results row 19). Phase 2 ran 2026-11-15 on the full set (Results rows
 18 and 20); its report is `out/phase2_report.md`, local. GATE B read by Fable 5.2 on
 2026-11-15 after Ken's listen ("GATE B read", Results row 21): NO-GO as built, GO after one
-change and two rulings. Next: Ken rules. The pipeline now calls `judge`: a
+change and two rulings. Ruled by Ken the same day ("GATE B ruling", Results row 22): all
+three taken, the fix specced for Sonnet 5.5. Spot 1 heard again 2026-11-16 ("Spot 1 heard
+again", Results row 23): the fix stands, one line logged. Next: Sonnet builds the fix and
+replays the one song. The pipeline now calls `judge`: a
 caption or LRCLIB song shows the backing vocals the transcriber heard, so a regenerated song
 changes; Genius and custom songs show their parentheses (C3).**
 
@@ -1202,6 +1205,160 @@ The two unheard spots above are Ken's to listen to before he rules. If the first
 the change to consider is not keeping a group on consistency alone when it leads its line
 (1 such line found worse; 13 inline groups are kept on consistency).
 
+#### GATE B ruling (Ken, 2026-11-15)
+
+"I take the recommendations." All three, as the read words them:
+
+1. **Build "an added line is never heard-aimed"**, replay `ru0K8uYEZWw` alone, check line 91
+   sits on its cue ("The fix" below).
+2. **B4: paced added lines are kept, and B4 is counted on inline words** (82.3%, passes).
+3. **Spot 4 is accepted** and logged in `plans/open-issues.md` (done with this ruling).
+
+**Ken's listen of the two spots the read left for him**, as given:
+
+| Spot | Ken |
+|---|---|
+| Best Part Of Me 3:05, added line `(With you)`, paced across a 10.5 s cue | the line is actually "with you, yeah, oooooooo ooooooooo wooooaahhh"; after covers it correctly length-wise with "with you" |
+| Leave the Door Open 3:46, old line 53 `(Tell me that you're coming through) for you` | the timing of "for you" is roughly correct, though "I'd have prefer 'tell me that you're coming through' to not split that line in" |
+
+Neither is a NO-GO. The second is read here (Fable's reading, not Ken's words) as a
+preference against that group joining the line, with no change asked for; it is logged in
+`plans/open-issues.md` with the read's candidate change, and nothing is built for it.
+
+**GATE B is GO once the replay below shows line 91 on its cue.** If it does not, stop and
+report; do not adjust anything to make it pass. The library regen stays the single full
+regen of "Rulings for Fable's window".
+
+##### Spot 1 heard again (Ken, 2026-11-16)
+
+Spot 1 was "too busy to hear the background clearly" at the listen. Ken went back to
+Takedown from 2:35 and, as given: "'ima take it down' is quite early (it actually starts at
+2:46), but ends on time. the other lines have early onsets but roughly right". Asked whether
+that changes the fix.
+
+**It does not: the fix and its check below stand as written.** The fix touches added lines
+only and Takedown has none (4 kept groups, all inline). Read-only over the Phase 2 bundles,
+logs and `.ass` files (Results row 23):
+
+| Line (new id) | Cue | Heard | Before | After |
+|---|---|---|---|---|
+| 48 `It's a takedown` | 2:43.5 | "It's" 2:41.8-2:43.3, "a takedown" 2:43.3-2:44.1 | 2:41.3-2:44.3 | the same |
+| 49 `I'ma take it down` + `(oh, da-da-da, down, ooh)` | 2:46.4 | 2:45.5-2:47.7 ("take" at 2:46.7) | 2:42.0-2:42.9 | lead 2:42.0-2:42.5, echo to 2:47.1 |
+| 50 `It's a takedown` (spot 1) | 2:50.3 | "It's" 2:49.2-2:50.1, "a" 2:50.1 | 2:42.9-2:53.0 | "It's" 2:47.2, "a takedown" 2:50.1-2:51.2 |
+| 51 `Take it down` | 2:53.4 | "it" 2:52.3-2:54.0, "down" 2:54.0-2:54.6 | "Take" 2:53.1, ends 2:54.9 | "Take" 2:51.2, ends 2:54.9 |
+
+- **Line 49 is as early before as after**, so the branch did not move it: the first pass
+  puts it 4.3 s before its cue on both sides, its words come back clean, and a clean line is
+  trusted outside its cue span. The transcript hears it on its cue, under 1.5 s from the cue
+  start, so rule B has nothing to look for. Before, the line gets no retry at all.
+- **After, the line gets a retry and the retry is refused.** With the echo joined, the
+  first pass returns "it" and "down" without a duration, so the line asks for a re-align.
+  The cue-aimed retry returns the lead at 2:46.5-2:47.9 (probabilities 0.49, 0.99, 1.00,
+  1.00) and the echo after it (0.15, 0.53, 0.02, 0.00), its last word ending at 2:51.0. The
+  span check allows an end up to 2:50.8, so the whole retry is dropped and the first-pass
+  line stays, with its two missing words guessed and the echo stretched by the end snap to
+  2:47.1. That end is why the line "ends on time".
+- **The echo was kept on consistency** (share 0.25: one of its four words matched in its
+  own cue, under the heard test's bar), the same kind of keep as Leave the Door Open 3:46.
+- **Reach, 47 songs:** 73 gaining lines had a retry refused; on 28 of them the retry ran
+  past the cue's end bound. Where the two leads can be compared (53 lines), the first pass
+  already had the lead within 1 s of the retry's on 45. Of the other 8, only this line has
+  the retry's lead inside its cue span, confident, and seconds from what shipped (row 23
+  lists the 8).
+- **Spot 1 (line 50)** is heard as roughly right with an early first word, which agrees
+  with the read (6.6 s off its heard words before, 1.0 s after). The read's credit to the
+  section re-align stands on Ken's ear now, not on the transcript alone.
+- **Line 51's early first word is new on the branch**: before, its retry was kept and
+  "Take" started at 2:53.1; after, the first pass is kept and "Take" starts at 2:51.2. It is
+  one of B2's listed middle moves (-1.83 s).
+
+Ken (2026-11-16), to the recommendation to keep GATE B as ruled and log line 49: "add and
+amend". Nothing is built for it. Logged in `plans/open-issues.md` with two candidate
+changes; either alters what the rescue keeps and would need a replay of its own.
+
+##### The fix: an added line is never heard-aimed (Sonnet 5.5 builds and replays)
+
+Why: an added line was kept on the evidence of its own cue window, so nowhere else is a
+place to look for it ("How the rescue treats an added line", the rule B bullets; spot 6).
+Only rule B changes for it. Rule A1 and the guard lift are left as they are, and so are the
+heard match and every non-added line.
+
+**Code** (`pikaraoke/lib/cue_align.py`, one commit with its tests):
+
+- `repace_bad_lines(..., added_lines: Collection[int] = ())`: the ids of the lines added to
+  the song for a backing vocal. Passed to `_Rescue.__init__` as a keyword and held as a
+  frozenset.
+- `_Rescue.heard_shift` returns None for a line in it, before any other test. Nothing else
+  in `_Rescue` reads it, so the line still gets the cue-aimed retry and then the fill.
+- `align_song` passes the new ids whose `backed.old_line_ids` entry is None, and nothing
+  when `backed` is None. If a small property on `Backed` reads better than a second
+  comprehension beside `_log_backing`'s count, add it and use it in both.
+- Docstrings: `repace_bad_lines` (the parameter and its why, in the rule B paragraph),
+  `heard_shift`, `align_song`. `alignment_capture.py`'s `cue_inputs` note: an offline replay
+  passes `added_lines` back too, read from `joint_stats.backing.old_line_ids` (null
+  entries). Nothing new is recorded, so no schema change.
+
+**Tests** (`tests/unit/test_cue_align.py`):
+
+- `TestHeardAimedRetry`: the scenario of
+  `test_a_line_with_no_words_heard_4_6_s_after_its_cue_is_kept_where_it_was_heard` with
+  `added_lines=[4]`: the one align call is the cue-aimed slice, `heard_aimed_line_ids` is
+  empty, the line is a fill.
+- `TestAlignSongBacking`:
+  `test_an_added_line_heard_two_seconds_before_its_cue_is_aimed_there_first` asserts the
+  opposite of the ruling. Rewrite it in place (same heard words; the stub also sings the echo
+  at its cue): the only one-line call is the cue window `(4.45, 6.55)`, the line is re-aligned
+  at 5.25, `heard_aimed_line_ids` is empty.
+- `test_a_one_word_added_line_is_never_aimed_where_its_word_was_heard` now passes for two
+  reasons and tells nothing apart: delete it (the one-word rule is `heard_lines`' own, tested
+  there). Check that before deleting; if `test_heard_lines.py` does not cover it, say so in
+  the Results row and keep it.
+- Mutation check: with the `heard_shift` test removed, both new tests fail.
+
+Full suite, pre-commit on the changed files, `graphify update .`.
+
+**Open issues** (`plans/open-issues.md`, "Backing vocal lines"): the entry "The rescue's rule
+B can aim an added line at another copy of its words" is closed by this commit; delete it.
+
+**Replay** (local GPU, one job, library read-only):
+
+- Phase 2's outputs in `~/probes/backing_vocal_lines_phase2/{before,after}` are what GATE B
+  was read on: do not write there. New scratch `~/probes/backing_vocal_lines_gateb_fix/`.
+- The library's files for the song must be the ones Phase 2 staged:
+  `find ~/pikaraoke-songs -newer ~/probes/backing_vocal_lines_phase2/logs/after_controls.started`
+  lists nothing of this song. If it does, stop.
+- Stage: `PYTHONPATH=. python plans/backing-vocal-lines/phase2_replay.py stage ~/pikaraoke-songs
+  ~/probes/backing_vocal_lines_gateb_fix plans/backing-vocal-lines/out --key ru0K8uYEZWw --side after`.
+- Run from this worktree's root on the fix commit, GPU idle first (`nvidia-smi`):
+  `python -u plans/backing-vocal-lines/phase2_run.py ~/probes/backing_vocal_lines_gateb_fix/after
+  --song=ru0K8uYEZWw --yes`, output to `~/probes/backing_vocal_lines_gateb_fix/logs/after_fix.log`.
+  Never `--reset`.
+
+**The check**, three sides: Phase 2 before, Phase 2 after, the fix. Line ids are the after
+run's new ids; old ids through `joint_stats.backing.old_line_ids`. Word times from the
+`.ass`, as in row 20.
+
+- Line 91 (the added line cued over the transcript's empty stretch, 3:25-3:33; confirm it by
+  text and `cue_inputs.spans[91]` first): not in `heard_aimed_line_ids`; its source
+  (`cue_align_line` or `cue_align_fill`); its start and end against `cue_inputs.spans[91]`
+  plus `cue_inputs.rescue_offset`. On its cue means it starts no earlier than 0.5 s before
+  the cue start plus the lead and ends by the cue end plus the lead (or the window's
+  `aim_end`, where a singing end widened it). Phase 2 after had it at 213.59-215.36.
+- The old line before it (old id 86): its last word's end (209.59 before, 213.52 after) and
+  whether its first two words are still guessed (the `PHASE2 guessed` note).
+- Sung-time overlap of 91/93, 91/94 and 93/94 (1.40, 1.65 s and over 1 s at GATE B).
+- Every line of the song whose word times differ between Phase 2 after and the fix, listed
+  with source and rescue-list membership on both. Expected: line 91, the line before it, and
+  any run of rescued lines directly after it. A difference anywhere else is listed, not
+  explained away.
+- The same count against Phase 2 before for old lines: the song's B2 "all other lines" stays
+  at zero moves.
+- The fix run's `heard_aimed_line_ids`, `heard_aimed_kept_line_ids`, `repaced_line_ids` and
+  aligner failures against Phase 2 after's (it had line 40 fail on its retry).
+
+Log it as a Results row (raw, no verdict), commit, and stop. Not in this step: a GO call,
+a `/code-review`, the landing, a push, any regen.
+
 ## Phase 0 record
 
 Run by Opus 5.5 on 2026-11-14, CPU only, library read-only. Scripts in
@@ -1706,3 +1863,5 @@ Raw tables, commands and commits only; no verdicts in this table.
 | 19 | 2026-11-15 | stage 2 review | Opus 5.5: `/code-review dev..HEAD` on `c072a228`, files `srt_cues.py`, `genius_lyrics.py`, `backing_vocals.py`, `cue_align.py`, `lyric_align.py`, `alignment_capture.py` and their tests, 3 finders (correctness, simplicity, robustness). Library reach read-only with two session-scratch scripts (`finding_counts.py`: `sheet_parens`, `judge`, `with_backing` over `out/songs.json`; `word_per_token.py`: `output_line_timings[].n_words` against `_tokenise_lines(lyrics.align_lines)` in every live bundle), then `parity.py ~/pikaraoke-songs plans/backing-vocal-lines/out`; `find ~/pikaraoke-songs -newer <stamp>` empty. Fixes `87d24ee2`, open issues `a85fb179` | 11 findings: (1) a stray paren in the align text unpairs a line; (2) a "(" inside a group reaches the align text; (3) a failed re-align of a gaining section empties its untouched lines; (4) `_group_at` sends a group after a dash or star to None; (5) `tokens` count space-split tokens, not the line's words; (6) `_show_line` matches words to tokens by text, so a missing copy of a repeated word moves its form; (7) a capitals file capitalises a mid-line group; (8) `sheet_parens` re-parses the sheet; (9) `_group_at`'s letter check is a second cleaner; (10) `_show_line`'s ValueError fallback; (11) `ORIGINS` spells `"lrclib_srt"`. Reach among the 261 kept: (1) 0, (2) 0, (4) 0 unplaced, (5) 4 groups in 3 songs, (7) 19 groups in 2 songs (after the fix 3 capitals, one after a full stop and two "I"). Live bundles, per line, words against align tokens with a word: `cue_align` 10868 equal, joint 2791 equal and 262 none, 0 partial. Ken in chat: the rest to open issues; asked why not 6 and 10. Fixed: 1, 2, 3, 5, 6 and 10 (pair by position, warn and keep the text otherwise), 7. To `plans/open-issues.md`: 4 with 9, 8, 11 (`LRC_ORIGIN` sits with the other origin names in `library_regen`). Tests: `test_backing_vocals.py` 4 added, 2 removed (a dropped word, a word with no token left); `test_srt_cues.py` 1 rewritten (capitals), 1 added; `test_cue_align.py` 1 added. Mutation checks, each fix reverted alone: every one caught by its new test. Full suite 3720 passed; pre-commit passed on the changed files; `graphify update .`. `parity.py` after: 626 of 626 groups, kept 261 (heard 180, vocable 60, consistency 21), differences 0. |
 | 20 | 2026-11-15 | 2 | Executor Sonnet 5.5. "Before" = `dev` `6c4e9991` in a detached worktree (`.claude/worktrees/bvl_phase2_before`); "after" = this branch at `aead83f3` (review fixes `87d24ee2`); `models/` linked into both. Scripts in `plans/backing-vocal-lines/`, committed with this row: `phase2_replay.py select` and `stage` (song list `out/phase2_songs.json`, kept), `phase2_run.py` (the driver's own `main()` with three observers on `_guess_missing_words`, `_Rescue.start_bounded` and `_Rescue.heard_aimed_line`, which log what the bundle does not keep: guessed tokens per line, why a retry's start moved, rule B's shifts), `phase2_report.py`. Replay: `scripts/regen_alignment_bundles.py <scratch>/before` (and `after`) `--song=<id>... --yes`, one GPU job at a time, scratch `~/probes/backing_vocal_lines_phase2/{before,after,logs}`, never `--reset`; library read-only (a stamp file, `find ~/pikaraoke-songs -newer <stamp>` empty after the controls, mid-run and at the end). Size: the full set, not the floor. Timed first on the 5 controls (after tree, 17:26-17:37, 11.3 min, 2.2 min a song), so the full 94 runs were expected in about 4 h; they ran 17:26-21:54 (controls first, then the 8 B6 songs and the 34 keep songs in chunks, each chunk before then after; the after side takes 1.0-1.4 times the before side). 47 songs: the 34 keep songs are row 10's (kept groups judged on the library bundles: 261, of them 205 inline and 56 paren-only; 129 min audio), the 8 B6 songs are "The B6 sample" (all 8 in the library, no substitute; 32 min, 7 Genius and 1 custom), the 5 controls are cue songs whose sheet holds no "(" (54 srt and 10 lrclib_srt candidates), per origin the ones nearest that origin's median audio length: `axySrE0Kg6k`, `orJSJGHjBLI`, `rg_zwK_sSEY` (srt), `9ThO76peOw0`, `gAYL5H46QnQ` (lrclib_srt); 18 min. The controls ran through the plain driver, everything else through `phase2_run.py`. Observers checked neutral: control `axySrE0Kg6k` rerun through `phase2_run.py` on a copy of the same inputs gave `.ass`, `.srt` and bundle identical to its plain run. Figures are the `Summary` block of `out/phase2_report.md` (local: it holds lyric text; the details are in `out/phase2_details.json`). Word times are read from the `.ass` (centiseconds, "moved" is over 0.011 s), since a cue song's bundle holds none. | **Inputs.** All 16 batches finished, no failed song. `.ass` dialogues match their bundle's lines on every keep-song run (34 x 2); the recomputed heard-line count equals `n_heard_lines` in all 68 of those bundles; every keep song has its guessed-token note in both logs; the `tokens` range of 260 of the 261 kept groups opens with "(" and closes with ")" in the `.ass` (the one that does not is the `show_parens` warning below). The replay transcribes again, so its keeps differ from the library judge's on 4 of 261 groups: not kept now, `TSVHoHyErBQ` cue 79 (inline) and `GG7fLOmlhYg` cue 33 (paren-only), both `not_heard`; kept now only, `FQ3slUz7Jo8` cues 71 and 73 (paren-only, heard). The after run keeps 261: 204 inline groups on 201 gaining lines (Phase 0: 205 on 202), 57 paren-only groups on 56 added lines; evidence heard 180, vocable 60, consistency 21; 83 sections sent back to the aligner. **B1** 5 of 5 controls identical: every output file byte-identical (2 files for three, 6 for two) and the bundle identical but `config.whisper.load_model.model_path`, which is each worktree's own `models/` link. **B2** (old words, 13138 in 2167 lines): gained 1010 words in 201 lines, moved at all 614, over 0.3 s 267 (in 144 lines); start |change| same 511, <=0.05 160, <=0.1 44, <=0.3 115, <=1 118, <=3 54, >3 8; end same 528, 189, 43, 75, 109, 58, 8; max(start,end) p50 0.03, p90 0.98, p99 3.46, max 5.87. Middle (in a section sent back, or directly before or after a gaining or added line) 5532 words in 837 lines, moved at all 1277, over 0.3 s 298 (in 187 lines); start same 4565, 454, 96, 204, 141, 54, 18; end same 4661, 502, 91, 108, 91, 60, 19; p50 0.00, p90 0.10, p99 1.84, max 6.87. All other lines 6596 words in 1129 lines, moved 0. Of the 565 words moved over 0.3 s, 13 (in 5 lines) sit on a line an aligner failure hit; each of the 565 is listed with the rescue steps that changed in the report. **B3** (old lines, before -> after): re-aligned 328 -> 340, paced 45 -> 39, lines with a guessed word 241 -> 306 (241 -> 271 counting only old words), guessed words 284 -> 331, zero-length words 0 -> 0. Increases listed per line, 213: re-aligned 49 (gained 26, middle 23), lines with a guessed word 73 (55, 18), with an old word guessed 39 (21, 18), guessed words 44 (25, 19), paced 8 (gained 8); 8 of them on a line an aligner failure hit. D8: 31 gaining lines have more new tokens than old (evidence heard 28, none 3, mixed 0; the plan counted 30, 27 / 3 / 0), by id in the report. **B4** new words: inline echo words 588, measured 484 (82.3%), guessed 66, paced 38; added-line words 269, measured 150 (55.8%), guessed 6, paced 113; all 857, measured 634 (74.0%). **B5** kept groups by Phase 0 label: sung 253, unsure 8, direction 0; old-line pairs whose display windows overlap after and did not before: 26; display-window overlaps involving an added line: 106; adjacent lines overlapping (the pre-roll): before 1872 of 2133 pairs, after 1859 of 2133 counting old lines only, 1951 of 2189 with the added lines. **B6** 8 songs: `output_line_timings` equal 8, bundle word times equal 8, `.ass` word times equal 8 (3138 words compared); text changed 286 words, all of them parentheses only; any other text change 0. **Added lines** 56 (18 songs): re-aligned 32, paced 23, heard-aimed and kept 1; guessed words in them 6; start cut to the previous line's end 13; guard lift freed 10; onset snap moved 4; the aligner failed on the retry of 2 (`wGyh_53ecgg` line 33, `ru0K8uYEZWw` line 40; both paced). The line before an added line: 55 have one with an old id; its last word's end moved for 44, earlier by over 0.3 s for 36, later by over 0.3 s for 1. **Heard-aimed tries on an added or gaining line** 5, kept 3: `GG7fLOmlhYg` gaining line 33 (shift -1.55 s, kept; line 34's words overlap the place by 0.35 s), `ru0K8uYEZWw` added line 91 (+4.28 s, kept; lines 92, 93, 94 overlap by 0.27, 1.40, 1.65 s; 93 is another added line), `fGyTN5UjnL4` gaining line 10 (-1.62 s, not kept), `atz_aZA3rf0` gaining line 39 (-1.61 s, kept; line 38 overlaps by 4.72 s) and line 40 (-1.62 s, not kept). Old lines whose membership of `heard_kept`, `heard_aimed`, `heard_aimed_kept` or `guard_lifted` changed, or whose heard status changed: 91 (gained 62, middle 29, other 0); 38 by list membership, 53 by heard status. Songs whose guessed-line share crosses 15%: 0. **Aligner failures** (every `slice-align failed` line, song and label): before 7: `axySrE0Kg6k` line 27, `W5kM5wAwRug` line 42, `wMOkm57vu0k` line 53, `wIyNAsmGrl0` line 35 (a padding-size error; the rest are "NoneType has no attribute language"), `tz_NxOF7RB4` lines 58, 59, 61; after 9: `axySrE0Kg6k` line 27, `W5kM5wAwRug` line 42, `wGyh_53ecgg` line 33, `ru0K8uYEZWw` line 40, `wIyNAsmGrl0` line 63, `tz_NxOF7RB4` lines 58, 59, 60, 61 (labels are the song's ids on each run). **`show_parens` warnings** in the after run: 1 (before: 0), `wIyNAsmGrl0` line 63, old line 56, an inline kept group (cue 63, vocable). The section align returned 3 of the line's 4 words, its one-line retry hit `slice-align failed` (same line, same log), and the line kept those 3 plus 1 guessed word; the third word reads `la-la` where its align token reads `la-la,`, so the words did not pair with the tokens and the group shows without parentheses. **Listening list** 10 spots in the report, from the 4 largest old-word moves (`j5itLHDMJsE`, `wGyh_53ecgg`, `wIyNAsmGrl0`, `PodgxWsZw9s`), the 3 heard-aimed keeps, an added line re-aligned and one paced, one inline line. Not done: any GO/NO-GO, a library regeneration, a push. |
 | 21 | 2026-11-15 | GATE B | Read by Fable 5.2 on `21c28fb2`, after Ken's listen of the report's 10 spots (his notes are in "GATE B read"). Read-only over `out/phase2_details.json` and the before/after `.ass` files and bundles in `~/probes/backing_vocal_lines_phase2/`, with session-scratch scripts built on `phase2_report.py`'s `Side`: each side's on-screen words paired by text and order (`match_words_to_tokens`) with the words `heard_lines` gives the line in the before bundle (old words only on the after side), the median absolute start offset per line compared; last-word ends; sung-time overlaps from word times; added lines against transcript words within 1 s of their cue span plus the lead. No GPU, no library read, no build. | **Transcript referee**, old lines with a word moved over 0.3 s: 331, comparable 262 (gained 109, middle 153). After nearer by over 0.3 s / before nearer / within 0.3 s: gained, move 0.3-1.0 s (64 lines) 3 / 3 / 58; gained, over 1.0 s (45) 6 / 4 / 35; middle, 0.3-1.0 s (93) 1 / 1 / 91; middle, over 1.0 s (60) 8 / 1 / 51. Lines within 1.0 s of heard, before -> after: 60 -> 61, 39 -> 39, 90 -> 90, 52 -> 57. Before nearer (median offset before -> after): `CEw-7cMnBDY` 33 (0.12 -> 1.55) and 32 (0.32 -> 0.94), `wIyNAsmGrl0` 53 (0.05 -> 1.20), `NSYNC - Paradise` 49 (0.36 -> 1.00), `1QYBiNRu1ok` 41 (0.05 -> 0.57), `atz_aZA3rf0` 41 (0.36 -> 0.81), `GG7fLOmlhYg` 39 (0.07 -> 0.50) and 12 (2.37 -> 2.73), `D_dOXTpwV5s` 27 (0.04 -> 0.43). After nearer by over 1 s: `j5itLHDMJsE` 50 (6.56 -> 0.99), `wGyh_53ecgg` 37 (5.64 -> 0.32), `GG7fLOmlhYg` 45 (2.94 -> 0.14), `9tcaM06eGrY` 20 (1.96 -> 0.32), `hj4e709GYf4` 11 (1.21 -> 0.11), `CEw-7cMnBDY` 13 (1.17 -> 0.15). **Gaining lines by evidence** (201; comparable / after worse / after better by over 0.3 s): heard 131 lines, 107 / 5 / 8; vocable 56, 40 / 0 / 1; consistency 13, 9 / 2 / 0; mixed 1, 1 / 0 / 0. Kept group first in the line 18 lines, an old start moved over 1 s on 14; group later 183 lines, 34. **Last old word ending over 1 s earlier**: 65 lines; the next line is an added line 31, the line's own echo follows 30, neither 4: `PodgxWsZw9s` 63 (-5.74), `j5itLHDMJsE` 50 (-1.72), `luotSpkyCVU` 47 (-1.15), `wIyNAsmGrl0` 55 (-1.13). `PodgxWsZw9s` 63: section 54-67 sent back for gaining lines 60 and 61; first-pass last word 234.80-235.64 -> 235.34-235.49; end extension 5.585 s -> none. **Sung-time overlap**: old pairs overlapping by 0.3 s more than before 26 (`atz_aZA3rf0` 38/39 4.72, `ru0K8uYEZWw` 86/87 3.93, `j5itLHDMJsE` 48/49 2.32, the other 23 at most 1.11); pairs with an added line 52, over 0.3 s 31, over 1 s 6 (`ru0K8uYEZWw` 91/94, 93/94, 91/93; `6tpl9LtkRRw` 47/48; `PodgxWsZw9s` 38/39; `FQ3slUz7Jo8` 69/70). **Added lines against words heard in their cue window**: re-aligned 32, with a pair 26, median offset up to 0.5 s / 0.5-1 / over 1: 22 / 1 / 3; paced 23, with a pair 18: 8 / 3 / 7; an echo that repeats its lead pairs with the lead's words. `ru0K8uYEZWw` line 91: verdict consistency, share 0.0, no transcript word from 205 to 213.14 s; placed 213.59-215.36 with line 93 at 213.96-215.40; old line 86's last word end 209.59 -> 213.52. `wGyh_53ecgg` line 33: cue 10.47 s, words at 185.70 and 191.68, heard at 185.92 and 186.02. **B3**: old lines with an increase 127 (gained 86, middle 41); newly holding a guessed old word 39 (21, 18), 29 of them newly crammed; newly re-aligned 49 (26, 23); newly paced 8 (all gained). **B5**: the 8 kept groups labelled unsure are 8 `(skate)`. Recommended: NO-GO as built, GO after one change (an added line is never heard-aimed) and two rulings by Ken (paced added lines kept or dropped; `PodgxWsZw9s` 63 accepted or not), with two more spots for his ear. "GATE B read". |
+| 22 | 2026-11-15 | GATE B ruling | Ken, in chat, on `502985d3`; no script run, no build. His listen of the read's two unheard spots, as given | Ruled: all three recommendations of "GATE B read" taken: (1) build "an added line is never heard-aimed" and replay `ru0K8uYEZWw` alone; (2) paced added lines kept, B4 counted on inline words (82.3%); (3) `PodgxWsZw9s` 63 accepted, logged in `plans/open-issues.md`. Listen: `wGyh_53ecgg` 3:05, added line `(With you)` paced over a 10.5 s cue: the line is "with you, yeah, oooooooo ooooooooo wooooaahhh", after covers it correctly length-wise with "with you". `wIyNAsmGrl0` 3:46, line 53: the timing of "for you" is roughly correct; Ken would have preferred "tell me that you're coming through" not put into that line. No change asked for the second; logged in `plans/open-issues.md`. Spec of the fix and the replay check written for Sonnet 5.5. "GATE B ruling". |
+| 23 | 2026-11-16 | GATE B, spot 1 heard again | Ken, in chat, on `fd87a2b9` before it was amended: his listen of `j5itLHDMJsE` from 2:35, as given in "Spot 1 heard again". Read by Fable 5.2, read-only over `~/probes/backing_vocal_lines_phase2/{before,after}` (the song's bundles, `.ass`, `lyrics/*.lrclib.srt`) and `logs/{before,after}_K3.log`; no GPU, no build, no library read. One session-scratch script over every after bundle with `joint_stats.backing`: for each line holding a kept inline group, the last `cue_inputs.realigns` record of that line when the line is not in `realigned_line_ids`; where the record returns a word for every align token, its words outside the group's `tokens` range (the lead) against the same words of `cue_inputs.sections`, and its first start and last end against the cue span plus `rescue_offset`, 0.5 s either side (the span check's bounds for a window not widened; 6 of the lines are in `windows_widened_line_ids`, where the true end bound is later) | Ken: "'ima take it down' is quite early (it actually starts at 2:46), but ends on time. the other lines have early onsets but roughly right". **`j5itLHDMJsE`**, audio clock, offset -0.05. Cues: 48 163.47-166.35, 49 166.35-170.31, 50 170.31-173.38, 51 173.38-177.38. Transcript: `It's` 161.78-163.28, `a` 163.28-163.46, `takedown` 163.46-164.08; `I'ma` 165.54-166.74, `take` 166.74-167.00, `it` 167.00-167.20, `down` 167.20-167.68; `It's` 169.22-170.12, `a` 170.12-170.28, `day` 170.28-170.64; `Dig` 171.82-172.28, `it` 172.28-174.00, `down` 174.00-174.60. Line 49 first pass: before 161.99-162.93, 4 words timed, no retry record; after `I'ma` 161.99-162.17, `take` 162.17-162.45, `it` 162.45-162.47, `down` 162.47-162.47, echo 162.47-164.87, in `crammed_line_ids` and `guessed_word_line_ids` (tokens 2 and 3). After retry of 49: slice 165.55-171.01, `start_bounded` bound 165.80, start 166.478 not cut; `I'ma` 166.478-166.75 (p 0.49), `take` -166.99 (0.99), `it` -167.17 (1.00), `down` 167.34-167.85 (1.00), `oh,` 167.85-168.53 (0.15), `da-da-da,` 169.33-169.83 (0.53), `down,` 170.07-170.91 (0.02), `ooh` 170.91-170.99 (0.00); end bound 170.76; 49 not in `realigned_line_ids`. Shipped: before 161.99-162.93, after 161.99-167.14 (end extends on tokens 6 and 7, 0.796 and 2.271 s). Group on cue 49: `consistency`, share 0.25; cues 47, 48, 50: `not_heard`. Line 48 on both sides: heard-aimed, shift -1.64, kept, 161.28-164.31. Line 50: before 162.93-172.96; after `It's` 167.24, `a` 170.11, `takedown` 170.29-171.23. Line 51: before retry kept, `Take` 173.06; after first pass kept, `Take` 171.23, `it` 173.90, `down` 174.50. **Refused retries on gaining lines, 47 songs**: gaining lines 201, with a retry record 108, kept 35, refused 73. Of the 73: a word for every token 56, fewer 17. Of the 56: end past the end bound 28 (group evidence heard 17, consistency 6, vocable 5), start before the start bound 15, both 6, neither 19. Lead compared with the first pass's on 53: starts within 0.5 s 28, 0.5-1 s 17, over 1 s 8. The 8 (song, line, evidence; first-pass lead -> retry lead; shipped; lowest lead probability; which bound): `atz_aZA3rf0` 40 heard, 167.52 -> 162.31, shipped 163.06-167.27 (its cue), 0.08, both; `atz_aZA3rf0` 23 heard, 93.01 -> 88.24, 88.99-93.03 (its cue), 0.61, both; `j5itLHDMJsE` 49 consistency, 161.99 -> 166.48, 161.99-167.14, 0.49, end; `atz_aZA3rf0` 22 heard, 87.25 -> 84.02, 84.61-88.90 (its cue), 0.03, both; `CEw-7cMnBDY` 35 heard, 162.84 -> 161.38, 161.83-165.00, 0.00, neither; `hj4e709GYf4` 10 heard, 18.06 -> 16.63, 18.06-18.62, 0.77, start; `6tpl9LtkRRw` 88 heard, 232.00 -> 233.07, 232.00-236.78, 0.28, end; `NSYNC - Paradise` 43 vocable, 228.90 -> 229.93, 228.90-233.10, 0.03, end. Ken: "add and amend". Logged in `plans/open-issues.md`; the fix spec unchanged. "Spot 1 heard again". |
