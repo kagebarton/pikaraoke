@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from pikaraoke.lib import library_regen as lr
+from pikaraoke.lib import lrc_auto_timing
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.lib.youtube_dl import ASR_JSON3_SUFFIX
 from pikaraoke.pipeline.config import PipelineConfig
@@ -71,6 +72,10 @@ LRC_SRT = "1\n00:00:05,000 --> 00:00:08,000\nla la la\n"
 
 def _write_lrc_sheet(folder: Path, stem: str, text: str = LRC_SRT) -> Path:
     return _write_sheet(folder, stem, text, "lrclib")
+
+
+def _write_auto_sheet(folder: Path, stem: str, text: str = LRC_SRT) -> Path:
+    return _write_sheet(folder, stem, text, "lrclib_auto")
 
 
 def _is_srt_plan(plan) -> bool:
@@ -414,6 +419,25 @@ class TestCustomSheetWinsEveryPlan:
         assert lr.sheet_kind(typed) == "custom"
         assert lr.sheet_kind(movie) == "movie"
 
+    @pytest.mark.parametrize(
+        ("name", "kind"),
+        [
+            ("Song.lrclib.srt", "lrclib"),
+            ("Song.lrclib-edited.srt", "lrclib_edited"),
+            ("Song.lrclib-auto.srt", "lrclib_auto"),
+            ("Song.lrclib-auto-edited.srt", "lrclib_auto_edited"),
+        ],
+    )
+    def test_the_four_lrclib_suffixes_are_told_apart(self, tmp_path, name, kind):
+        assert lr.sheet_kind(tmp_path / "lyrics" / name) == kind
+
+    def test_the_automatic_sheet_is_where_the_check_says_it_is(self, tmp_path):
+        song = tmp_path / f"{YT_STEM}.mp4"
+
+        assert lr.custom_sheet_file(song, "lrclib_auto") == lrc_auto_timing.sheet_path(song)
+        assert lr.SHEETS["lrclib_auto"].origin == lrc_auto_timing.ORIGIN == lr.LRC_AUTO_ORIGIN
+        assert lr.LRC_ORIGINS == (lr.LRC_ORIGIN, lr.LRC_AUTO_ORIGIN)
+
     def test_no_sheet_and_a_file_that_is_no_sheet_have_no_kind(self, tmp_path):
         assert lr.sheet_kind(None) is None
         assert lr.sheet_kind(tmp_path / "lyrics" / f"{YT_STEM}.lrc") is None
@@ -434,6 +458,7 @@ class TestCustomSheetWinsEveryPlan:
             ("srt", "caption_edited"),
             ("movie_srt", "movie_edited"),
             ("lrclib_srt", "lrclib_edited"),
+            ("lrclib_auto_srt", "lrclib_auto_edited"),
             ("custom", None),
             ("genius", None),
             (None, None),
@@ -442,15 +467,17 @@ class TestCustomSheetWinsEveryPlan:
     def test_an_edit_of_a_cue_sheet_saves_as_the_edited_kind_of_its_origin(self, origin, kind):
         assert lr.edited_kind(origin) == kind
 
-    def test_an_edited_sheet_stands_for_the_repair_source_it_edits(self):
-        assert [lr.repair_source(kind) for kind in lr.SHEETS] == [
-            "custom",
-            "movie",
-            "lrclib",
-            "caption",
-            "movie",
-            "lrclib",
-        ]
+    def test_an_edited_or_automatic_sheet_stands_for_the_repair_source_it_comes_from(self):
+        assert {kind: lr.repair_source(kind) for kind in lr.SHEETS} == {
+            "custom": "custom",
+            "movie": "movie",
+            "lrclib": "lrclib",
+            "caption_edited": "caption",
+            "movie_edited": "movie",
+            "lrclib_edited": "lrclib",
+            "lrclib_auto": "lrclib",
+            "lrclib_auto_edited": "lrclib",
+        }
 
     @pytest.mark.parametrize(
         ("sheet", "edited"),
@@ -458,7 +485,9 @@ class TestCustomSheetWinsEveryPlan:
             (Path("lyrics/Song.lrclib-edited.srt"), True),
             ("lyrics/Song.caption-edited.srt", True),
             (r"lyrics\Song.movie-edited.srt", True),
+            ("lyrics/Song.lrclib-auto-edited.srt", True),
             ("lyrics/Song.lrclib.srt", False),
+            ("lyrics/Song.lrclib-auto.srt", False),
             ("lyrics/Song.custom.txt", False),
             ("lyrics/Song.lrc", False),
             ("", False),
@@ -475,9 +504,11 @@ class TestCustomSheetWinsEveryPlan:
             ("custom", False),
             ("movie", False),
             ("lrclib", False),
+            ("lrclib_auto", False),
             ("caption_edited", True),
             ("movie_edited", True),
             ("lrclib_edited", True),
+            ("lrclib_auto_edited", True),
         ],
     )
     def test_an_edited_kind_is_told_by_the_sheet_table(self, kind, edited):
@@ -489,6 +520,7 @@ class TestCustomSheetWinsEveryPlan:
             ("caption_edited", "caption", "srt"),
             ("movie_edited", "movie", "movie_srt"),
             ("lrclib_edited", "lrclib", "lrclib_srt"),
+            ("lrclib_auto_edited", "lrclib", "lrclib_auto_srt"),
         ],
     )
     @pytest.mark.parametrize("reset", [False, True])
@@ -503,7 +535,7 @@ class TestCustomSheetWinsEveryPlan:
         assert plan.lyrics_path == sheet
         assert plan.seed == {"lyrics_origin": origin}
         assert plan.custom_text is None
-        assert plan.label.endswith(" (edited)")
+        assert plan.label.endswith("edited)")
         assert not lr.is_custom_plan(plan)
 
     @pytest.mark.parametrize("reset", [False, True])
@@ -533,6 +565,40 @@ class TestCustomSheetWinsEveryPlan:
 
         assert plan.seed == {"lyrics_origin": lr.LRC_ORIGIN}
 
+    @pytest.mark.parametrize("reset", [False, True])
+    def test_resolve_plan_replays_the_automatic_sheet_over_the_genius_bundle(self, tmp_path, reset):
+        """A reset keeps a song on its automatic LRCLIB pick: the sheet on disk wins."""
+        sheet = _write_auto_sheet(tmp_path, YT_STEM)
+
+        plan = lr.resolve_plan(_job(tmp_path, YT_STEM, self.GENIUS_BUNDLE), reset=reset)
+
+        assert plan.kind == "seed"
+        assert plan.lyrics_path == sheet
+        assert plan.seed == {"lyrics_origin": lr.LRC_AUTO_ORIGIN}
+        assert plan.label == "LRCLIB timing (auto)"
+        assert plan.custom_text is None
+        assert not lr.is_custom_plan(plan)  # the cue route reads no third source
+
+    AUTO_BUNDLE = {
+        "lyrics": {
+            "origin": "lrclib_auto_srt",
+            "lines": ["the record's line"],
+            "genius": {"id": 9, "title": "H", "artist": "W"},
+        },
+    }
+
+    def test_an_automatic_bundle_with_its_sheet_gone_is_not_reusable_genius_lyrics(self, tmp_path):
+        """The bundle keeps the Genius identity, but its lines are the record's."""
+        assert lr.reuse_plan(_job(tmp_path, YT_STEM, self.AUTO_BUNDLE)) is None
+        assert lr.resolve_plan(_job(tmp_path, YT_STEM, self.AUTO_BUNDLE), reset=False).kind == (
+            "fetch"
+        )
+
+    def test_a_hand_picked_lrclib_bundle_with_its_sheet_gone_is_not_reusable_either(self, tmp_path):
+        bundle = {"lyrics": {**self.AUTO_BUNDLE["lyrics"], "origin": "lrclib_srt"}}
+
+        assert lr.reuse_plan(_job(tmp_path, YT_STEM, bundle)) is None
+
     def test_an_lrc_sheet_is_a_sheet_of_its_own_kind_and_not_the_lrc_file(self, tmp_path):
         song = tmp_path / f"{YT_STEM}.mp4"
         sheet = _write_lrc_sheet(tmp_path, YT_STEM)
@@ -556,6 +622,13 @@ class TestSheetPlans:
             ("caption_edited", ".caption-edited.srt", "srt", "YouTube caption (edited)"),
             ("movie_edited", ".movie-edited.srt", "movie_srt", "movie subtitles (edited)"),
             ("lrclib_edited", ".lrclib-edited.srt", "lrclib_srt", "LRCLIB timing (edited)"),
+            ("lrclib_auto", ".lrclib-auto.srt", "lrclib_auto_srt", "LRCLIB timing (auto)"),
+            (
+                "lrclib_auto_edited",
+                ".lrclib-auto-edited.srt",
+                "lrclib_auto_srt",
+                "LRCLIB timing (auto, edited)",
+            ),
         ],
     )
     def test_each_kind_is_a_seed_plan_for_its_own_file(self, tmp_path, kind, suffix, origin, label):
@@ -1503,6 +1576,16 @@ class TestApplyCustomChoice:
         assert lr.custom_sheet_path(song) == sheet
         assert sheet.read_text(encoding="utf-8") == LRC_SRT
 
+    def test_a_repair_to_manual_lrclib_timing_deletes_the_automatic_sheet(self, tmp_path):
+        song = tmp_path / f"{YT_STEM}.mp4"
+        auto = _write_auto_sheet(tmp_path, YT_STEM)
+        job = self._job_with(tmp_path, lr.sheet_plan(song, "lrclib", LRC_SRT))
+
+        lr.apply_custom_choice(job)
+
+        assert not auto.exists()
+        assert lr.custom_sheet_path(song) == lr.custom_sheet_file(song, "lrclib")
+
     def test_replaying_the_lrc_sheet_leaves_it_alone(self, tmp_path):
         sheet = _write_lrc_sheet(tmp_path, YT_STEM, "kept\n")
         job = self._job_with(tmp_path, lr.custom_plan(_job(tmp_path, YT_STEM, None)))
@@ -1671,6 +1754,43 @@ class TestPrepareLyricsCustom:
         )
 
         assert stage._seed == {"lyrics_origin": "lrclib_srt"}
+
+
+class TestPrepareLyricsAutomatic:
+    """A run from the automatic LRCLIB sheet keeps the Genius song the pick was found with."""
+
+    GENIUS = {"id": 9, "title": "H", "artist": "W"}
+
+    def _seed(self, tmp_path, kind, bundle):
+        job = _job(tmp_path, YT_STEM, bundle)
+        job.plan = lr.sheet_plan(job.song_path, kind, LRC_SRT)
+        work = tmp_path / "work"
+        work.mkdir(exist_ok=True)
+        _path, stage = lr.prepare_lyrics(job, MagicMock(), work, PipelineConfig())
+        return stage._seed
+
+    @pytest.mark.parametrize("kind", ["lrclib_auto", "lrclib_auto_edited"])
+    def test_the_seed_carries_the_bundles_genius_song(self, tmp_path, kind):
+        bundle = {"lyrics": {"origin": "lrclib_auto_srt", "genius": self.GENIUS}}
+
+        assert self._seed(tmp_path, kind, bundle) == {
+            "lyrics_origin": "lrclib_auto_srt",
+            "genius": self.GENIUS,
+        }
+
+    @pytest.mark.parametrize("bundle", [None, {"lyrics": {"origin": "lrclib_auto_srt"}}])
+    def test_with_no_genius_song_recorded_the_seed_is_the_origin_alone(self, tmp_path, bundle):
+        assert self._seed(tmp_path, "lrclib_auto", bundle) == {"lyrics_origin": "lrclib_auto_srt"}
+
+    @pytest.mark.parametrize("kind", ["lrclib", "lrclib_edited", "movie", "caption_edited"])
+    def test_another_kinds_seed_is_unchanged_even_when_the_bundle_has_a_genius_song(
+        self, tmp_path, kind
+    ):
+        bundle = {"lyrics": {"origin": "genius", "genius": self.GENIUS}}
+
+        assert self._seed(tmp_path, kind, bundle) == {
+            "lyrics_origin": lr.SHEETS[kind].origin,
+        }
 
 
 class TestPrepareRegenJob:
@@ -2008,6 +2128,16 @@ class TestPutBackLyricFiles:
 
         assert timed.read_text(encoding="utf-8") == LRC_SRT
         assert not typed.exists()
+
+    def test_it_restores_the_automatic_sheet_a_repair_to_genius_removed(self, tmp_path):
+        song = _touch_video(tmp_path, YT_STEM)
+        auto = _write_auto_sheet(tmp_path, YT_STEM)
+        snapshot = lr.snapshot_lyric_files(song)
+        auto.unlink()  # a repair to another source removed it
+
+        lr.put_back_lyric_files(snapshot)
+
+        assert auto.read_text(encoding="utf-8") == LRC_SRT
 
     def test_it_restores_a_sheet_the_run_overwrote(self, tmp_path):
         song = _touch_video(tmp_path, YT_STEM)

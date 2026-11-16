@@ -99,11 +99,11 @@ UNREADABLE_SHEET_MESSAGE = (
 )
 
 # The lyric sources :meth:`LibraryTools.repair` takes: the edited sheet kinds are no
-# source, a word edit is not a repair.
+# source, a word edit is not a repair, and nobody repairs to the automatic LRCLIB pick.
 REPAIR_SOURCES = (
     "caption",
     "genius",
-    *(kind for kind in SHEETS if not is_edited_kind(kind)),
+    *(kind for kind in SHEETS if repair_source(kind) == kind),
     "transcribe",
 )
 

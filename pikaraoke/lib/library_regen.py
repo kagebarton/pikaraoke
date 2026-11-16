@@ -19,7 +19,7 @@ from typing import NamedTuple
 
 import srt
 
-from pikaraoke.lib import lrclib, ytasr
+from pikaraoke.lib import lrc_auto_timing, lrclib, ytasr
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius import GeniusClient, GeniusUnavailable, write_choice
@@ -140,6 +140,9 @@ class SongJob:
 CUSTOM_ORIGIN = "custom"
 MOVIE_ORIGIN = "movie_srt"
 LRC_ORIGIN = "lrclib_srt"
+LRC_AUTO_ORIGIN = lrc_auto_timing.ORIGIN
+# Timed from an LRCLIB record, picked by hand on Repair or by the check at download.
+LRC_ORIGINS = (LRC_ORIGIN, LRC_AUTO_ORIGIN)
 
 
 def is_genius_reuse(plan: Plan | None) -> bool:
@@ -226,12 +229,15 @@ def find_local_srt(song: Path) -> Path | None:
 class SheetKind(NamedTuple):
     """One kind of custom sheet: its file suffix, the lyrics origin a run from it
     records, and its plan's label. ``edits`` marks an admin's word edit of a cue
-    sheet and names the repair source whose words it fixes."""
+    sheet and names the repair source whose words it fixes. ``stands_for`` marks a
+    sheet no repair saves, the automatic LRCLIB pick's, and names the repair source
+    Repair shows as current for it."""
 
     suffix: str
     origin: str
     label: str
     edits: str | None = None
+    stands_for: str | None = None
 
 
 # The admin's own lyrics for a song, kept in the library's ``lyrics/`` folder in one
@@ -246,6 +252,11 @@ class SheetKind(NamedTuple):
 # YouTube caption's (a caption is no sheet until edited), the movie subtitles' or the
 # LRCLIB match's. Each records its source's origin, so everything that tells a song's
 # source by origin is unchanged; the edit shows only in the label.
+#
+# The last two are the LRCLIB match a new download's check picked by itself
+# (``.lrclib-auto.srt``) and that sheet after an edit. They record their own origin,
+# which tells the song's source apart from a match the admin picked, and Repair shows
+# both as LRCLIB timing.
 SHEETS = {
     "custom": SheetKind(".custom.txt", CUSTOM_ORIGIN, "custom sheet"),
     "movie": SheetKind(".custom.srt", MOVIE_ORIGIN, "movie subtitles"),
@@ -258,6 +269,12 @@ SHEETS = {
     ),
     "lrclib_edited": SheetKind(
         ".lrclib-edited.srt", LRC_ORIGIN, "LRCLIB timing (edited)", edits="lrclib"
+    ),
+    "lrclib_auto": SheetKind(
+        lrc_auto_timing.SHEET_SUFFIX, LRC_AUTO_ORIGIN, "LRCLIB timing (auto)", stands_for="lrclib"
+    ),
+    "lrclib_auto_edited": SheetKind(
+        ".lrclib-auto-edited.srt", LRC_AUTO_ORIGIN, "LRCLIB timing (auto, edited)", edits="lrclib"
     ),
 }
 
@@ -298,8 +315,11 @@ def edited_kind(origin: str | None) -> str | None:
 
 
 def repair_source(kind: str) -> str:
-    """The repair source a sheet of ``kind`` stands for: an edited sheet's is its source's."""
-    return SHEETS[kind].edits or kind
+    """The repair source a sheet of ``kind`` stands for: an edited sheet's is its source's,
+    and the automatic LRCLIB sheet's is LRCLIB timing. A kind that is its own is one a
+    repair saves."""
+    sheet = SHEETS[kind]
+    return sheet.edits or sheet.stands_for or kind
 
 
 def is_edited_kind(kind: str | None) -> bool:
@@ -398,6 +418,12 @@ def reuse_plan(job: SongJob) -> Plan | None:
                 seed={"lyrics_origin": "srt"},
                 label="reuse srt (from video)",
             )
+        return None
+
+    if origin in LRC_ORIGINS:
+        # Its lines are the record's, which only the sheet holds: with the sheet gone
+        # nothing is reusable. An automatic pick's bundle also records the Genius
+        # identity, which must not read as Genius lyrics.
         return None
 
     # Non-srt origin: reuse only when the identity metadata the schema needs
@@ -807,6 +833,12 @@ def prepare_lyrics(job: SongJob, genius: GeniusClient, lyrics_dir: Path, config:
         if is_custom_plan(plan):
             # The cue route a movie sheet takes never reads the third source.
             seed = {**seed, **_ytasr_seed(song)}
+        if seed.get("lyrics_origin") == LRC_AUTO_ORIGIN:
+            # An automatic pick keeps the Genius song it was found with, so Repair can
+            # offer it again and the bundle records it.
+            genius_ref = ((job.bundle or {}).get("lyrics") or {}).get("genius")
+            if genius_ref:
+                seed = {**seed, "genius": genius_ref}
         return lyrics_path, SeedArtifactsStage(seed)
 
     if plan.kind == "sidecar":
@@ -1005,11 +1037,12 @@ def backup_text_folders(folder: Path, stems: list[str] | None = None) -> Path | 
 #   ``LyricsFetchStage``, per E1's gated fill). Wiping them would force a
 #   re-fetch of every genius song's variant on the next run for no benefit --
 #   ``ensure_lrc`` already reuses an on-disk file unconditionally.
-# - ``lyrics/<stem>.custom.txt`` / ``.custom.srt`` / ``.lrclib.srt`` and the three
+# - ``lyrics/<stem>.custom.txt`` / ``.custom.srt`` / ``.lrclib.srt`` and the four
 #   ``-edited.srt`` kinds: an admin's own lyric sheet, typed, pasted from a movie,
 #   fitted from an LRCLIB match, or a cue sheet with its words fixed. It is
 #   hand-made, so a reset must not lose it; only a repair to another source
-#   removes it.
+#   removes it. The same holds for ``.lrclib-auto.srt``, the match a new download's
+#   check picked: a reset keeps the song on it.
 KEEP_ON_RESET = {
     "subtitles": ASR_JSON3_SUFFIX,
     "lyrics": (".lrc", *(sheet.suffix for sheet in SHEETS.values())),
