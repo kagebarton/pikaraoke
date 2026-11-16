@@ -724,7 +724,8 @@ function populateLyricsDropdown(found) {
     }
     var $genius = $('<optgroup label="Genius.com Results">');
     found.hits.forEach(function (item) {
-      $genius.append($("<option>").val(item.id).text(item.title + " — " + item.artist));
+      var year = item.year ? " (" + item.year + ")" : "";
+      $genius.append($("<option>").val(item.id).text(item.title + " — " + item.artist + year));
     });
     $sel.append($genius);
     $("#lyrics-results-label").removeClass("is-hidden");

@@ -70,7 +70,7 @@ backfill only ever fills in what's absent.
    ```
    <song name>
      search query [<default>] or s/t/k: <enter, edit, or s/t/k>
-     1) Title - Artist  <- Enter
+     1) Title - Artist (Year)  <- Enter
      ...
      choose [Enter=1, 1-N/s/t/k or new query]:
    ```
@@ -78,7 +78,8 @@ backfill only ever fills in what's absent.
    The default is the file name read as a title (artist, film and
    year pulled out, junk words dropped). Enter searches with it: up to
    two Genius queries, best first, and a hit that is surely the song
-   is marked `<- Enter`, which then takes it. Text you type is searched
+   is marked `<- Enter`, which then takes it. Each hit shows its year
+   when Genius has one. Text you type is searched
    as typed, in Genius's order, with nothing marked. With no mark,
    Enter at the choose prompt searches again.
 
