@@ -20,10 +20,11 @@ build spec is written below ("Phases 4-6: the build"), with Ken's rulings on its
 
 **2026-11-16: the spec is amended for `dev` `5680091a`, where `cue_heard_rescue` and
 `backing_vocal_lines` have landed (4a, 4c, 4d, 4d2, 4f, 4g, Phase 6 check 4; Results row 13).
-One point is open and Ken's: whether an automatic pick shows its backing vocals ("Open point
-P1"). `defer_timing` is re-read against the automatic pick ("`defer_timing` after the
-automatic pick"). This branch is 27 commits behind `dev`. Next: Ken says how the branch is
-brought current with `dev`, then Phase 4, Sonnet.**
+Ken ruled the one open point the same day (Decision 36, Results row 14): an automatic pick
+shows its backing vocals, built as 4d2 ("Open point P1"). `defer_timing` is re-read against
+the automatic pick ("`defer_timing` after the automatic pick"). This branch is 27 commits
+behind `dev`. Next: Ken says how the branch is brought current with `dev`, then Phase 4,
+Sonnet.**
 
 ## Goal
 
@@ -94,6 +95,12 @@ Ken, 2026-11-12, by question dialog, on the open points of the Phase 4-6 spec:
     edited)". The song stays in the auto list.
 35. When LRCLIB cannot be reached during a new download's check, the song stays on joint and
     gets no automatic second try (Decision 3 stands). Song Info says the check could not run.
+
+Ken, 2026-11-16, in chat, on the one open point of the amended spec:
+
+36. An automatic pick shows its backing vocals ("Open point P1", ruled as added). Built as
+    4d2, its own commit after 4d. The keep rule has not been measured on an automatic pick;
+    Phase 6 check 4 is its first listen.
 
 ## The bar and the pick (pre-registered)
 
@@ -480,14 +487,15 @@ is the check that no pick moved.
 | The pick order (I'm A Slave 4 U) | Unchanged (Decision 32, "Sizing for Decision 32"). | Ken |
 | The 4 s hold on a last line | Unchanged: it feeds the fit, so it is part of the measured bar. Whether the finished karaoke still ends Catch My Breath's last line early is heard in Phase 6. | this spec; Ken may overrule |
 | `defer_timing` | Corrected 2026-11-16: its plan is on this computer, `git show origin/defer_timing:plans/defer-timing.md`, and is read against this build in "`defer_timing` after the automatic pick". | note |
-| Parentheses on an automatic pick | Open, Ken's call: "Open point P1". As built by 4d an automatic pick shows none; 4d2 is the change if he rules they show. | open |
+| Parentheses on an automatic pick | Shown. "Open point P1" ruled as added (Decision 36). 4d builds the pick with none; 4d2, its own commit after 4d, adds the origin to `backing_vocals.ORIGINS`. | Ken |
 
 Also noted for landing: branch `onset_loud_start` changes the `snap_line_edges` call in
 `lyric_align.py`. Whichever of the two lands second is replayed onto the other.
 
-### Open point P1: does an automatic pick show its backing vocals? (Ken's call)
+### Open point P1: does an automatic pick show its backing vocals? (ruled 2026-11-16: yes)
 
-Not a Decision. Written 2026-11-16 by Fable 5.2 from
+**Ruled 2026-11-16 by Ken, in chat: add it, as 4d2 (Decision 36).** The question and Fable's
+recommendation below are kept as they were put. Written 2026-11-16 by Fable 5.2 from
 `git show archive/backing_vocal_lines:plans/backing-vocal-lines.md` and `dev` `5680091a`.
 
 **The question.** On `dev`, a caption song and a song Ken timed from LRCLIB on Repair show
@@ -666,8 +674,8 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
     sheet (`apply_custom_choice` already walks `_sheet_files`); a failed regen puts it back
     (`snapshot_lyric_files`). Test both, no new code expected.
   - `reuse_plan` must not read an auto bundle as reusable Genius lyrics. The bundle keeps
-    `lyrics.genius` (4d), but its `lines` are the record's (with 4d2, the record's plus the
-    backing vocals kept, as an `lrclib_srt` bundle's are on `dev`). With the sheet gone from
+    `lyrics.genius` (4d), but its `lines` are the record's (once 4d2 is in, the record's plus
+    the backing vocals kept, as an `lrclib_srt` bundle's are on `dev`). With the sheet gone from
     disk it returns None, as an `lrclib_srt` bundle does today. Test it.
   - A run from an auto sheet (Regenerate, Reset, a bulk run, Edit words) keeps the Genius
     identity: when the plan's origin is `LRC_AUTO_ORIGIN` and the job's bundle has
@@ -694,7 +702,7 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
     and run the cue route on it with the gate's result. The route's `parens` come from the
     one call every cue sheet makes, `self._sheet_parens(<the tmp sheet>, <the origin just
     set>)`: no special case for a pick. With `ORIGINS` as it is on `dev` that is an empty
-    list, so a pick shows no parenthesised words; 4d2 changes that if Ken rules so. From
+    list, so a pick shows no parenthesised words; 4d2 changes that (Decision 36). From
     the pick on, the song's lines are the ones the cue route returns: `show_parens`, the
     ASS, the SRT and the bundle go by them, and the Genius sheet's lines are not used
     again. Where the ASS is promoted, also move the
@@ -725,15 +733,14 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
   Commit: `feat(pipeline): a new Genius download is timed from an LRCLIB record that
   passes the bar`.
 
-- [ ] **4d2. Backing vocals on an automatic pick. Only if Ken has ruled "Open point P1"
-  as added.** Not ruled when 4d is done: skip it, go on to 4e, and name the open point in
-  the 4g relay. Ruled as left out: skip it. Always its own commit after 4d, so 4d's tests
-  hold at 4d's commit and this one changes them.
+- [ ] **4d2. Backing vocals on an automatic pick. Ruled added by Ken, 2026-11-16 (Decision
+  36): build it, after 4d and before 4e.** Its own commit, so 4d's tests hold at 4d's commit
+  and this one changes them.
   - `backing_vocals.ORIGINS` gains `"lrclib_auto_srt"`. Spelled there, as `"lrclib_srt"`
     is: `backing_vocals` is imported by `cue_align` and takes no pipeline module. The
     comment above it says the rule was measured on captions and on Repair-picked LRCLIB
-    records, and that the automatic origin is in by Ken's ruling of P1 (the same records'
-    sheets), not by a measurement of its own.
+    records, and that the automatic origin is in by Ken's ruling of P1, Decision 36 (the
+    same records' sheets), not by a measurement of its own.
   - Nothing else changes: `_sheet_parens`, `judge`, the rule's pad, share and vocable list
     are as landed. The edited kind needs no entry: an edited sheet holds no group
     (`backing-vocal-lines.md` D3).
@@ -785,13 +792,12 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
   Phase 4 commits (core pipeline). Hand Ken the line, do not launch it:
   `/code-review <4b's commit>~1..HEAD` on `lyric_align.py`, `lrc_auto_timing.py`,
   `library_regen.py`, `lrclib.py`, `library_tools.py`, `processing_manager.py`, the two
-  scripts and their tests (and `backing_vocals.py` when 4d2 was built), with three finders:
+  scripts and their tests (and `backing_vocals.py`, from 4d2), with three finders:
   correctness (does a no-pick or failed check leave joint byte-for-byte as before; is the
   pick the bar's; after a pick, do the parentheses, the ASS and the bundle go by the
   picked sheet's lines and never the Genius sheet's), simplicity (one gate call, one query
   function, no second copy of the bar, no paren case of the pick's own), robustness (files
   only at promotion, cancel and failure paths, the network call).
-  If "Open point P1" is still not ruled, say so in the relay: 4d2 is waiting on it.
 
 ### Phase 5: status, lists, wording (Sonnet)
 
@@ -858,18 +864,13 @@ On the computer with the library, the app run from this branch.
    finished karaoke? (Without deleting: Repair to LRCLIB timing with that record gives
    nearly the same sheet through the hand route.)
 4. **Parentheses:** one of the twelve picks with whole lines in parentheses (Who You Are)
-   the same way. What to expect depends on "Open point P1" (amended 2026-11-16;
-   `backing_vocal_lines` has landed and covers caption songs and Repair's LRCLIB timing,
-   not this origin unless 4d2 was built).
-   - **Built without 4d2:** no parenthesised words on screen, the echo lines included.
-     Repair to LRCLIB timing with the same record then shows the ones heard, so the two
-     routes differ on the same record until P1 is ruled.
-   - **Built with 4d2:** the echo lines the transcriber heard are on screen in
-     parentheses. This is the first listen of the keep rule on an automatic pick. Listen
-     for what GATE B of `backing-vocal-lines.md` listened for: a lead line beside an echo
-     that now starts or ends at the wrong time, an echo shown where nothing is sung, and
-     two lines on screen together that should not be. The song's bundle records what was
-     kept and why under `joint_stats.backing`.
+   the same way. 4d2 is built (Decision 36), so the echo lines the transcriber heard are on
+   screen in parentheses, as Repair to LRCLIB timing with the same record shows them. This
+   is the first listen of the keep rule on an automatic pick. Listen for what GATE B of
+   `backing-vocal-lines.md` listened for: a lead line beside an echo that now starts or
+   ends at the wrong time, an echo shown where nothing is sung, and two lines on screen
+   together that should not be. The song's bundle records what was kept and why under
+   `joint_stats.backing`.
 5. **Staying put:** Regenerate and Reset on an auto song keep it auto. Edit words gives
    "LRCLIB timing (auto, edited)" and the song stays in the auto list.
 6. **Going back:** Repair to Genius on an auto song offers the recorded Genius song with
@@ -1034,6 +1035,7 @@ For Phases 1-3. Phases 4-6 have their own under "Phases 4-6: the build".
 | 11 | 2026-11-10 | GATE P | GATE P read by Fable on `lrclib_fit_pick` (HEAD `bc222f9`), read-only: both report sections, both `<out>` folders, Ken's verdicts (rows 7-10). Neither probe was rerun. The library share was not mounted during the read, so captions were read from the sheets' `C` rows. Scratch scripts outside the repo. | Rule 1 met. Rule 2 complete. **Rule 3 not met: seven wrong picks**, two `new` by Ken's ear, five `caption` by the sheets. Two `minor`. Detail in "GATE P read". Ken's ruling pending. |
 | 12 | 2026-11-12 | 4-6 spec | Spec of Phases 4-6 written by Fable 5.2 on `lrclib_fit_pick` (HEAD `30b91f3`), after GATE Q of `plans/lrclib-shift-check.md` was ruled go. No code, no probe run, no library read (the library is not on this computer). **Code read for the open points:** `lyric_align.py`, `lyrics_fetch.py`, `lrclib.py`, `lrc_auto_pick.py`, `library_regen.py`, `library_status.py`, `library_tools.py`, `processing_manager.py`, `orchestrator.py`, `routes/song_info.py`, `routes/library.py`, `scripts/add_songs.py`, `scripts/regen_alignment_bundles.py`. **Found against the loose text:** `add_songs` hands its new songs to the regen run path, not the download lane, so "first-time download" is a flag the caller sets; `library_regen` imports the align stage, so the stage cannot import it; History names a version "Genius" whenever the bundle has a Genius identity, and `reuse_plan` would replay an auto bundle's lines as Genius lyrics, both of which the spec guards. **Sizing for Decision 32,** read-only on the saved `candidates.tsv` of both shift-check runs (scratch scripts `order.py`, `order2.py`, outside the repo): a shift-run tiebreak swaps 5 of 31 fresh picks and 18 of 102 used picks. **Ken ruled four points by question dialog** (Decisions 32-35). The `defer_timing` plan is not on this computer and was not read. | "Phases 4-6: the build", "Sizing for Decision 32". |
 | 13 | 2026-11-16 | 4-6 spec amended | Fable 5.2 on `lrclib_fit_pick` (HEAD `e8bd6994`, 27 commits behind `dev` `5680091a`), plan edits only: no code, no probe, no library read, no GPU, branch not rebased, merged or pushed. Code read from the main checkout on `dev`. **`dev` against `e8bd6994`** (`git diff lrclib_fit_pick...dev`, merge base `37d8d93`): changed under `pikaraoke/` are `alignment_capture.py`, `cue_align.py`, `genius_lyrics.py`, `srt_cues.py`, `srt_slice_fit.py`, `token_align.py`, `lyric_align.py`; new are `backing_vocals.py`, `heard_lines.py`. `library_regen.py`, `library_tools.py`, `library_status.py`, `lrclib.py`, `lyrics_fetch.py`, `processing_manager.py`, `routes/` and `scripts/` are not changed. In `lyric_align.py`: `_run_cue_align` takes `parens` and returns six values (the last the lines it timed); `_sheet_parens(lyrics_path, origin)` is empty outside `backing_vocals.ORIGINS` (`{"srt", "lrclib_srt"}`, `backing_vocals.py:30`); `align_song` takes `heard_words` and `parens` and returns four values; `show_parens` runs on every alignment route before `_generate_ass`; `test_backing_vocals.py` `TestOrigins` asserts `ORIGINS == {"srt", LRC_ORIGIN}`. In the frozen list: `clean_cue_texts` split into `_is_caps_file` and `_clean_file_cue` (`523b8718`); `_PAREN_CONTENT_RE` and `_strip_markup` made public in `genius_lyrics.py`; `_token_expected_times` moved from `cue_align` to `token_align`, body equal, and `srt_slice_fit` imports it from there. `git merge-tree --write-tree lrclib_fit_pick dev` gave a tree and no conflict; one file is changed on both sides, `srt_slice_fit.py`. **Spec edits:** the amendment note and the frozen-list paragraph; 4a (the branch must hold `dev`; the `dev` signatures); 4c (`reuse_plan` wording); 4d (the call shape, the pick's `parens` through `_sheet_parens`, two tests); 4d2 new and conditional; 4f (what the parity now also covers); 4g (review line); Phase 6 check 4; the `defer_timing` row of the settled table corrected (row 12 said the plan was not on this computer; it is at `origin/defer_timing`, `9e7f6dab`). **Open point P1** written from `archive/backing_vocal_lines` (`5d9c81f0`) `plans/backing-vocal-lines.md`: Phase 0 measured 142 caption sheets and 28 `lrclib_srt` sheets (Ken's Repair picks; 18 with a group, 192 groups, labels 184 sung, 0 direction, 8 unsure); no automatic pick was measured. Both routes save `fit_slice(...).srt` (`library_tools.py:1328`). Not ruled. **`defer_timing` note** written from `origin/defer_timing:plans/defer-timing.md`; counts taken from `lrclib-shift-check.md` (fresh Table P; GATE F item 2), nothing recomputed. **On this computer:** `~/pikaraoke-songs` exists; `~/.pikaraoke/tmp/lrclib_shift_check_holdout` does not (`ls`). **Not done:** no test run, no `judge` run on any picked record, no timing of joint against transcribe-only. | "Amended 2026-11-16", "Open point P1", 4a-4g, Phase 6 check 4, "`defer_timing` after the automatic pick". |
+| 14 | 2026-11-16 | 4-6 spec, P1 ruled | Ken ruled "Open point P1" in chat: add it (Decision 36), and asked for the plan and the Phase 4 start prompt to be amended. Recorded by Sonnet 5.5 on `lrclib_fit_pick` (HEAD `a688abea`), plan edits only: no code, no probe, no library read, no GPU. **Edits:** Decision 36; the 2026-11-16 status paragraph; the settled-table row for parentheses; the P1 heading and a ruling line; 4c's `reuse_plan` wording; 4d's parentheses sentence; 4d2 (unconditional, after 4d and before 4e); 4g (`backing_vocals.py` always in the review line, the "not ruled" relay sentence removed); Phase 6 check 4 (the built-with-4d2 case only). **Not changed:** the question's own text, its table and Fable's recommendation; 4d's tests and its `parens == []` (4d2 flips them in its own commit); `defer_timing`. Earlier the same day `a688abea` moved 4f's `<out>` to `~/probes/lrclib-shift-check-handoff/lrclib_shift_check_holdout`. | Decision 36, "Open point P1", 4d2, 4g, Phase 6 check 4. |
 
 ## GATE P read (Fable, 2026-11-10)
 
