@@ -25,9 +25,13 @@ from pikaraoke.lib.token_align import _match_simple, _normalize_token
 logger = logging.getLogger(__name__)
 
 # The bundle's ``lyrics.origin`` of the sheets the rule was measured on: a YouTube caption and
-# an LRCLIB record. Movie and custom sheets were not measured. Spelled here because the
-# align stage cannot import ``library_regen``; a test ties it to ``LRC_ORIGIN``.
-ORIGINS = frozenset({"srt", "lrclib_srt"})
+# an LRCLIB record picked on Repair. Movie and custom sheets were not measured. The record the
+# download's check picks (``lrclib_auto_srt``) is in by Ken's ruling in plans/lrclib-fit-pick.md
+# (Decision 36: the same records' sheets, read the same way) and a transcript-only dry run on
+# the 31 fresh picks (Results row 15), not by a listen of its own. Spelled here because the
+# align stage cannot import ``library_regen``; a test ties them to ``LRC_ORIGIN`` and
+# ``LRC_AUTO_ORIGIN``.
+ORIGINS = frozenset({"srt", "lrclib_srt", "lrclib_auto_srt"})
 
 # Seconds added to each side of a cue's window, which is moved by the song's display lead.
 WINDOW_PAD_S = 0.5

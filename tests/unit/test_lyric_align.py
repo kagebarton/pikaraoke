@@ -1045,7 +1045,7 @@ class TestAutoLrcTiming:
         assert bundle["lyrics"]["source_path"] == f"lyrics/{ctx.song_path.stem}.lrclib-auto.srt"
         assert bundle["transcribe_words"] == self.HEARD
 
-    def test_a_pick_is_timed_with_the_gates_words_and_none_of_the_sheets_parentheses(
+    def test_a_pick_shows_the_backing_vocals_the_transcriber_heard_as_a_caption_does(
         self, tmp_path, monkeypatch
     ):
         import pikaraoke.pipeline.stages.lyric_align as la_mod
@@ -1056,15 +1056,25 @@ class TestAutoLrcTiming:
 
         stage.run(ctx)
 
-        assert align.call_args.kwargs["parens"] == []
+        assert len(align.call_args.kwargs["parens"]) == 2
         assert align.call_args.kwargs["heard_words"] == self.HEARD
         bundle = _read_bundle(ctx)
-        assert bundle["lyrics"]["lines"] == ["glowing river", "phantom parade"]
-        assert "backing" not in bundle["joint_stats"]
+        assert bundle["lyrics"]["lines"] == ["glowing river (hey)", "(oh, oh)", "phantom parade"]
+        assert bundle["lyrics"]["align_lines"] == ["glowing river hey", "oh, oh", "phantom parade"]
+        backing = bundle["joint_stats"]["backing"]
+        assert backing["old_line_ids"] == [0, None, 1]
+        assert [(g["verdict"], g["line_id"]) for g in backing["groups"]] == [
+            ("heard", 0),
+            ("heard", 1),
+        ]
         ass = (ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass").read_text(
             encoding="utf-8"
         )
-        assert "(hey)" not in ass
+        assert ass.count("Dialogue:") == 3
+        assert "(hey)" in ass and "(oh," in ass and "oh)" in ass
+        # The sheet kept for the song is still the record as picked, groups and all.
+        sheet = self._lyrics(ctx) / f"{ctx.song_path.stem}.lrclib-auto.srt"
+        assert sheet.read_text(encoding="utf-8") == self.SHEET
 
     @pytest.mark.parametrize("outcome", [NO_PICK, NO_RECORDS, SEARCH_FAILED, ERROR])
     def test_any_other_outcome_leaves_the_song_on_joint_with_nothing_written(
