@@ -1152,3 +1152,15 @@ and keys): 4 rows differ, in `agreed` only, true to false:
     `1YiAzyCzZzw` lines 57-60 v11 178.03 to 180.19, v12 all at 175.14; `pXNd2V88d60` lines
     56-62 v11 287.98 to 313.56, v12 all at 296.08; `GI6CfKcMhjY` line 12 ("Here we go")
     v11 27.84, v12 23.48, and line 62 v11 168.64, v12 171.94 (pass 1 values).
+- Where the v11 bundles were captured (`config.whisper.load_model.model_path`; the config
+  is otherwise equal to v12's in every song compared): 11 of the 13 on Windows
+  (`C:\temp\Github\pikaraoke\models\...`, 11-05 to 11-12), every cue song but Rent - I'll
+  Cover You and every joint song but `22QYya-LGDY`; those two on this box (11-07, 10-30).
+  Words changed against v12, by time of 11 ms or more or by word: `22QYya-LGDY` 0 (linux to
+  linux); Rent - I'll Cover You 24 of 221 (linux to linux); the Windows ones 5 to 88 of 340
+  to 777 where the counts match. All four stacked-line cases above are Windows captures.
+  Not tested: a second run on this box of the same song, so the machine is not shown to be
+  the cause. R7 left 12 joint bundles undiagnosed for a final line time that differs from
+  the bundle, among them `hvvjiE4AdUI`, `aBt8fN7mJNg` and `ZrX1XKtShSI`. For
+  `plans/open-issues.md` at landing: a joint song's lines can stack on one instant (zero
+  length) when the heard words shift; not caused by this branch (pass 1).
