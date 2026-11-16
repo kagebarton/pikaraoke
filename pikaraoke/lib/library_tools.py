@@ -556,14 +556,13 @@ class LibraryTools:
         job = self._song_job(song_path)
         lyrics = (job.bundle or {}).get("lyrics") or {}
         genius = lyrics.get("genius") or {}
-        terms = lrclib.clean_key(
-            genius.get("title") or default_query(job.song_path), genius.get("artist") or ""
-        )
         return {
             "text": self._sheet_on_disk(job.song_path, "custom")
             or "\n".join(lyrics.get("lines") or []),
             "movie": self._sheet_on_disk(job.song_path, "movie"),
-            "query": " ".join(term for term in terms if term),
+            "query": lrclib.query_text(
+                genius.get("title") or default_query(job.song_path), genius.get("artist") or ""
+            ),
             "genius": genius_start(job.song_path),
         }
 

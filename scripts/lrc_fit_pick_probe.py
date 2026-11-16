@@ -474,8 +474,7 @@ def read_caption(song: Path) -> tuple[str, list[dict]] | None:
 def search_query_for(song: Path, bundle: dict | None) -> str:
     """The query Repair's LRCLIB search box starts with (``LibraryTools.custom_start``)."""
     genius = ((bundle or {}).get("lyrics") or {}).get("genius") or {}
-    terms = lrclib.clean_key(genius.get("title") or default_query(song), genius.get("artist") or "")
-    return " ".join(term for term in terms if term)
+    return lrclib.query_text(genius.get("title") or default_query(song), genius.get("artist") or "")
 
 
 def search_records(youtube_id: str, query: str, cache_dir: Path) -> list[dict]:

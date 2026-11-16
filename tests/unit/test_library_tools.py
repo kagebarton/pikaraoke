@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 import pytest
 import srt
 
-from pikaraoke.lib import library_status, lrclib
+from pikaraoke.lib import library_status, lrc_auto_timing, lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import (
@@ -1859,6 +1859,18 @@ class TestCustomStart:
 
         assert start["query"] == "Song Artist"  # the LRCLIB box
         assert start["genius"] == {"file_title": "Some Song (Official Video)", "query": "Some Song"}
+
+    def test_the_search_is_the_one_a_download_sends_for_the_same_genius_song(
+        self, tmp_path, song, monkeypatch
+    ):
+        genius = {**GENIUS, "title": "Song (Ft. Guest) [Live]", "artist": "Artist (feat. Other)"}
+        write_bundle(tmp_path, song.stem, lyrics={"origin": "genius", "genius": genius})
+        sent = MagicMock(return_value=[])
+        monkeypatch.setattr(lrclib, "search_query", sent)
+
+        lrc_auto_timing.check(genius, [], 100.0)
+
+        sent.assert_called_once_with(self.start(tmp_path, song)["query"])
 
 
 class TestGeniusSong:

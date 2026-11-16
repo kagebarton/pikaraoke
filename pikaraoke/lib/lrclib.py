@@ -223,6 +223,12 @@ def clean_key(track_name: str, artist_name: str) -> tuple[str, str]:
     return track or track_name.strip(), artist or artist_name.strip()
 
 
+def query_text(title: str, artist: str) -> str:
+    """The free-text search for a song: its cleaned title and artist, which Repair's LRCLIB
+    box starts with and the download's check sends, so both list the same records."""
+    return " ".join(term for term in clean_key(title, artist) if term)
+
+
 def _strip_trailing_parens(text: str) -> str:
     """Remove all trailing parenthetical/bracket groups (e.g. multiple
     ``(Remastered) (Live)`` qualifiers); leave a leading group intact."""
