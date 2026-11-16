@@ -56,6 +56,7 @@ from pikaraoke.lib.library_regen import (
     fetch_or_prompt_plan,
     find_local_srt,
     gate_on_disk_caption,
+    genius_start,
     is_edited,
     is_edited_kind,
     media_duration,
@@ -544,7 +545,8 @@ class LibraryTools:
         the saved slice (already clip-timed) if the song has one, else nothing.
         ``query``: the title and artist of the
         Genius song the bundle records, cleaned as the pipeline's LRCLIB search cleans
-        them, else the song's file name.
+        them, else the song's file name. ``genius``: what the Genius search box starts with
+        (``library_regen.genius_start``), whatever the bundle records.
         """
         job = self._song_job(song_path)
         lyrics = (job.bundle or {}).get("lyrics") or {}
@@ -557,6 +559,7 @@ class LibraryTools:
             or "\n".join(lyrics.get("lines") or []),
             "movie": self._sheet_on_disk(job.song_path, "movie"),
             "query": " ".join(term for term in terms if term),
+            "genius": genius_start(job.song_path),
         }
 
     @staticmethod
@@ -1071,7 +1074,7 @@ class LibraryTools:
                     "title": self._song_manager.filename_from_path(entry.song),
                     "needs_pick": True,
                     "now": {"source": entry.source, "reason": entry.reason},
-                    "query": default_query(Path(entry.song)),
+                    **genius_start(Path(entry.song)),
                     "poor": False,
                     "genius_id": None,  # no current pick to keep
                     "caption": None,
@@ -1405,7 +1408,7 @@ class LibraryTools:
             "group": run.group(entry),
             "needs_pick": run.undecided_group(entry) == "needs_pick",
             "now": self._now(status),
-            "query": default_query(status.path),
+            **genius_start(status.path),
             "poor": status.poor,
             "guessed": status.guessed,
             "line_count": status.line_count,

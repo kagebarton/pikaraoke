@@ -1235,6 +1235,17 @@ class TestEditedLabels:
         assert html.count("current (edited)") == 1
         assert 'var CURRENT_SOURCE = "%s"' % source in html
 
+    def test_the_repair_page_starts_the_genius_box_from_the_file_name(self, env):
+        song = env.add_song("Pop Song (Official Video)---aaaaaaaaaaa.mp4")
+
+        html = text(env.client.get("/song_info/repair", query_string={"song": song}))
+
+        start = re.search(r"var GENIUS_START = (\{.*?\});", html).group(1)
+        assert json.loads(start) == {
+            "file_title": "Pop Song (Official Video)",
+            "query": "Pop Song",
+        }
+
     @pytest.mark.parametrize("source", ["movie", "lrclib"])
     def test_the_repair_page_tags_a_plain_sheet_current(self, env, source):
         html = text(

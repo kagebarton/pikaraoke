@@ -24,6 +24,7 @@ from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius import GeniusClient, GeniusUnavailable, write_choice
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
+from pikaraoke.lib.genius_query import start_query
 from pikaraoke.lib.get_platform import get_temp_directory
 from pikaraoke.lib.metadata_parser import (
     clean_search_query,
@@ -439,12 +440,26 @@ def fetch_or_prompt_plan(song: Path) -> Plan:
     return Plan(kind="prompt", label="genius (no youtube id)")
 
 
-def default_query(song: Path) -> str:
-    """Strip the YouTube ID suffix and tidy the title for a search query."""
+def file_title(song: Path) -> str:
+    """The file name without its extension and YouTube ID: the text a Genius search reads."""
     suffix = youtube_id_suffix(str(song))
-    title = song.stem[: -len(suffix)] if suffix else song.stem
-    cleaned = clean_search_query(title)
-    return cleaned or title
+    return song.stem[: -len(suffix)] if suffix else song.stem
+
+
+def genius_start(song: Path) -> dict[str, str]:
+    """What a song's Genius search box starts with.
+
+    ``query`` is the box's text. A search with the box unchanged sends ``file_title`` so
+    the server runs the full ladder; once the text is edited it goes as typed.
+    """
+    title = file_title(song)
+    return {"file_title": title, "query": start_query(title)}
+
+
+def default_query(song: Path) -> str:
+    """The file title tidied for an LRCLIB search query."""
+    title = file_title(song)
+    return clean_search_query(title) or title
 
 
 # ---------------------------------------------------------------------------

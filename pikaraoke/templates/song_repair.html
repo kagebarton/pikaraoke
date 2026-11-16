@@ -120,6 +120,7 @@
     var START_SOURCE = PRESELECT || CURRENT_SOURCE;  // the card chosen on load
     var CURRENT_GENIUS_ID = {{ current_genius_id | tojson }};
     var CUSTOM_QUERY = {{ custom_query | tojson }};  // where a custom song's LRCLIB search starts
+    var GENIUS_START = {{ genius_start | tojson }};  // {file_title, query}: where the Genius box starts
     var LRC_MATCH = {{ lrc_match | tojson }};  // the song's LRCLIB match on disk, as a list row, or null
     var HAS_YOUTUBE_ID = {{ has_youtube_id | tojson }};
     var URLS = {
@@ -283,20 +284,28 @@
       chooseSource($(this).closest('.rp-src').data('source'));
     });
 
+    // The box as it started is the song's own search, so the server reads the file title and runs
+    // its whole ladder; text the admin edited goes as typed.
     function searchGenius() {
       var query = $.trim($('#genius-q').val());
       if (!query) return;
+      var params = query === $.trim(GENIUS_START.query) ? { title: GENIUS_START.file_title } : { q: query };
       var seq = ++state.geniusSeq;
       var list = $('#genius-results').empty().removeClass('is-hidden');
       list.append(el('div', 'rp-empty', T.searching));
       state.genius = null;
       closePreview('genius');
       refreshStep1();
-      $.getJSON(URLS.geniusSearch, { q: query }).done(function (hits) {
+      $.getJSON(URLS.geniusSearch, params).done(function (found) {
         if (seq !== state.geniusSeq) return;
         list.empty();
-        if (!hits.length) list.append(el('div', 'rp-empty', T.noGenius));
-        $.each(hits, function (i, hit) { list.append(geniusOption(hit)); });
+        if (!found.hits.length) list.append(el('div', 'rp-empty', T.noGenius));
+        $.each(found.hits, function (i, hit) { list.append(geniusOption(hit)); });
+        // A preselected hit is ticked through its radio's own change handler, so it is picked.
+        if (found.preselect !== null) {
+          list.find('input').filter(function () { return $(this).val() === String(found.preselect); })
+            .prop('checked', true).trigger('change');
+        }
       }).fail(function () {
         if (seq !== state.geniusSeq) return;
         list.empty().append(el('div', 'rp-empty', T.searchFailed));
@@ -839,6 +848,7 @@
 
     /* -------------------------------------------------------------- start */
 
+    if (!$('#genius-q').val()) $('#genius-q').val(GENIUS_START.query);  // searched only when asked
     startCaptionCheck();
     if (START_SOURCE && START_SOURCE !== 'caption') chooseSource(START_SOURCE);  // the caption waits for its check
     renderMovie();

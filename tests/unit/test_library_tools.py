@@ -1850,6 +1850,16 @@ class TestCustomStart:
     def test_without_one_it_starts_from_the_file_name(self, tmp_path, song):
         assert self.start(tmp_path, song)["query"] == "Some Song"
 
+    def test_the_genius_box_starts_from_the_file_name_whatever_the_bundle_records(
+        self, tmp_path, song
+    ):
+        genius_bundle(tmp_path, song.stem)
+
+        start = self.start(tmp_path, song)
+
+        assert start["query"] == "Song Artist"  # the LRCLIB box
+        assert start["genius"] == {"file_title": "Some Song (Official Video)", "query": "Some Song"}
+
 
 class TestGeniusSong:
     def test_a_song_is_fetched_once_for_the_preview_the_search_and_the_queue(self, tmp_path):
@@ -2337,6 +2347,7 @@ class TestOpenRun:
             "group": "reuse",
             "needs_pick": False,
             "now": {"source": "genius", "title": "Song", "artist": "Artist"},
+            "file_title": "Pop Song (Official Video)",
             "query": "Pop Song",
             "poor": True,
             "guessed": 5,
@@ -3920,6 +3931,7 @@ class TestNeedsPickView:
                 "title": "Song",
                 "needs_pick": True,
                 "now": {"source": "download", "reason": "no_caption"},
+                "file_title": "Song",
                 "query": "Song",
                 "poor": False,
                 "genius_id": None,
