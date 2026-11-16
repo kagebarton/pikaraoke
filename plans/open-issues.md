@@ -359,6 +359,24 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
   its own list of names that stand for no act (the ranking's short, the Genius
   module's wide). Not ruled. Record: `plans/genius-search-spec.md` on branch
   `genius_search_accuracy`, Calls item 3 and "Channel names".
+- **A Genius hit is preselected when it does not account for the whole video title.**
+  GATE G found two in 63 preselects, both film or stage: a hit titled `You Will Be
+  Found (Reprise)` for a video of the full song, and `Mamma Mia — Meryl Streep` for
+  `Mamma Mia! - The Winner Takes It All - Meryl Streep`, whose middle part the parse
+  dropped. Both are pinned in `test_genius_query.py`. A guard that withholds the
+  preselect when the hit's title carries a bracket the video's lacks, or a dash part
+  went unread, can only withhold; its cost (right preselects withheld) is countable on
+  the 500 frozen titles with no network. Not ruled, including whether it needs a new
+  gate. Record: `plans/genius-search-spec.md` on branch `genius_search_accuracy`,
+  "Ruling on the failed gate" and `plans/genius-search-accuracy/gate_g/verdicts.md`.
+- **For a film or stage video the first Genius hit is wrong about 4 times in 10.**
+  GATE G: 18 of 47 on fresh titles, against 6 of 43 on the library titles the order
+  was shaped on. Seven are another recording of the song (a later film, a stage cast,
+  a live cast), eleven another song (the film's name read as the title, a page by an
+  act named like the show). Apart from the two above none was preselected: the page
+  asks the person to choose, with the year and artist shown. Shipped as it is (Ken,
+  2026-11-16): no order tried fixes one film title without breaking another. Record:
+  as above.
 
 ## Movie splits (on `dev`)
 
