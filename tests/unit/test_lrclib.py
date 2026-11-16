@@ -38,6 +38,14 @@ class TestCleanKey:
         assert lrclib.clean_key("(Live)", "Artist") == ("(Live)", "Artist")
 
 
+class TestQueryText:
+    def test_joins_the_cleaned_title_and_artist(self):
+        assert lrclib.query_text("Song (Live)", "Artist feat. Other") == "Song Artist"
+
+    def test_a_missing_artist_leaves_just_the_title(self):
+        assert lrclib.query_text("Song", "") == "Song"
+
+
 class TestSearch:
     @patch("pikaraoke.lib.lrclib.time.sleep")
     @patch("pikaraoke.lib.lrclib.requests.get")
