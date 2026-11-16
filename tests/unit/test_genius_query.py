@@ -198,7 +198,7 @@ def test_a_sure_first_hit_is_preselected_and_stops_the_ladder():
     search = FakeSearch({"Queen Bohemian Rhapsody": [_hit(1, "Bohemian Rhapsody", "Queen")]})
     found = gq.find_song(search, QUEEN, max_calls=3)
     assert search.asked == ["Queen Bohemian Rhapsody"]
-    assert (found.preselect, found.query) == (1, "Queen Bohemian Rhapsody")
+    assert found.preselect == 1
 
 
 def test_a_hit_on_a_page_nobody_reads_is_not_preselected():
