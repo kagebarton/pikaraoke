@@ -341,7 +341,7 @@ class TestResetWithNewGeniusPick:
         monkeypatch.setattr(regen, "PipelineOrchestrator", FakeOrchestrator)
         monkeypatch.setattr(regen, "StemWorker", MagicMock())
         monkeypatch.setattr(regen, "WhisperWorker", MagicMock())
-        monkeypatch.setattr(regen, "build_stages", lambda *args: [])
+        monkeypatch.setattr(regen, "build_stages", lambda *args, **kwargs: [])
         monkeypatch.setenv("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
         monkeypatch.setattr(
             sys, "argv", ["regen", str(tmp_path), "--song", "dQw4w9WgXcQ", "--reset", "--yes"]
@@ -355,6 +355,43 @@ class TestResetWithNewGeniusPick:
 # ---------------------------------------------------------------------------
 # A transcribe run drops the old bundle
 # ---------------------------------------------------------------------------
+
+
+class TestRunJobsArmsFirstDownloadsOnly:
+    """A job from ``add_songs`` is a first download and arms the LRCLIB check; a scanned job
+    never does."""
+
+    def _armed(self, tmp_path, monkeypatch, *, first_download):
+        _touch_video(tmp_path, "Song")
+        job = _job(tmp_path, "Song", None)
+        job.plan = regen.Plan(kind="transcribe")
+        job.first_download = first_download
+        build = MagicMock(return_value=[])
+        monkeypatch.setattr(regen, "build_stages", build)
+        monkeypatch.setattr(regen, "StemWorker", MagicMock())
+        monkeypatch.setattr(regen, "WhisperWorker", MagicMock())
+        monkeypatch.setattr(regen, "prepare_lyrics", lambda *args: (None, None))
+
+        class FakeOrchestrator:
+            def __init__(self, *args):
+                pass
+
+            def run_one(self, song, lyrics_path):
+                return SimpleNamespace(artifacts={"lyric_method": "genius+joint"})
+
+        monkeypatch.setattr(regen, "PipelineOrchestrator", FakeOrchestrator)
+        config = PipelineConfig()
+        config.intermediate_dir = str(tmp_path)
+
+        assert regen.run_jobs([job], config, MagicMock()) == (1, 0, 0)
+
+        return build.call_args.kwargs["auto_lrc_timing"]
+
+    def test_a_first_download_arms_the_stage(self, tmp_path, monkeypatch):
+        assert self._armed(tmp_path, monkeypatch, first_download=True) is True
+
+    def test_a_scanned_job_does_not(self, tmp_path, monkeypatch):
+        assert self._armed(tmp_path, monkeypatch, first_download=False) is False
 
 
 class TestRunJobsFinishesEachSong:
@@ -384,7 +421,7 @@ class TestRunJobsFinishesEachSong:
         monkeypatch.setattr(regen, "PipelineOrchestrator", FakeOrchestrator)
         monkeypatch.setattr(regen, "StemWorker", MagicMock())
         monkeypatch.setattr(regen, "WhisperWorker", MagicMock())
-        monkeypatch.setattr(regen, "build_stages", lambda *args: [])
+        monkeypatch.setattr(regen, "build_stages", lambda *args, **kwargs: [])
         monkeypatch.setattr(regen, "prepare_lyrics", prepare or (lambda *args: (None, None)))
         config = PipelineConfig()
         config.intermediate_dir = str(tmp_path)

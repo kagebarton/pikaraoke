@@ -127,13 +127,16 @@ class Plan:
 @dataclass
 class SongJob:
     """One song's regen. ``replaces_custom`` marks an admin's repair to another
-    source, the one job that removes the song's custom lyric sheet."""
+    source, the one job that removes the song's custom lyric sheet. ``first_download``
+    marks a song no run has timed yet, the only kind whose Genius pick may be timed
+    from an LRCLIB record (:mod:`lrc_auto_timing`); every regen leaves it off."""
 
     song_path: Path
     bundle: dict | None
     stale_reason: str
     plan: Plan | None = None
     replaces_custom: bool = False
+    first_download: bool = False
 
 
 # The bundle's ``lyrics.origin`` for each kind. ``"srt"`` already means a YouTube
@@ -716,11 +719,19 @@ def _dereverb_cache(song: Path) -> Path:
     return song.parent / "dereverb" / f"{song.stem}---dereverb.m4a"
 
 
-def build_stages(song: Path, lyric_stage, whisper, config: PipelineConfig, stem_worker):
+def build_stages(
+    song: Path,
+    lyric_stage,
+    whisper,
+    config: PipelineConfig,
+    stem_worker,
+    auto_lrc_timing: bool = False,
+):
     """Stem reuse/generation + the optional lyric stage + lyric-align.
 
     ``LyricAlignStage`` gets the stem worker so its de-reverb retry (and the
-    de-reverb cache) is live — backfill omits it.
+    de-reverb cache) is live — backfill omits it. ``auto_lrc_timing`` arms its
+    LRCLIB check, for a job's first download only.
     """
     stages: list = []
     if _stems_present(song):
@@ -734,7 +745,7 @@ def build_stages(song: Path, lyric_stage, whisper, config: PipelineConfig, stem_
         stages.append(FFmpegTranscodeStage(config))
     if lyric_stage is not None:
         stages.append(lyric_stage)
-    stages.append(LyricAlignStage(whisper, config, stem_worker))
+    stages.append(LyricAlignStage(whisper, config, stem_worker, auto_lrc_timing=auto_lrc_timing))
     return stages
 
 

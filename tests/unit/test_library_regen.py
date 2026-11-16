@@ -1788,6 +1788,27 @@ class TestPrepareLyricsCustom:
         assert stage._seed == {"lyrics_origin": "lrclib_srt"}
 
 
+class TestBuildStages:
+    """The align stage is armed for the LRCLIB check only when the job is a first download."""
+
+    @staticmethod
+    def _align_stage(tmp_path, **kwargs):
+        song = _touch_video(tmp_path, YT_STEM)
+        stages = lr.build_stages(song, None, MagicMock(), PipelineConfig(), MagicMock(), **kwargs)
+        return stages[-1]
+
+    def test_it_is_not_armed_by_default(self, tmp_path):
+        assert self._align_stage(tmp_path)._auto_lrc_timing is False
+
+    def test_a_first_download_arms_it(self, tmp_path):
+        assert self._align_stage(tmp_path, auto_lrc_timing=True)._auto_lrc_timing is True
+
+    def test_a_job_is_a_first_download_only_when_its_caller_says_so(self, tmp_path):
+        assert _job(tmp_path, YT_STEM, None).first_download is False
+        _touch_video(tmp_path, YT_STEM)
+        assert not any(job.first_download for job in lr.scan_folder(tmp_path, include_all=True))
+
+
 class TestPrepareLyricsAutomatic:
     """A run from the automatic LRCLIB sheet keeps the Genius song the pick was found with."""
 

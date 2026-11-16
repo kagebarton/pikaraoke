@@ -137,9 +137,10 @@ def handoff(song_paths: list[str]) -> int:
     stopped run left unprocessed, has no prior bundle to reuse), which gives
     it a ``fetch`` plan -- it always has a YouTube id. A caption the download
     already saved is gated in place (:func:`gate_on_disk_caption`) instead of
-    being fetched again. Returns regen's own exit code.
+    being fetched again. Each job is a ``first_download``, which lets its Genius
+    pick be timed from an LRCLIB record. Returns regen's own exit code.
     """
-    jobs = [SongJob(Path(p), None, "new") for p in song_paths]
+    jobs = [SongJob(Path(p), None, "new", first_download=True) for p in song_paths]
     for job in jobs:
         job.plan = resolve_plan(job, reset=False)
         gate_on_disk_caption(job)

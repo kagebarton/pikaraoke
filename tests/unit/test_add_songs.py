@@ -204,6 +204,7 @@ class TestHandoff:
         assert len(jobs) == 1
         assert jobs[0].bundle is None
         assert jobs[0].plan.kind == "fetch"
+        assert jobs[0].first_download is True
         mock_run.assert_called_once_with(jobs)
 
     def test_caption_on_disk_is_gated_instead_of_refetched(self, tmp_path, monkeypatch):
