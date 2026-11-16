@@ -467,7 +467,7 @@ Heard at GATE B, not fixed:
 
 Onset snap:
 
-- **A line starting on the previous line's held note is taken as on time.**
+- ~~**A line starting on the previous line's held note is taken as on time.**
   Onset snap skips a line whose first word is loud at its claimed start, and the
   end snap then stops the held note just before it (Someone Like You 3:48
   "instead"). `bb7c8ca` lifts the skip for re-aligned lines only. Lifting it for
@@ -482,7 +482,32 @@ Onset snap:
   that ship today further, so it cannot judge a start move, and Ken's ear has
   to. Ken, 2026-11-10: own branch, first rule to try is a move only where the
   transcriber's first word agrees with the rise. Record:
-  `plans/onset-loud-start.md` on branch `onset_loud_start`.
+  `plans/onset-loud-start.md` on branch `onset_loud_start`.~~
+  Fixed where the transcriber hears the first word at the rise (`fa91d145`,
+  `eb7d1ffb`, `ff76a886` on `dev`, schema 12): a loud start moves there, and a
+  first word the transcriber also heard earlier keeps its start. The 133-song
+  replay moves 589 lines and holds 4. A line whose first word the transcriber
+  does not hear at the rise is still taken as on time. Library songs change only
+  when regenerated; the full regen is Ken's, later. Record:
+  `plans/onset-loud-start.md` on tag `archive/onset_loud_start`.
+- **The repeated-first-word guard needs both copies heard** (Results row 13).
+  A line that starts with an echo of its own next word keeps its start only when
+  the transcriber heard both copies; with only the second heard it still moves
+  to a sliver before word 2. The two lines of that shape in the replay are among
+  the four held, so none of the 589 moves is one. Said in `snap_line_onsets`'s
+  docstring.
+- **A joint song's lines can stack on one instant, zero length, when the heard
+  words shift** (Results row 14). Already in pass 1, so not the onset snap's:
+  `hvvjiE4AdUI` lines 41-43 all at 230.62, `1YiAzyCzZzw` lines 57-60 at 175.14,
+  `pXNd2V88d60` lines 56-62 at 296.08, each on a song whose v11 bundle was a
+  Windows capture. Heard in Ken's listen of the 13 songs, 2026-11-16.
+- **Windows and Linux whisper give different words for the same song** (Results
+  row 14). 11 of the 13 regenerated songs had Windows v11 bundles; their heard
+  words differ from this box's by 5 to 88 of 340 to 777, with the config equal
+  but the model path, and a second run here repeats the first exactly. So a regen
+  on one box moves lines on songs last captured on the other, apart from any rule
+  change. Ken, 2026-11-16: does not gate the onset snap. The cause is not settled
+  in this file.
 
 The rescue (review findings and decisions kept as built):
 
@@ -570,9 +595,9 @@ and compare scripts (`scripts/cue_heard_probe.py`, `scripts/cue_heard_compare.py
 which read the stats of the three cut rules and stay on the tag.
 
 - **Library songs change only when regenerated.** They wait for one full regen
-  from `dev` once `onset_loud_start` has landed (this branch and
-  `backing_vocal_lines` have; `onset_loud_start` makes every bundle stale with
-  its schema bump anyway). Ken, 2026-11-15: no `--song` batch for this branch alone.
+  from `dev` now that `onset_loud_start` has landed (2026-11-16, after this
+  branch and `backing_vocal_lines`); its schema bump makes every bundle stale
+  anyway. Ken, 2026-11-15: no `--song` batch for this branch alone.
 - **Reflection line 36 (3:11) is still about 5 s early.** The transcriber
   hears nothing there, and the line's cue-aimed retry timed three of five words
   before its window ended. Lines 35 to 37 are word for word the same in the old
@@ -776,7 +801,8 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   list beside "poor" and the flagged lines with time and direction on Song Info. Open:
   no tool fixes one line's time today (Edit words keeps times, Repair swaps the whole
   source), so the flag needs a nudge tool or an automatic fix; `onset_loud_start`
-  (GATE S passed, Phases 2-4 unspecced) may fix the early-start kind first. Cheap
+  (landed 2026-11-16, tag `archive/onset_loud_start`) fixes the early-start kind
+  where the transcriber hears the first word at the rise, once a song is regenerated. Cheap
   next step: run the check over the whole library (VM, read-only) and have Ken
   listen to a sample of flagged lines.
   `cue_heard_rescue` (record: `plans/cue-heard-rescue.md` on tag
