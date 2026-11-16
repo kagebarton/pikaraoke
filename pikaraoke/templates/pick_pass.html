@@ -269,18 +269,22 @@
       if (state.open === song.song && picker.hits === null) searchGenius(song);
     }
 
+    // The box as it started is the song's own search, so the server reads the file title and runs
+    // its whole ladder; text the admin edited goes as typed.
     function searchGenius(song) {
       var query = $.trim(picker.query);
       if (!query) return;
+      var params = query === $.trim(song.query) ? { title: song.file_title } : { q: query };
       var seq = ++state.seq;
       picker.hits = null;
       picker.selected = null;
       picker.message = T.searching;
       render();
-      $.getJSON(URLS.geniusSearch, { q: query }).done(function (hits) {
+      $.getJSON(URLS.geniusSearch, params).done(function (found) {
         if (seq !== state.seq || state.open !== song.song) return;
-        picker.hits = hits;
-        picker.message = hits.length ? null : T.noGenius;
+        picker.hits = found.hits;
+        picker.selected = $.grep(found.hits, function (hit) { return hit.id === found.preselect; })[0] || null;
+        picker.message = found.hits.length ? null : T.noGenius;
         render();
       }).fail(function () {
         if (seq !== state.seq || state.open !== song.song) return;

@@ -121,6 +121,38 @@ YT_STEM = "Song---dQw4w9WgXcQ"
 # ---------------------------------------------------------------------------
 
 
+class TestGeniusStart:
+    """What a song's Genius search box starts with, from a fresh download's name or a renamed one."""
+
+    def start(self, name: str) -> dict:
+        return lr.genius_start(Path("/songs") / name)
+
+    def test_a_fresh_download_keeps_its_brackets_for_the_server_and_shows_the_first_query(self):
+        start = self.start("Justin Timberlake - Mirrors (Official Video)---uuZE_IRwLNI.mp4")
+
+        assert start == {
+            "file_title": "Justin Timberlake - Mirrors (Official Video)",
+            "query": "Justin Timberlake Mirrors",
+        }
+
+    def test_an_id_in_brackets_is_dropped_too(self):
+        assert self.start("Some Song [dQw4w9WgXcQ].mp4") == {
+            "file_title": "Some Song",
+            "query": "Some Song",
+        }
+
+    def test_a_renamed_file_has_no_id_to_drop(self):
+        assert self.start("Frozen (2013) - Let It Go.mp4") == {
+            "file_title": "Frozen (2013) - Let It Go",
+            "query": "Frozen Let It Go",
+        }
+
+    def test_the_lrclib_query_is_still_the_tidied_title(self):
+        song = Path("/songs/Justin Timberlake - Mirrors (Official Video)---uuZE_IRwLNI.mp4")
+
+        assert lr.default_query(song) == "Justin Timberlake - Mirrors"
+
+
 class TestScanFolder:
     def _setup(self, folder: Path):
         _touch_video(folder, "current")

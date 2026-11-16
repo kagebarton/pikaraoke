@@ -598,6 +598,7 @@ def repair_page():
         current_genius_id=(status.genius or {}).get("id"),
         custom_prefill=start["text"],
         custom_query=start["query"],
+        genius_start=start["genius"],
         movie_prefill=start["movie"],
         lrc_match=_lrc_match(status),
     )
