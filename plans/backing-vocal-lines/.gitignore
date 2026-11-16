@@ -1,7 +1,9 @@
 # out/ is rebuilt from the library by the scripts. What holds lyric text (paren texts, cue
 # texts) stays local; the baseline (timings and line ids only) and the song list are kept,
-# since a library regen would change what they were read from.
+# since a library regen would change what they were read from. The Phase 2 song list is kept
+# for the same reason; its report holds lyric text and stays local.
 out/*
 !out/baseline.json
 !out/songs.json
+!out/phase2_songs.json
 __pycache__/
