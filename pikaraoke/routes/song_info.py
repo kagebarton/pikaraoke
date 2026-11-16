@@ -31,6 +31,7 @@ from pikaraoke.lib.library_tools import (
     MovieSliceCheck,
     MovieSliceRefused,
     custom_sheet_lines,
+    is_whole_number,
 )
 from pikaraoke.lib.lrclib import LrclibUnavailable
 from pikaraoke.lib.srt_slice_fit import (
@@ -1060,7 +1061,7 @@ def _non_number(body: dict, *keys: str) -> str | None:
     """The first of ``keys`` the body holds as something other than a whole number, else None."""
     for key in keys:
         value = body.get(key)
-        if value is not None and (not isinstance(value, int) or isinstance(value, bool)):
+        if value is not None and not is_whole_number(value):
             return key
     return None
 
