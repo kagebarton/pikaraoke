@@ -17,6 +17,11 @@ window.libraryPages = {
     return node;
   },
 
+  // A Genius hit's artist line: "Artist (Year)", the year left off when Genius has none.
+  byline: function (hit) {
+    return hit.year ? hit.artist + ' (' + hit.year + ')' : hit.artist;
+  },
+
   // The server's error message from a failed request, or the fallback.
   errorOf: function (xhr, fallback) {
     try { return JSON.parse(xhr.responseText).error || fallback; } catch (err) { return fallback; }

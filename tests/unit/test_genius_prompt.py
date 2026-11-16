@@ -94,6 +94,18 @@ def test_enter_at_choose_takes_the_marked_hit(monkeypatch, capsys):
     assert "2) Song - Somebody\n" in out
 
 
+def test_a_hit_shows_its_year_after_the_artist_and_before_the_mark(monkeypatch, capsys):
+    dated_sure = GeniusHit(7, "Song", "Artist", primary_artist="Artist", year=1987, views=1000)
+    dated_other = GeniusHit(8, "Song", "Somebody", primary_artist="Somebody", year=2001, views=1000)
+
+    _ask(monkeypatch, ["", ""], hits=[dated_sure, dated_other, ELSEWHERE])
+
+    out = capsys.readouterr().out
+    assert "1) Song - Artist (1987)  <- Enter" in out
+    assert "2) Song - Somebody (2001)\n" in out
+    assert "3) Song - Elsewhere\n" in out  # Genius gave no year
+
+
 def test_the_choose_prompt_says_enter_takes_the_marked_hit_only_when_there_is_one(monkeypatch):
     marked, unmarked = [], []
 

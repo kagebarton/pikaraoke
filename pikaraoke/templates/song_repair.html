@@ -318,7 +318,7 @@
       var body = el('span', 'rp-opt-body');
       var head = el('span', 'rp-opt-head').append(el('span', null, hit.title));
       if (hit.id === CURRENT_GENIUS_ID) head.append(el('span', 'rp-tag', T.current));
-      body.append(head, el('span', 'rp-muted', hit.artist));
+      body.append(head, el('span', 'rp-muted', libraryPages.byline(hit)));
       label.append(input, body);
       input.on('change', function () {
         state.genius = hit;

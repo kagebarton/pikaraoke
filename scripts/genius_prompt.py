@@ -65,8 +65,9 @@ def ask_lyrics_source(song: Path, genius: GeniusClient) -> tuple:
             print("  (no Genius hits)")
             continue
         for i, h in enumerate(hits, 1):
+            year = f" ({h.year})" if h.year else ""
             mark = "  <- Enter" if h.id == preselect else ""
-            print(f"  {i}) {h.title} - {h.artist}{mark}")
+            print(f"  {i}) {h.title} - {h.artist}{year}{mark}")
         enter = "Enter=1, " if preselect is not None else ""
         ans = input(f"  choose [{enter}1-{len(hits)}/s/t/k or new query]: ").strip()
         if ans.lower() in _SHORTCUTS:

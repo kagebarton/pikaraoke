@@ -235,7 +235,7 @@
         }
         var label = el('label', 'pp-hit' + (selected ? ' is-selected' : '')).append(
           $('<input type="radio" name="genius">').val(hit.id).prop('checked', selected),
-          el('span', 'pp-hit-body').append(title, el('span', 'pp-muted', hit.artist))
+          el('span', 'pp-hit-body').append(title, el('span', 'pp-muted', libraryPages.byline(hit)))
         );
         label.find('input').on('change', function () {
           picker.selected = hit;
