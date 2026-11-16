@@ -49,7 +49,10 @@ from pikaraoke.lib.cue_align import SOURCE_REALIGN, align_song
 from pikaraoke.lib.evidence_veto import veto_uncorroborated_lines
 from pikaraoke.lib.ffmpeg import probe_duration
 from pikaraoke.lib.genius_lyrics import parse_lyric_lines
-from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
+from pikaraoke.lib.joint_match import (
+    SOURCE_TRANSCRIBE,
+    match_words_to_lines_joint_with_stats,
+)
 from pikaraoke.lib.onset_snap import decode_env_db, snap_line_edges
 from pikaraoke.lib.srt_cues import ParenCue, cue_spans_from_srt, sheet_parens
 from pikaraoke.lib.srt_provenance import is_generated, mark_generated
@@ -291,14 +294,14 @@ class LyricAlignStage(BaseStage):
         # which reads as on time; onset snap searches those lines regardless. Any
         # other loud start is searched too, and moves when the heard words put the
         # first word at the rise -- except on a line timed from those words, which
-        # would agree with itself (joint_match's "transcribe" source).
+        # would agree with itself.
         line_objects, edge_stats = snap_line_edges(
             line_objects,
             snap_stem,
             env=env,
             doubted_sources=frozenset({SOURCE_REALIGN}),
             heard_words=capture_transcribe_words,
-            heard_timed_sources=frozenset({"transcribe"}),
+            heard_timed_sources=frozenset({SOURCE_TRANSCRIBE}),
         )
         if capture_joint_stats is not None:
             capture_joint_stats["edge_snap"] = edge_stats

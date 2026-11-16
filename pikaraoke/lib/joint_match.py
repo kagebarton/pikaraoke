@@ -71,6 +71,10 @@ from pikaraoke.lib.token_align import _normalize_token, match_words_to_tokens
 
 logger = logging.getLogger(__name__)
 
+# Source of a line placed from the transcriber's words; the edge snap reads it to know
+# which lines took their times from the heard words.
+SOURCE_TRANSCRIBE = "transcribe"
+
 # Minimum width of an align candidate's selection window, in seconds. A
 # genuinely narrow but plausibly-paced window is padded up to this minimum so
 # it renders as a visible line rather than a near-instant flash. Collapsed or
@@ -272,7 +276,7 @@ def match_words_to_lines_joint_with_stats(
             selected_source[obj["line_id"]] = "interp"
 
     align_won = sum(1 for s in selected_source if s == "align")
-    transcribe_won = sum(1 for s in selected_source if s == "transcribe")
+    transcribe_won = sum(1 for s in selected_source if s == SOURCE_TRANSCRIBE)
     ytasr_won = sum(1 for s in selected_source if s == "ytasr")
     interpolated = [i for i, s in enumerate(selected_source) if s == "interp"]
     absent = [i for i, s in enumerate(selected_source) if s == "absent"]
@@ -449,7 +453,7 @@ def _build_transcribe_candidates(
         out.append(
             {
                 "line_id": line_id,
-                "source": "transcribe",
+                "source": SOURCE_TRANSCRIBE,
                 "t0": t0,
                 "t1": t1,
                 "score": score,
