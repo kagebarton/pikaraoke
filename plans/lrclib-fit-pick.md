@@ -31,6 +31,10 @@ transcripts (Results row 15). Nothing argues against 4d2 and it is built as spec
 You Are most likely shows no echo line, so Phase 6 check 4 now hears three other songs
 (Decision 37).**
 
+**2026-11-16, later still: Phase 4 is built, 4a-4g (Results row 16). The branch holds `dev`
+`fe9b2632` by a merge; the 4f parity check found no difference. The review of the Phase 4
+commits is due; Phase 5 waits for it. No push.**
+
 ## Goal
 
 A first-time download with a Genius lyric pick is timed from an LRCLIB record automatically
@@ -600,7 +604,7 @@ automatic songs that have parentheses.
 
 GPU-free, no library write. Tests mock the network and the workers; made-up lines only.
 
-- [ ] **4a. Anchor check.** On branch `lrclib_fit_pick`, brought current with `dev` (Ken's
+- [x] **4a. Anchor check.** On branch `lrclib_fit_pick`, brought current with `dev` (Ken's
   call how; see "Amended 2026-11-16"). First confirm that: `pikaraoke/lib/backing_vocals.py`
   and `pikaraoke/lib/heard_lines.py` exist, and `git merge-base --is-ancestor 5680091a HEAD`
   holds (or, on a new branch off `dev`, that this branch's code commits `ddefad80`,
@@ -636,7 +640,7 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
   `heard_streams({"transcribe_words": words}, None)` gives the stage the same stream the
   probe read from a bundle.
 
-- [ ] **4b. The check**, new module `pikaraoke/lib/lrc_auto_timing.py`. Network, no file
+- [x] **4b. The check**, new module `pikaraoke/lib/lrc_auto_timing.py`. Network, no file
   writes. It imports `lrclib`, `lrc_auto_pick` and `srt_slice_fit` only: `library_regen`
   imports `LyricAlignStage`, so the stage cannot import `library_regen`, and what both
   need about the auto sheet lives here.
@@ -664,7 +668,7 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
     sent equals `custom_start`'s for the same title and artist.
   Commit: `feat(lyrics): check LRCLIB records against the heard words in one call`.
 
-- [ ] **4c. The sheet kinds** in `pikaraoke/lib/library_regen.py`.
+- [x] **4c. The sheet kinds** in `pikaraoke/lib/library_regen.py`.
   - `LRC_AUTO_ORIGIN = lrc_auto_timing.ORIGIN` beside `LRC_ORIGIN`, and
     `LRC_ORIGINS = (LRC_ORIGIN, LRC_AUTO_ORIGIN)` for the places that mean "timed from an
     LRCLIB record, either way".
@@ -696,7 +700,7 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
     carries it and that other sheet kinds are unchanged.
   Commit: `feat(lyrics): sheet kinds for an LRCLIB timing picked at download`.
 
-- [ ] **4d. The switch** in `LyricAlignStage`.
+- [x] **4d. The switch** in `LyricAlignStage`.
   - Constructor gains `auto_lrc_timing: bool = False`.
   - `run`, alignment mode: call `_dereverb_gate` once, before the route choice.
     `_run_joint` and `_run_cue_align` take its result (stem, words, de-reverb stats)
@@ -746,7 +750,7 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
   Commit: `feat(pipeline): a new Genius download is timed from an LRCLIB record that
   passes the bar`.
 
-- [ ] **4d2. Backing vocals on an automatic pick. Ruled added by Ken, 2026-11-16 (Decision
+- [x] **4d2. Backing vocals on an automatic pick. Ruled added by Ken, 2026-11-16 (Decision
   36): build it, after 4d and before 4e.** Its own commit, so 4d's tests hold at 4d's commit
   and this one changes them.
   - `backing_vocals.ORIGINS` gains `"lrclib_auto_srt"`. Spelled there, as `"lrclib_srt"`
@@ -767,7 +771,7 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
   Commit: `feat(pipeline): an LRCLIB record picked at download shows the backing vocals
   it sings`.
 
-- [ ] **4e. Arming.**
+- [x] **4e. Arming.**
   - `processing_manager.py`: the download lane's `LyricAlignStage(...,
     auto_lrc_timing=True)`.
   - `library_regen.build_stages(..., auto_lrc_timing: bool = False)` passes it on;
@@ -779,7 +783,7 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
     job is not (`test_add_songs.py`, `test_regen_alignment_bundles.py`).
   Commit: `feat(pipeline): downloads and add_songs arm the LRCLIB timing check`.
 
-- [ ] **4f. Parity check, read-only, on the fifty bundles' snapshot and the fresh `<out>`**
+- [x] **4f. Parity check, read-only, on the fifty bundles' snapshot and the fresh `<out>`**
   (`<out>` is `~/probes/lrclib-shift-check-handoff/lrclib_shift_check_holdout`, the handoff
   copy of the probe's `~/.pikaraoke/tmp/lrclib_shift_check_holdout`; `<bundles>` is
   `~/probes/lrclib-shift-check-handoff/fresh50_bundles_v11`). A scratch script outside
@@ -806,7 +810,7 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
   clean: `songs.tsv` has 50 rows (31 picks, 19 none) and `cache/` has 50 files whose
   `query` equals `songs.tsv`'s. The USB drive is not needed for 4f.
 
-- [ ] **4g.** Full suite, pre-commit on the changed files, self-review on the three axes,
+- [x] **4g.** Full suite, pre-commit on the changed files, self-review on the three axes,
   `graphify update .` where the graph exists. Results log row. **STOP:** review due on the
   Phase 4 commits (core pipeline). Hand Ken the line, do not launch it:
   `/code-review <4b's commit>~1..HEAD` on `lyric_align.py`, `lrc_auto_timing.py`,
@@ -1070,6 +1074,7 @@ For Phases 1-3. Phases 4-6 have their own under "Phases 4-6: the build".
 | 13 | 2026-11-16 | 4-6 spec amended | Fable 5.2 on `lrclib_fit_pick` (HEAD `e8bd6994`, 27 commits behind `dev` `5680091a`), plan edits only: no code, no probe, no library read, no GPU, branch not rebased, merged or pushed. Code read from the main checkout on `dev`. **`dev` against `e8bd6994`** (`git diff lrclib_fit_pick...dev`, merge base `37d8d93`): changed under `pikaraoke/` are `alignment_capture.py`, `cue_align.py`, `genius_lyrics.py`, `srt_cues.py`, `srt_slice_fit.py`, `token_align.py`, `lyric_align.py`; new are `backing_vocals.py`, `heard_lines.py`. `library_regen.py`, `library_tools.py`, `library_status.py`, `lrclib.py`, `lyrics_fetch.py`, `processing_manager.py`, `routes/` and `scripts/` are not changed. In `lyric_align.py`: `_run_cue_align` takes `parens` and returns six values (the last the lines it timed); `_sheet_parens(lyrics_path, origin)` is empty outside `backing_vocals.ORIGINS` (`{"srt", "lrclib_srt"}`, `backing_vocals.py:30`); `align_song` takes `heard_words` and `parens` and returns four values; `show_parens` runs on every alignment route before `_generate_ass`; `test_backing_vocals.py` `TestOrigins` asserts `ORIGINS == {"srt", LRC_ORIGIN}`. In the frozen list: `clean_cue_texts` split into `_is_caps_file` and `_clean_file_cue` (`523b8718`); `_PAREN_CONTENT_RE` and `_strip_markup` made public in `genius_lyrics.py`; `_token_expected_times` moved from `cue_align` to `token_align`, body equal, and `srt_slice_fit` imports it from there. `git merge-tree --write-tree lrclib_fit_pick dev` gave a tree and no conflict; one file is changed on both sides, `srt_slice_fit.py`. **Spec edits:** the amendment note and the frozen-list paragraph; 4a (the branch must hold `dev`; the `dev` signatures); 4c (`reuse_plan` wording); 4d (the call shape, the pick's `parens` through `_sheet_parens`, two tests); 4d2 new and conditional; 4f (what the parity now also covers); 4g (review line); Phase 6 check 4; the `defer_timing` row of the settled table corrected (row 12 said the plan was not on this computer; it is at `origin/defer_timing`, `9e7f6dab`). **Open point P1** written from `archive/backing_vocal_lines` (`5d9c81f0`) `plans/backing-vocal-lines.md`: Phase 0 measured 142 caption sheets and 28 `lrclib_srt` sheets (Ken's Repair picks; 18 with a group, 192 groups, labels 184 sung, 0 direction, 8 unsure); no automatic pick was measured. Both routes save `fit_slice(...).srt` (`library_tools.py:1328`). Not ruled. **`defer_timing` note** written from `origin/defer_timing:plans/defer-timing.md`; counts taken from `lrclib-shift-check.md` (fresh Table P; GATE F item 2), nothing recomputed. **On this computer:** `~/pikaraoke-songs` exists; `~/.pikaraoke/tmp/lrclib_shift_check_holdout` does not (`ls`). **Not done:** no test run, no `judge` run on any picked record, no timing of joint against transcribe-only. | "Amended 2026-11-16", "Open point P1", 4a-4g, Phase 6 check 4, "`defer_timing` after the automatic pick". |
 | 14 | 2026-11-16 | 4-6 spec, P1 ruled | Ken ruled "Open point P1" in chat: add it (Decision 36), and asked for the plan and the Phase 4 start prompt to be amended. Recorded by Sonnet 5.5 on `lrclib_fit_pick` (HEAD `a688abea`), plan edits only: no code, no probe, no library read, no GPU. **Edits:** Decision 36; the 2026-11-16 status paragraph; the settled-table row for parentheses; the P1 heading and a ruling line; 4c's `reuse_plan` wording; 4d's parentheses sentence; 4d2 (unconditional, after 4d and before 4e); 4g (`backing_vocals.py` always in the review line, the "not ruled" relay sentence removed); Phase 6 check 4 (the built-with-4d2 case only). **Not changed:** the question's own text, its table and Fable's recommendation; 4d's tests and its `parens == []` (4d2 flips them in its own commit); `defer_timing`. Earlier the same day `a688abea` moved 4f's `<out>` to `~/probes/lrclib-shift-check-handoff/lrclib_shift_check_holdout`. | Decision 36, "Open point P1", 4d2, 4g, Phase 6 check 4. |
 | 15 | 2026-11-16 | 4d2 dry run | Fable 5.2, read-only: no code commit, no library read, no GPU. Code: scratch detached worktree at `dev` `5680091a` with `git merge --no-commit` of `lrclib_fit_pick` `54f362b5` (clean), removed after. Inputs: `~/probes/lrclib-shift-check-handoff/lrclib_shift_check_holdout/{songs.tsv,cache/}` and `fresh50_bundles_v11/` (`transcribe_words`, `media_duration_s`). **Picks:** `lrc_auto_pick.evaluate` on the cached records gave 31 picks and 19 none, all 50 equal to `songs.tsv`'s `pick_id` (not 4f's record: `lrc_auto_timing.check` not called, Set E queries not compared). **Groups:** per pick, `fit.srt` -> `sheet_parens` + `cue_spans_from_srt` -> `backing_vocals.judge` at display leads 0 / 0.5 / 1.0 s (the lead is unknown without a cue run), `with_backing` for added lines. 21 of 31 picks have a group; 284 groups (232 inline, 52 paren-only; 242 worded, 42 vocable-only). Worded kept 176 / 174 / 157 of 242 (73% / 72% / 65%; measured LRC rate 64%); vocable-only kept 42 of 42 at each. Lines added 35 / 33 / 23 (in 9 songs at 0); lines with a kept inline group 182 / 182 / 175; 20 of 21 songs keep a group at 0. Verdicts at 0: heard 151, vocable 29, consistency 38, not_heard 65, quote 1, unplaced 0, overlap 0. **Lead:** 19 groups in 5 songs flip between kept and dropped across the three leads (`fk4BbF7B29w` 2, `eH3giaIzONA` 12, `GG7fLOmlhYg` 3, `j2WWrupMBAE` 1, `GLQ0biK-ZgA` 1); 2 of them between 0 and 0.5. Extra run at -0.5 s (ad hoc, not in the script): worded kept 180, lines added 39, none lost against 0, 4 gained (`j2WWrupMBAE` 3, `fO4BmrVjqjM` 1). **Text read:** all 284 groups; annotation or direction 0, kept or not; the 1 quote is sung text. 37 inline groups have every word in their own line, 35 kept. **Who You Are (`j2WWrupMBAE`, pick 30554413):** its 4 paren-only echo lines are not kept at 0, 0.5 or 1.0 (heard share 0.33 each); 3 of 4 kept at -0.5; its 1 inline group kept at 0 and 0.5. **`eH3giaIzONA` (pick 3002633):** transcript ends at 261 s of 314 s; 10 groups kept by consistency with nothing heard in their window (7 added lines, 3 inline). **Not measured:** whether a lead line beside a kept group moves in the aligned timing; the display lead; whether any group is sung at its place. **Ken, in chat:** agreed (Decision 37): 4d2 as specified, no narrower rule; Phase 6 check 4 hears `rYEDA3JcQqw` (35807678), `eH3giaIzONA` (3002633) and `3gOHvDP_vCs` (21309114), with `j2WWrupMBAE` as the song where nothing shows. Plan edits in the same commit: status paragraph, Decision 37, the P1 ruling line, 4d2's comment wording, Phase 6 check 4. | `~/probes/lrclib-shift-check-handoff/dryrun_4d2/`: `report.md`, `tables.md`, `groups.tsv`, `songs/`, `dryrun_4d2.py`, `row.md`. Lyric text stays there. Plan: Decision 37, 4d2, Phase 6 check 4. |
+| 16 | 2026-11-16 | 4 | Sonnet 5.5 on `lrclib_fit_pick` (HEAD `ff1bca94` at the start), GPU-free, no library write, no network, no push. **Merge:** `git merge dev` at `dev`'s tip `fe9b2632`; the handoff named `5680091a`, and `dev` has since gained `onset_loud_start` (`5680091a..fe9b2632`, 11 commits, changing under `pikaraoke/` only `lyric_align.py`, `onset_snap.py`, `joint_match.py` and `alignment_capture.py`: `SCHEMA_VERSION` 11 to 12; `snap_line_edges` takes `heard_words` and `heard_timed_sources`). `git merge --no-commit` first: no conflict, one file changed on both sides (`srt_slice_fit.py`, the `_token_expected_times` import only); merge commit `f95c140b`. **4a:** every anchor the step names exists as the spec uses it, `5680091a` and `dev`'s tip are ancestors of `HEAD`, `heard_streams({"transcribe_words": words}, None)` gives the stream `heard_streams(bundle, None)` does (`build_bundle` stores the words as given). Nothing contradicted the spec; the onset snap's new `snap_line_edges` arguments are not in the spec's anchors and do not touch it. Suite after the merge: 3914 passed. **Commits:** 4b `2fd9c4f9`, 4c `0dcf5bcc`, 4d `f460f339`, 4d2 `5ed41adc`, 4e `c74e1bf8`, and `313384ea` (a docstring correction, not in the plan). **Where the spec was silent, chosen:** `AutoCheck.record()`'s `pick.mistimed` is the count of mistimed lines, `shift_s` the fit's float as it is; `no_records` is a search with no synced record, an empty one included, and `check` leaves the `syncedLyrics` filter to `lrc_auto_pick.evaluate`, which already makes it; the stage hands both routes a `_Gate` named tuple; the picked sheet is moved after the ASS and the SRT are promoted, then the record's `.lrc` is written, then the bundle; a video with no length gives outcome `error` without calling `check`, with an empty `query`; the stage logs one info line per check (outcome, records, passing); `SheetKind.stands_for` names the repair source the automatic kind shows as, `repair_source` reads it and `REPAIR_SOURCES` is the kinds that are their own repair source; `reuse_plan` returns None for any origin in `LRC_ORIGINS`; the `KEEP_ON_RESET` comment names the automatic sheet; `scripts/lrc_fit_pick_probe.py`'s `search_query_for` calls `lrclib.query_text`. **Existing tests changed:** none of `test_lyric_align.py`'s tests of either route needed an edit (they drive `run`); `test_resolve_plan_replays_an_edited_sheet_with_its_sources_origin` asserts the label ends `edited)` (Decision 34's wording does not end ` (edited)`); the order-pinned `repair_source` list became a dict over `SHEETS` (now eight kinds); two `build_stages` stubs in `test_regen_alignment_bundles.py` take keywords; `TestOrigins` reads the three origins (4d2). The test that the query equals `custom_start`'s is in `test_library_tools.py` `TestCustomStart`, where the helpers are. **4f:** scratch script `parity_4f.py` outside the repo (`/tmp/claude-1000/-home-ken-projects-pikaraoke/bf27791e-9f13-4870-a696-bf62ceac5c6c/scratchpad/`, output `parity_4f.out` beside it). Inputs: `<bundles>` `sha256sum -c` 50 OK, 20 bundles carry `lyrics.genius`; `<out>` `songs.tsv` 50 rows, `cache/` 50 files. Per song, `lrc_auto_timing.check` with `lrclib.search_query` replaced by the cache file's records, the bundle's `transcribe_words` and `media_duration_s`. **Counts:** 31 picks and 19 none (15 `no_pick`, 4 `no_records`); picked id equal to `songs.tsv`'s `pick_id` in 50 of 50; the query built from `lyrics.genius` equal to the cache file's `query` in 20 of 20; also equal to `songs.tsv`: `records`, `timings` and `passing` for all 50, and `pick_mistimed`, `pick_unclaimed_run`, `pick_shift_run` and `pick_timing_size` for the 31 picks (0 differences). The first run stopped on my script's own assertion, which refused `no_records` (`jQ-Pqxl1BlI`, 0 records in `songs.tsv`); the script was changed to accept it, no code changed. Nothing under the library was read or written. **4g:** full suite 3992 passed; pre-commit passed on the 19 changed files; no `graphify-out` in this worktree (it is in the main checkout), so no `graphify update`. **Checks that the new tests bite:** with the check disabled in `run`, 9 of the 14 `TestAutoLrcTiming` tests fail (the 5 that pass are the ones where the check is never made); with the download lane's `auto_lrc_timing=True` removed, `TestDownloadLaneStages` fails. **Self-review:** the three axes over the five code commits; one inaccuracy found and fixed (`313384ea`). Not measured: the check's time on a real search, a real download, Phase 6. **Review due** on `2fd9c4f9~1..313384ea`. | Code: the commits above. Scratch: the 4f script and output in the scratchpad above. Plan: Decisions 36-37, 4a-4g ticked. |
 
 ## GATE P read (Fable, 2026-11-10)
 
