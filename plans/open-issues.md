@@ -338,6 +338,13 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
 - **YouTube sometimes drops the channel fields.** About 1 in 12 live searches came back with
   no channel, uploader, verified flag or description on any row; nothing is lifted and the
   channel line is missing, as before the branch. YouTube-side; recorded, not chased.
+- **Unify the channel cleaners once `search_official_captions` lands.**
+  `official_rank.py` and `genius_query.py` each work out what act a channel's name
+  stands for, with their own noise words, kept apart while that branch rewrites
+  `official_rank`'s. Once it lands: one function for the name, each module keeping
+  its own list of names that stand for no act (the ranking's short, the Genius
+  module's wide). Not ruled. Record: `plans/genius-search-spec.md` on branch
+  `genius_search_accuracy`, Calls item 3 and "Channel names".
 
 ## Movie splits (on `dev`)
 
