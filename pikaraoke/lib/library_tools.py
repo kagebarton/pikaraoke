@@ -173,6 +173,11 @@ def _pick_text(value: object) -> str:
     return value.strip()[:_PICK_TEXT_MAX] if isinstance(value, str) else ""
 
 
+def is_whole_number(value: object) -> bool:
+    """A posted id is an int; JSON ``true`` reads as one in Python, so a bool is refused."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _pasted_text(text: object, kind: str, max_chars: int) -> str:
     """An admin's pasted ``kind`` (lyrics, subtitles) with ``\\n`` line ends; raises
     for anything that is not text or is longer than ``max_chars``."""
@@ -1239,7 +1244,7 @@ class LibraryTools:
             return {"mode": "raw"}
         if kind == "genius":
             genius_id = pick.get("genius_id")
-            if not isinstance(genius_id, int) or isinstance(genius_id, bool):
+            if not is_whole_number(genius_id):
                 raise RegenError("Pick a Genius song first.")
             return {"genius_id": genius_id}
         raise RegenError("Unknown pick.")
@@ -1456,7 +1461,7 @@ class LibraryTools:
             return {"kind": "keep", "genius_id": entry.genius_id}
         if kind == "genius":
             genius_id = pick.get("genius_id")
-            if not isinstance(genius_id, int) or isinstance(genius_id, bool):
+            if not is_whole_number(genius_id):
                 raise RegenError("Pick a Genius song first.")
             return {
                 "kind": "genius",
