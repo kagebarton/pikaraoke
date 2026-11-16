@@ -1,6 +1,8 @@
 Model: Claude Fable 5.2 (author; ran Phases 0 and 1, 2026-11-10). Judge at GATE S: Ken's
 ear; Claude Opus 5.5 reads his labels off. Phases 2-4: spec by Claude Opus 5.5
-(2026-11-14), read by Claude Fable 5.2, built by Claude Sonnet 5.5.
+(2026-11-14), read by Claude Fable 5.2, built by Claude Sonnet 5.5. Phase 3 amended
+2026-11-15 by Claude Sonnet 5.5 on Ken's ruling (13-song regen, land before the full
+regen).
 
 # Onset snap: a loud start is not always this line's voice
 
@@ -10,8 +12,9 @@ ruled the same day: (a), transcribe-timed lines are left out of the new exit (Re
 Results row 8): four changes, all written into 2a-2c below. Phase 2 built 2026-11-15 by
 Sonnet 5.5: the reference dump, then 2a `196de7fd`, 2b `cd42d8e8`, 2b2 `0e08ee3e`, 2c
 `a89f8ead` (Results rows 9-12); every pass criterion met as written. The ten
-`.onsetfix.ass` files are out of the library (2b's cleanup done). Next: Ken's regen on
-Windows (Phase 3). Review due on `4001f57f..a89f8ead`.**
+`.onsetfix.ass` files are out of the library (2b's cleanup done). Ken ruled 2026-11-15:
+Phase 3 is a 13-song regen on the Linux box, the feature lands on `dev` after its read,
+and the full-library regen is Ken's, later (Phase 3, Decision 6). Next: that regen. Review due on `4001f57f..a89f8ead`.**
 
 ## Goal
 
@@ -96,6 +99,9 @@ Ken, 2026-11-10: "defaults" to all six. They are decisions now.
    Default: the rule is built for every route, measured on the cue route only.
 6. **After landing**: a `SCHEMA_VERSION` bump to 12 and a regen of the library on the
    Windows box, as Phase 6 of the edge snap did. Default: yes.
+   **Amended by Ken, 2026-11-15:** the full regen no longer comes before landing. A
+   13-song regen is run and read first (Phase 3), the feature lands on `dev`
+   after that read, and Ken runs the full regen later.
 
 ## Phase 0: the probe (done)
 
@@ -149,10 +155,12 @@ score is 2, at the limit. One line shows no pattern; the rule stands as built.
 Spec by Opus 5.5, 2026-11-14, for Sonnet 5.5; amended 2026-11-15 from Fable's read, as
 Ken ruled it ("Read and ruling"). Order: the reference dump, 2a, 2b (the check passes at
 593, then the after-files move out), 2b2 (the guard; the check then reads 589), 2c, stop.
-Phase 3 is Ken's; Phase 4 follows it.
+Phase 3 (the 13-song regen and its read) follows the build; Phase 4 follows Phase 3.
 
 2b must run before any regen touches `~/pikaraoke-songs`: its pass needs the 147
-cue-align bundles of 11-10 as they are (all unchanged on 2026-11-15).
+cue-align bundles of 11-10 as they are (all unchanged on 2026-11-15). Phase 3 regenerates
+5 of them, so `--check` no longer reproduces all 133 songs on that library afterwards; 2b's check passed first (Results row 11), and the v11 bundles stay under
+`regen_backups/<UTC>/alignment_debug/`.
 
 ### The rule, as GATE S passed it
 
@@ -448,33 +456,84 @@ Close of Phase 2:
 
 Then stop.
 
-### 3. Ken's regen on Windows, then a read
+### 3. A 13-song regen on the Linux box, then a read
 
-- Before it, Ken deletes any `.onsetfix.ass` from `D:\Shared\pikaraoke-songs\karaoke\` and
-  checks out the branch on the Windows box.
-- Regenerate from this branch as cut: it does not hold `backing_vocal_lines`. Schema 12
-  makes every bundle stale, so a regen on a base that holds that branch adds its backing
-  lines to every affected song, ahead of its GATE B regen decision, and mixes them into
-  this read. If the order does flip, the read splits cue songs by whether the v12 bundle
-  has a kept group in `joint_stats.backing` (that plan's "Landing order" carries the same
-  note).
-- `uv run python scripts/regen_alignment_bundles.py D:\Shared\pikaraoke-songs --dry-run`
-  should list every bundle as `v11` (234 in this box's library on 11-14). Then run it with
-  `--yes`. Old files go under `regen_backups/<UTC>/`.
-- The read: Sonnet or Opus, CPU, read-only, scratch not kept. Per route, from the new
-  bundles and the backup's v11 bundles, tabulate:
-  - songs and lines
-  - `n_snapped` at v11 and at v12
-  - `n_heard_snapped` and `n_heard_earlier` at v12
-  - the ten songs with the most heard moves
-- Logged as a Results row with the raw table.
-- What to expect: a fresh whisper run moves a different exact set, but the cue route
-  should sit near the 11-10 rate (593 over 133 songs), with `n_snapped` near v11.
-- The joint route's numbers are its first measurement (Decision 5). A route far off the
-  cue rate goes to Ken before landing.
+**Ruled by Ken, 2026-11-15** (Decision 6 amended; first a 45-song sample, shrunk to 13 the
+same day): regenerate 13 songs, read them, land after the read, and leave the full-library
+regen to Ken, later. The full regen is Phase 4's last step and does not gate landing.
+
+Why a GPU run at all: the snap is CPU work after whisper, and the replays (Results rows 4,
+7, 10, 11) already measured it from stored bundles; the cue route's 589 moves over 133
+songs reproduced exactly. What no replay has done is run the wired stage (2c: the heard
+words into the snap, schema 12, the new counters) end to end, or run the 12 joint bundles
+that did not replay. `regen_alignment_bundles.py` has no re-snap-from-stored-words mode, so
+a real run means whisper again for each song. Thirteen songs are enough for that; the cue
+rate is not re-measured here, since a replay answers it without whisper's noise.
+
+- Where: this box (RTX 2060, 6 GB; whisper and the separator fit together), from the
+  `onset_loud_start` worktree, on `~/pikaraoke-songs`, with the app stopped. The worktree
+  has no `models/`: symlink the main checkout's `models/` into it first, or whisper dies.
+  Run it from the branch as cut: it does not hold `backing_vocal_lines`, which would add
+  backing lines to the songs and mix them into this read.
+- Dry-run first with the 13 `--song` patterns below. It must list 13 songs, every plan a
+  reuse (no caption fetch, no Genius prompt); that was true on 2026-11-15. `--song` runs a
+  song even when its bundle is current and backs up only that song's files, to
+  `regen_backups/<UTC>/`. Quote the full-name pattern.
+- Then run it with `--yes`: 13 songs of whisper align and transcribe, stems reused. No
+  per-song time is on record.
+- The read: Sonnet or Opus, CPU, read-only, scratch not kept. From the 13 new bundles and
+  the backup's v11 bundles, per route (cue 5, joint 8), tabulate: lines; `n_snapped` at v11
+  and v12; `n_heard_snapped` and `n_heard_earlier` at v12; and, for the cue songs, the
+  11-10 count below. Logged as a Results row with the raw table.
+- What passes (defaults chosen 2026-11-15, written before the run; Ken may change them):
+  - **Wiring, every one of the 13:** the run ends `failed=0`; the bundle's
+    `schema_version` is 12; `joint_stats.edge_snap.onset` has `n_heard_snapped`,
+    `heard_snaps` and `n_heard_earlier`, with `n_heard_snapped == len(heard_snaps)`; the
+    song's `.ass` is rewritten. A song that breaks any of these stops the landing.
+  - **Cue, read not passed:** a fresh whisper run moves a different exact set, so the five
+    songs' `n_heard_snapped` are listed against their 11-10 counts and not banded. A song
+    with 11-10 moves and none now, or the reverse (Rent - I'll Cover You, 0), goes to Ken
+    with its numbers. Bohemian Rhapsody should show `n_heard_earlier` above 0 (2b2's
+    held line 33).
+  - **Joint, the first real measurement (Decision 5):** R7's replay gave 138 moves over 45
+    songs, 3.1 a song. Eight songs outside half to double that (12 to 49 moves) go to Ken
+    before landing. Eight songs say little about the rate; the band catches a broken
+    route, not a drift. The full regen is where a drift would show.
+
+#### The sample
+
+Chosen by hand 2026-11-15 from the seeded 45 drawn earlier that day, to cover the plan
+kinds and the cases the replay could not reach. A pattern is the 11-character video id, or
+the file name where the song has none.
+
+Cue, with the lines the new exit moved in the 11-10 record at `0e08ee3e` (30 in all):
+
+```
+pj6FCKm8dhM 6          srt
+fJ9rUzIMcZQ 9          srt, Bohemian Rhapsody (2b2's held line)
+xFYQQPAOz7Y 8          LRCLIB timing
+MiraOCjABn8 7          movie subtitles
+Rent (2005) - I'll Cover You 0          srt, no move at 11-10
+```
+
+Joint (no per-song baseline; R7 did not keep one). The first three are among the 12 the
+replay left out:
+
+```
+aBt8fN7mJNg            genius
+hvvjiE4AdUI            genius
+ZrX1XKtShSI            genius
+GI6CfKcMhjY            genius+ytasr
+1YiAzyCzZzw            genius+ytasr
+pXNd2V88d60            genius+ytasr
+22QYya-LGDY            custom sheet
+rEXhAMtbaec            genius
+```
 
 ### 4. Land on `dev`
 
+- Only after Phase 3's read passes, or Ken accepts it. Landing does not wait for the full
+  regen.
 - Copy onto `dev`, in order, with their messages: `b054f918`, `ad8b51af`, then 2a, 2b,
   2b2, 2c and any fix commits. Leave out the plan-only commits (`02906b91`, `a817be32`,
   `56dce3c7`, and this spec's).
@@ -490,6 +549,22 @@ Then stop.
 - `plans/open-issues.md`, in its own commit on `dev`: strike the "Onset snap" entry with
   `~~ ~~` and add a line pointing at `archive/onset_loud_start`.
 - Push `dev`. Retire the branch as `archive/onset_loud_start` per CLAUDE.md.
+- **The full regen is Ken's, later, and not part of landing.** Until then the library is
+  mixed: the 13 regenerated songs are v12 and the other 221 are v11, which the library page
+  lists as stale. New downloads get v12 from the first run. When Ken runs it:
+  - On the Windows box (`D:\Shared\pikaraoke-songs`, `uv run python ...`) or here, from a
+    base that does not hold `backing_vocal_lines`, unless that plan's GATE B regen
+    decision has been made; otherwise every song also gains backing lines. If the order
+    does flip, a read splits cue songs by whether the v12 bundle has a kept group in
+    `joint_stats.backing` (that plan's "Landing order" carries the same note).
+  - Delete any `.onsetfix.ass` from `karaoke/` first. The ten from GATE S are gone from
+    `~/pikaraoke-songs` and `/media/ken/Data`; any on `D:\Shared` are Ken's to delete.
+  - `scripts/regen_alignment_bundles.py <library> --dry-run` should list every
+    not-yet-regenerated bundle as `v11` (221 on 2026-11-15), and the 14 songs with no bundle,
+    which fetch a caption or ask for a Genius pick. Then `--yes`. Old files go under
+    `regen_backups/<UTC>/`.
+  - A read like Phase 3's over the whole library is optional, logged as its own Results
+    row; it is where a small drift in the cue rate would show.
 
 ### O1 (ruled 2026-11-14)
 
