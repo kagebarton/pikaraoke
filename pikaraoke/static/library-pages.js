@@ -30,6 +30,16 @@ window.libraryPages = {
     return query === $.trim(start.query) ? { title: start.file_title } : { q: query };
   },
 
+  // The hit id to select when /lyrics_search's answer has a preselect: the song's own Genius
+  // pick instead when the list has it (the first of `own` listed; nulls are skipped), so a
+  // search never swaps out a pick the song already has. Null when nothing is preselected.
+  geniusSelected: function (found, own) {
+    if (found.preselect === null) return null;
+    var listed = $.map(found.hits, function (hit) { return hit.id; });
+    var mine = $.grep(own, function (id) { return id != null && listed.indexOf(id) >= 0; });
+    return mine.length ? mine[0] : found.preselect;
+  },
+
   // The server's error message from a failed request, or the fallback.
   errorOf: function (xhr, fallback) {
     try { return JSON.parse(xhr.responseText).error || fallback; } catch (err) { return fallback; }
