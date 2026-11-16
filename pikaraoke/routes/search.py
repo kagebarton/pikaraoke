@@ -22,8 +22,8 @@ from flask_smorest import Blueprint
 from marshmallow import Schema, fields
 
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name
-from pikaraoke.lib.genius import write_choice
-from pikaraoke.lib.genius_lyrics import clean_genius_query
+from pikaraoke.lib.genius import HITS_PER_QUERY, GeniusHit, write_choice
+from pikaraoke.lib.genius_query import LIBRARY_CALLS, SEARCH_PAGE_CALLS, find_song
 from pikaraoke.lib.library_regen import check_video_caption
 from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.lib.official_rank import OfficialKind, official_first, pick_artist
@@ -223,22 +223,39 @@ def download(form):
     return jsonify({"status": "ok"})
 
 
+def _hit_json(hit: GeniusHit) -> dict:
+    return {"id": hit.id, "title": hit.title, "artist": hit.artist, "year": hit.year}
+
+
 @search_bp.route("/lyrics_search")
 def lyrics_search():
-    """GET ``?q=<query>`` → JSON list of ``{id, title, artist}``.
+    """GET ``?title=<video title>[&channel=..&typed=..]`` or ``?q=<typed text>`` →
+    ``{hits: [{id, title, artist, year}], preselect: id | null, query}``.
 
-    Returns ``[]`` when Genius is disabled or the search fails.  Always 200
-    so the UI can render an empty state without error handling.
+    ``title`` finds the song the video is of (``genius_query.find_song``); a ``channel``
+    parameter, even an empty one, marks the search page and allows three Genius calls rather
+    than two. ``q`` is what someone typed: one call, as typed, in Genius's order, nothing
+    preselected. ``title`` wins when both are sent.
+
+    Always 200, with ``hits`` empty when Genius is disabled or finds nothing, so the UI can
+    render an empty state without error handling.
     """
     k = get_karaoke_instance()
-    query = request.args.get("q", "").strip()
-    if not query:
-        return jsonify([])
-    cleaned = clean_genius_query(query)
-    if not cleaned:
-        return jsonify([])
-    hits = k.genius_client.search(cleaned)
-    return jsonify([{"id": h.id, "title": h.title, "artist": h.artist} for h in hits])
+    title = request.args.get("title", "").strip()
+    typed_text = request.args.get("q", "").strip()
+    if title:
+        found = find_song(
+            lambda query: k.genius_client.search(query, limit=HITS_PER_QUERY),
+            title,
+            channel=request.args.get("channel", ""),
+            typed=request.args.get("typed", ""),
+            max_calls=SEARCH_PAGE_CALLS if "channel" in request.args else LIBRARY_CALLS,
+        )
+        hits, preselect, query = found.hits, found.preselect, found.query
+    else:
+        hits = k.genius_client.search(typed_text) if typed_text else []
+        preselect, query = None, typed_text
+    return jsonify({"hits": [_hit_json(h) for h in hits], "preselect": preselect, "query": query})
 
 
 @search_bp.route("/lyrics_select", methods=["POST"])

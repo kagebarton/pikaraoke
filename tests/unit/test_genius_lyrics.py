@@ -1,8 +1,7 @@
 """Unit tests for pikaraoke.lib.genius_lyrics — parse_lyric_lines,
-normalize_lyric_line, clean_srt_line, clean_genius_query."""
+normalize_lyric_line, clean_srt_line."""
 
 from pikaraoke.lib.genius_lyrics import (
-    clean_genius_query,
     clean_srt_line,
     normalize_lyric_line,
     parse_lyric_lines,
@@ -211,49 +210,3 @@ class TestCleanSrtLine:
         instead of dropping them as letter-less."""
         assert clean_srt_line("こんにちは") == "こんにちは"
         assert clean_srt_line("Привет мир") == "Привет мир"
-
-
-# ---------------------------------------------------------------------------
-# clean_genius_query
-# ---------------------------------------------------------------------------
-
-
-class TestCleanGeniusQuery:
-    """Light-clean query preserving parenthetical content."""
-
-    def test_preserves_parenthetical_content(self):
-        """Unlike regex_tidy, clean_genius_query does NOT strip parens."""
-        result = clean_genius_query("(I Can't Help) Falling In Love")
-        assert "(I Can't Help)" in result
-        assert "Falling In Love" in result
-
-    def test_strips_emoji(self):
-        result = clean_genius_query("Song 🎤🎵 Title")
-        assert "🎤" not in result
-        assert "🎵" not in result
-        assert "Song" in result
-        assert "Title" in result
-
-    def test_replaces_underscores(self):
-        result = clean_genius_query("Artist_Name_Song")
-        assert "_" not in result
-        assert "Artist Name Song" in result
-
-    def test_strips_noise_words(self):
-        """YouTube noise words like 'karaoke', 'official video' etc are stripped."""
-        result = clean_genius_query("Song karaoke official video")
-        assert "karaoke" not in result.lower()
-        assert "official" not in result.lower()
-
-    def test_collapses_whitespace(self):
-        result = clean_genius_query("  Song   Title  ")
-        assert result == "Song Title"
-
-    def test_empty_string(self):
-        assert clean_genius_query("") == ""
-
-    def test_preserves_brackets(self):
-        """Bracketed content (e.g. '[HD]') should be preserved since
-        clean_genius_query only strips emoji and noise words, not brackets."""
-        result = clean_genius_query("Song [HD]")
-        assert "Song" in result
