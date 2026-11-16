@@ -667,6 +667,18 @@ parentheses too. Record: `plans/backing-vocal-lines.md` on branch
   such a retry on the lead's words when only the echo overruns; or give a
   clean line a retry when it sits seconds off its cue and the transcript hears
   it on the cue, which fixes the line on `dev` too.
+- **An echo on its cue can show over the next line's early first word.** The
+  first pass can start a line's first word at the previous line's end, well
+  before its own cue, and the end snap holds it to the second word. Where an
+  added line now fills that time, both are lit at once. Can't Stop The Feeling
+  3:29 and 3:34: `(I can't stop the feeling)` over "Got" and over "Wanna", each
+  placed about 1.5 s before its cue (on `dev` as well) and held 1.9 and 2.3 s;
+  overlaps of 1.34 and 1.44 s. 5 added-line pairs overlap by over 1 s in 47
+  songs at that plan's GATE B (these two; the other three not read for
+  cause). No old word moves for it. Not heard by Ken as of 2026-11-16. The
+  candidate: the line after an added line starts no earlier than the echo's
+  end, or is a doubted start for the onset snap; either moves an old line's
+  first word and needs a replay.
 - **A group after a dialogue dash or song star is dropped as unplaced.**
   `srt_cues._group_at` gives up on a group when the text before it has no
   letter, which also catches a mark the cleaner removes ("- (hey) go",
