@@ -5,9 +5,10 @@ executor rules and the Results log by Claude Opus 5.5, 2026-11-15, reviewed by F
 same day. GATE G is read by Opus, then Ken (Fable only if Opus is unsure which recording a
 hit is, and only while Fable is available, to 2026-11-16: "Rulings on the gate", 5).
 
-Status: **Phases 0-4 done 2026-11-16 (Results log rows 2-13); `/code-review` on Phases 1-4
-run and its fixes landed the same day (row 14); Phase 5 collected the same day (row 15);
-Opus reads GATE G next, then Ken.** Does not
+Status: **GATE G read 2026-11-16 and failed on G1 and G3 (Results log row 16). Ken ruled
+the same day: ship, with the typed term moved back to the zero-hits fallback and no rule or
+order change (row 17, "Ruling on the failed gate"). Next: Phase 5b (Sonnet), then Phase 6
+(Ken).** Phases 0-4, the review fixes and the Phase 5 collection are rows 2-15. Does not
 wait for `search_official_captions` (Ken, 2026-11-15). Ken ruled the review's four gate
 questions on 2026-11-15 ("Rulings on the gate").
 
@@ -73,7 +74,9 @@ Three more calls, each **Ken's to overturn**:
   re-sort Genius's answer by page views.
 - **The typed YouTube search term is the last rung** on the search page: tried after the
   title's own queries, inside the three-call limit, when nothing has matched for sure. Today
-  it is tried only when the title returns nothing at all.
+  it is tried only when the title returns nothing at all. **Overturned by Ken on 2026-11-16
+  after GATE G:** it is asked only when the title's queries return nothing at all ("Ruling
+  on the failed gate").
 - **At the command-line prompt, Enter takes the preselected hit.** Today Enter there searches
   again.
 
@@ -153,10 +156,12 @@ rule 6; keep 8; preselect the first when it passes rule 5.
 Not in the prototype, so not in the fixtures; covered by its own tests and read at GATE G.
 
 `typed` is the YouTube search the guest ran. It is one more query after the title's own,
-asked only when a call is left and no query so far has stopped the ladder. It is skipped
-when its words, folded and taken as a set, equal those of a query already asked. Its hits
-merge into the same list under the same order; the title from the video stays the thing
-hits are matched against. It never changes what `parse` returns.
+asked only when a call is left and the title's queries have returned no hit at all
+(amended 2026-11-16, "Ruling on the failed gate"; as built for the gate it was asked
+whenever no query had stopped the ladder). It is skipped when its words, folded and taken
+as a set, equal those of a query already asked. Its hits are ordered like any others; the
+title from the video stays the thing hits are matched against. It never changes what
+`parse` returns.
 
 ### Channel names
 
@@ -380,7 +385,66 @@ gate, because the gate freezes the code.
 **Phase 5: GATE G collection.** Below. The executor collects and stops; it does not count
 or judge.
 
-**Phase 6: Ken's checks in the real app**, after the gate passes: a search-page download
+**Phase 5b: the ruling's changes** (added 2026-11-16, "Ruling on the failed gate"). No
+network call by any step: every Genius answer is the committed `gate_g/genius.json`. The
+Executor rules hold: no pattern, word or order level is added, and no row is made to pass.
+
+1. Before any edit, at the frozen code (`8076469b`): in scratch, not committed, write out
+   for each of the gate's 120 videos the two reads `gate_g/collect.py`'s `read_video`
+   gives (with the typed term, and without), as queries asked, hit ids in order and
+   preselect. Import `collect.py`'s `load_youtube`, `select`, `CachedGenius` and
+   `read_video`; never run its `main` (it rewrites the gate's sheet and verdicts). The
+   search must fail on a query that is not in the cache, never call Genius.
+2. `fix(genius_query)`: in `find_song` the typed term is asked only when the title's
+   queries returned no hit at all. The call limit and the skip of a reworded query stay as
+   they are. Docstring and the typed-term tests follow (asked when the title's queries
+   find nothing; not asked when they find hits, sure or not; the limit, the reworded-query
+   and the no-words tests stay); the test of typed hits merging among others goes, since
+   they no longer can. One commit, tests with it.
+3. The check, in scratch, logged in the Results row: with the changed code, each video's
+   read with the typed term equals step 1's read without it where that one has hits, and
+   step 1's read with it where it has none. Give the count of each kind and the numbers of
+   the videos whose read changed. Any other difference is a STOP.
+4. The gate's videos become fixtures, the way `unseen.jsonl` did. `docs(plans)`:
+   `gate_g/freeze.py`. Then `test(genius_query)`: what it writes to
+   `tests/unit/data/genius_search/`, and the tests.
+   - `gate_g.jsonl`, 118 rows: the 120 less 16.3 and 30.4, whose titles hold a lyric line
+     ("No lyric text"). Per row: ID, title, channel, `typed` (its search), the parsed
+     parts, and one run, `search_page` (three calls, the channel and the typed term, with
+     the changed code): queries, hit ids, preselect.
+   - `gate_g_answers.json`: query to hits, only the queries those 118 runs ask, from
+     `gate_g/genius.json`. Its own file, not merged into `answers.json`: the two were asked
+     of Genius months apart and nothing says a shared query got the same answer.
+   - Tests: every row parses to its frozen parts and replays to its frozen queries, order
+     and preselect, through the fake `search` that fails on an unknown query. Named pins
+     beside the Known holes, each with a comment saying it is a wrong preselect the gate
+     found and an open issue: 5.4 (`ed1RIhS7lDA`) and 6.1 (`mSfH2AuhXfw`), as they are.
+5. `docs(plans)`, two entries in `plans/open-issues.md` under "Search results (on `dev`)":
+
+   > - **A Genius hit is preselected when it does not account for the whole video title.**
+   >   GATE G found two in 63 preselects, both film or stage: a hit titled `You Will Be
+   >   Found (Reprise)` for a video of the full song, and `Mamma Mia — Meryl Streep` for
+   >   `Mamma Mia! - The Winner Takes It All - Meryl Streep`, whose middle part the parse
+   >   dropped. Both are pinned in `test_genius_query.py`. A guard that withholds the
+   >   preselect when the hit's title carries a bracket the video's lacks, or a dash part
+   >   went unread, can only withhold; its cost (right preselects withheld) is countable on
+   >   the 500 frozen titles with no network. Not ruled, including whether it needs a new
+   >   gate. Record: `plans/genius-search-spec.md` on branch `genius_search_accuracy`,
+   >   "Ruling on the failed gate" and `plans/genius-search-accuracy/gate_g/verdicts.md`.
+   > - **For a film or stage video the first Genius hit is wrong about 4 times in 10.**
+   >   GATE G: 18 of 47 on fresh titles, against 6 of 43 on the library titles the order
+   >   was shaped on. Seven are another recording of the song (a later film, a stage cast,
+   >   a live cast), eleven another song (the film's name read as the title, a page by an
+   >   act named like the show). Apart from the two above none was preselected: the page
+   >   asks the person to choose, with the year and artist shown. Shipped as it is (Ken,
+   >   2026-11-16): no order tried fixes one film title without breaking another. Record:
+   >   as above.
+6. `docs(plans)`: the Results log row (the step 3 counts, the suite's count, the commits),
+   and STOP. Hand Ken Phase 6's checks as a list. No `/code-review` line unless the change
+   in step 2 grew past one condition; say which.
+
+**Phase 6: Ken's checks in the real app**, after Phase 5b (the gate failed and Ken ruled
+ship; it was written as "after the gate passes"): a search-page download
 with a preselect and one without; a title-only upload; the pick pass on a fresh download;
 Repair's Genius box; the prompt through `add_songs`.
 
@@ -543,6 +607,38 @@ the rows Fable read, and every row that failed, by number and title. Then Ken re
   item 1). A change is read at a new GATE G on new searches, and this gate's videos are
   then frozen into the fixtures the way `unseen.jsonl` was.
 
+### Ruling on the failed gate (Ken, 2026-11-16)
+
+The gate failed on G1 and G3 (Results log row 16). Ken ratified Fable's recommendation
+whole, the same day:
+
+1. **Ship.** No structural rule and no order level changes, and no new GATE G is read. The
+   two wrong preselects and the film and stage first-hit rate go to `plans/open-issues.md`
+   (Phase 5b, step 5). The stop numbers are not moved or reread: the gate stands as failed,
+   and this is the "ship as it is" the Fail line allows.
+2. **The typed term moves back to the zero-hits fallback** (the Fail line's second
+   option). On the gate's rows where the title's queries already had hits it helped none,
+   hurt one (30.4) and changed 15.1's first hit from another recording of the song to
+   another song; its one "helped" row (15.4) had no hits without it, which the fallback
+   still covers. No new collection: the sheet holds both reads for every video the typed
+   term was asked on, so what the move does to the gate's rows is read from it (Phase 5b,
+   steps 1 and 3).
+3. **The gate's videos are frozen into the fixtures**, as the Fail line has it for a
+   change.
+
+What weighed, as given to Ken: every failing row is a film or stage row, and searches
+16-30 had no wrong preselect and 86.4% right first; `dev`'s search page has no "Choose the
+lyrics" option, so it selects the first hit on every video, where this build selects 63 of
+116 and is wrong on 2; of G3's 18 rows only the two G1 rows were preselected, and the right
+page is listed for 11; and a second gate of this size would reach G1's stop number about
+one time in three by chance at a true rate of one wrong preselect in 50.
+
+Calls Fable made in writing Phase 5b, **Ken's to overturn**: the fallback stays inside the
+call limit, as the gate measured it (`dev`'s fallback is a request of its own, so a title
+whose three queries all come back empty gets no typed query here); 16.3 and 30.4 are left
+out of the fixtures for the lyric line in their titles; only the two wrong preselects get
+named pins, the other failing rows being held by the every-row test.
+
 ### Rulings on the gate (Ken, 2026-11-15)
 
 On four questions from Fable's review of this section, each taken as recommended and
@@ -624,3 +720,4 @@ that ported them.
 | 14 | 2026-11-16 | Review fixes | `/code-review high eb8d4be0..3743f4f2` (three finders, one per Self-Review axis), run by Ken; 9 findings, triaged in chat, every recommendation ratified by Ken the same day. Fixed, in order: (1) search page race, the row 9 "seen, not touched" (`097d8b36`): `_lyricsSeq` is bumped by each search and each `resetLyricsSection`, and an answer is shown only when it is the latest; with the preselect a stale answer had arrived with Download shown and the other video's hit selected. (2) The empty ladder (`da4afc2a`): a title with nothing that reads ("Official Video", "Karaoke", emoji only) asked Genius nothing while its box showed the title; `find_song` now asks the trimmed title, the same text `start_query` gives; an empty or blank title still asks nothing. No fixture title has an empty ladder (checked over all 382), so every frozen run is unchanged. (3) `genius.HITS_LISTED = 8` (`1d929376`), read by `GeniusClient.search`'s default and `find_song`'s cut; `MAX_HITS` gone. (4) The route's `query` field and `Found.query` dropped (`2f2cd01d`): no page read them. (5) `libraryPages.geniusParams` (`097f6654`): the unchanged-box rule once for the pick pass and Repair; the prompt keeps its own (it calls `find_song`, not the route). (6) `libraryPages.geniusSelected` (`b16ab269`): when the answer has a preselect and the song's own Genius pick is listed (pick pass: the admin's pick in this run, then the recorded `genius_id`; Repair: `CURRENT_GENIUS_ID`), that one is selected instead; a typed search still selects nothing. "The four places" amended. From open issues, same triage: (7) the direct box's Add to queue tick (`62702d65`); (8) `library_tools.is_whole_number` for the three int-not-bool checks (`df2d1159`). Logged, not fixed (`335fe75e`): a failing Genius now costs the title search up to three 15 s calls, added to open-issues "A service outage reads as no results". Dropped: the typed term asked only within the call limit (ruled in "The typed term"); `search.html`'s own year format (row 13). The `_typed` half of open-issues' custom-sheet leftovers no longer applies and is struck there. Tests: the empty-ladder test replaced by 1 + 2 (title asked as its box shows it, with the typed term after; blank titles ask nothing); the route tests drop `query`; a throwaway return to the bare ladder failed the new test; file restored. The JS has no test harness, so it was driven in headless Chrome as in rows 9-10, from throwaway scripts in scratch, not committed. Search page (fake Genius, one answer delayed 2.5 s): a slow answer for a closed video does not replace the next video's dropdown or selection, does not fill a closed modal, and still shows when its own video is reopened; with no results on the page the direct box queues when ticked and not when unticked. Run against the unfixed page, both bugs reproduced (the slow answer took over the next video's dropdown; a ticked direct box sent `queue: false`). Pick pass and Repair (the suite's `Env`): the 19 checks of row 10 all pass after (5) and (6); `geniusSelected` in the page, 6 cases; Repair ticks the listed recorded pick over the preselect and the preselect when the recorded pick is not listed; a run's pick pass selects the song's recorded pick on first open, the admin's pick after Change, and nothing for a typed search listing both. Against the pages before (6), the run pick pass selected the preselect over the recorded pick. No page errors in any run. Full suite at `df2d1159`, env `pik`: 3685 passed (3683 + 2), 0 failed, 48 s. Pre-commit on the changed files: all hooks passed. No Genius or YouTube call by any step or check; no title used is one of the gate's thirty. Not pushed; `origin/genius_search_accuracy` is still at `6dcfb89b`. | this file, "The route", "The four places"; `git log 3743f4f2..335fe75e` |
 | 15 | 2026-11-16 | Phase 5 | GATE G collected (`d56ffe24`; `gate_g/collect.py`, `youtube.json`, `genius.json`, `sheet.md`, `verdicts.md` in `plans/genius-search-accuracy/gate_g/`). **Frozen HEAD `8076469b`**: nothing under `pikaraoke/`, `tests/` or `scripts/` differs from it, and the script refuses to start a collection over a difference. **Suite at it**, env `pik`: 3685 passed, 0 failed, 48 s, the seven Known holes and the pinned rows among them. **YouTube search quoted:** yes, `get_search_results(term, 30)` builds `ytsearch30:"<term>"`, as `dev` does. 30 searches, 30 rows each, every row with a channel; no search needed a rerun for missing channels, no yt-dlp error. **Videos:** 4 per search, 120 in all (120 distinct IDs, none in `library.jsonl` or `unseen.jsonl`, none kept twice); searches short of four: none; kept videos with no channel: 0. **Genius:** 186 calls in all, 182 distinct queries answered and cached; 4 calls failed, all one query (`Elaine Paige Memory Cats Lyrics YouTube`), HTTP 429 with a Cloudflare challenge page, on the first run after 90 answered calls in about two minutes (3-9 s between retries); a failed call is told by the warning the client logs, and is not cached. The script then paced every call (1.5 s) and backed off 60 s x n after a failure; the run resumed from the cache, the other 92 queries answered with no failure. A rerun makes 0 calls; the four generated files regenerate byte-identically from the committed ones, with no probes folder (the clone case). Nothing counted or judged: no hit, preselect or title was read for a verdict. **Lyric text, ruled by Ken 2026-11-16 (asked, three options):** the spec's description snippet in the sheet and the cache conflicts with "No lyric text" in the Executor rules, because a lyric video's snippet opens with its lyrics. Ken: cut the lyrics and keep the rest, the whole data kept in the local probes folder. Done: in 11 kept videos' snippets the lyric text is cut out and marked `[lyrics cut]`: 4.4, 6.3, 9.4, 16.3, 19.2, 24.1, 26.2, 26.3, 27.1, 28.2, 30.4 (found by reading all 120 snippets; by character offsets in `LYRIC_SPANS`, so the script holds no lyrics); the snippets of the 780 cached rows that were not kept are not in the committed `youtube.json`. The cache as YouTube gave it and the sheet built from it are at `~/probes/genius_search_accuracy_gate_g/` (`youtube.json`, `sheet.md`), uncommitted. **Video titles are not cut**, being the data under test: the titles of 16.3 and 30.4 each hold a lyric line, and so do the Genius queries made from them (in the sheet and in `genius.json`). Choices the spec left open: a video's number is `search.place` (`7.2`), and `verdicts.md` has one empty row each with the spec's five columns; the sheet does not print a search's Kind; the typed term counts as asked when its run asked one query more than the run without it; a hit with no year reads `no year`; `sheet.md`'s header says which snippets were cut. No recordings guide (ruling 6) exists, so none is committed. Not pushed; `origin/genius_search_accuracy` is still at `6dcfb89b`. | this file, "GATE G"; `git show d56ffe24` |
 | 16 | 2026-11-16 | GATE G read | `gate_g/verdicts.md` filled, all 120 rows, from `gate_g/sheet.md` (the eleven cut snippets from `~/probes/genius_search_accuracy_gate_g/sheet.md`), at `b301c663`, code frozen at `8076469b`. **Read by Claude Fable 5.2**, in the session Ken opened for the read on the last night of its window, not by Opus as "Who reads it, and after" has it; so no row was handed on and none is a "row Fable read" apart from the rest. 116 rows counted, 4 left out. **G1, wrong preselects: 2** (stops at 2 or more: reached); 61 right, 53 none. 5.4 `Mamma Mia! - The Winner Takes It All - Meryl Streep` preselects `Mamma Mia — Meryl Streep`, its only hit; 6.1 `"You Will Be Found" from the DEAR EVAN HANSEN Original Broadway Cast Recording` preselects the cast's `You Will Be Found (Reprise)` page, the full song's pages second and third. **G2, right song first: 94 of 116, 81.0%** (stops below 70%: not reached): right 77, right song with the wrong recording 17, wrong song 18, no hits 4. Searches 1-15: 43 of 57, 75.4%; searches 16-30: 51 of 59, 86.4%. **G3, film and stage videos with the wrong recording or a wrong song first: 18 of 47, 38.3%** (stops above 1 in 3: reached); film 10 of 29, stage 8 of 18; three of the 47 have no hits (2.3, 14.1, 14.4), and with those out of the 47 too it is 18 of 44. Another recording first (7): 4.1 and 4.4 You're the One That I Want (Grease Live over the 1978 film), 6.2 You Will Be Found (Sam Smith & Summer Walker over the 2021 film cast), 8.1 Go the Distance (a cover page, the film's page not listed), 11.1 I Just Can't Wait to Be King (the 1997 Broadway cast over the 1994 film), 12.1 and 12.4 The Wizard and I (the 2024 film over the 2003 Broadway cast). A wrong song first (11): 5.4 The Winner Takes It All, 6.1 You Will Be Found, 8.2 Go the Distance (`Hercules — Young Thug`), 9.4 Kiss the Girl (a film script page), 10.1 Friend Like Me (`Aladdin — Not3s`), 13.2 Memory (`In Memory — Unloved`), 15.1-15.4 My Shot (`Myshot — Hamilton (Artist)`, the cast page 5th, 8th, 5th, 3rd), 29.4 Yesterday, the 2019 film's scene (`Lost In Yesterday — Tame Impala`). **G4, the typed term: asked on 19 counted rows, helped 1 (15.4), hurt 1 (30.4, Imagine)**, no change 17 (stops when hurt on more than it helped: not reached). **Left out (4):** 9.1 and 10.3, a fan channel's Kiss the Girl and Friend Like Me, uploaded 2020, the recording named nowhere (ruling 5); 11.3 and 21.4, game play and a dance tutorial over the song, the recording under them not named. **Looked up by ID** (`yt-dlp --skip-download`, no search): 2.4, 3.3, 6.4, 8.2, 9.1, 10.1, 10.3, 11.3, 14.1, 21.4; 3.3's music credit (original London cast, Michael Crawford) is past the sheet's snippet and makes its first hit right. Two Genius pages read by ID (the song record, and a word comparison with the known page of the song, scores only): `Myshot — Hamilton (Artist)` (36 words, ratio 0.04: another song) and `I can go the distance — Sally Harmon` (ratio 0.42: a cover of the song). The preselect, typed and no-hits columns checked by script against the sheet's marks: 0 differences. Calls the judge made, with what each moves, are in `verdicts.md` ("Calls the judge made"): a Reprise page read as another song; a Romanizations page read as the wrong recording; 15.4, an hour's loop of the cast recording, kept in (out, G4 is helped 0, hurt 1, which reaches its stop number; G3 17 of 46); three stage performers singing outside the show (2.4, 6.4, 14.3) kept out of G3's 47 (in, 21 of 50). Not right first outside G3, by number: wrong recording 2.4, 6.4, 11.2, 11.4, 14.2, 14.3, 26.2, 26.3, 26.4, 30.3; wrong song 12.3, 16.3, 17.4, 19.3, 27.3, 30.1, 30.4; no hits 24.4. Nothing under `pikaraoke/`, `tests/` or `scripts/` and no list changed; no lyric text in `verdicts.md`. STOP for Ken ("Who reads it, and after", Fail). Not pushed; `origin/genius_search_accuracy` is still at `6dcfb89b`. | `plans/genius-search-accuracy/gate_g/verdicts.md`; this file, "GATE G" |
+| 17 | 2026-11-16 | Ken's ruling on the gate | Ship; the typed term back to the zero-hits fallback; no structural rule or order change; no new GATE G; the gate's videos frozen as fixtures; G1's two wrong preselects and G3's rate logged in open-issues. Recommended by Claude Fable 5.2 from row 16 and `verdicts.md`, ratified whole by Ken in the same session. Checked for the recommendation, nothing run against Genius or YouTube: `dev`'s `search.html` (`5680091a`) builds the Genius dropdown with no placeholder option, so the first hit is the selected one on every video. From `verdicts.md`: all of G1 and G3 are in searches 1-15; of the 19 counted rows the typed term was asked on, 5 had no hits without it (2.4, 13.2 and 15.4 have hits with it; 14.1 and 14.4 have none either way) and on the other 14 it helped 0, hurt 1 (30.4) and moved 15.1's first hit from a wrong recording to a wrong song. From `sheet.md`: 2.3 and 24.4 have no hits and no typed query, their three calls being spent on the title's own queries (the call-limit choice under "Ruling on the failed gate"). By those notes the move would make G2 96 of 116 and leave G1 and G3 as they are; not replayed, Phase 5b step 3 does that. Spec amended in this commit: status, the typed-term call and section, Phase 5b, Phase 6's opening, "Ruling on the failed gate". No code touched; code still frozen at `8076469b`. Not pushed; `origin/genius_search_accuracy` is still at `6dcfb89b`. | this file, "Ruling on the failed gate", Phase 5b |
