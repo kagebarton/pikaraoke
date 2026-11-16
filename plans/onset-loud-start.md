@@ -1136,7 +1136,19 @@ and keys): 4 rows differ, in `agreed` only, true to false:
   ocean meets the sand"), 3.859 s: 180.716 to 184.575. The forced align had "In" at 180.72
   and "the" at 184.78; the transcript has "in" at 184.64, "the" at 184.76. v11's final start
   for the line was 180.716.
-- Not separated here: the v11 to v12 differences in `n_snapped` (`xFYQQPAOz7Y` +2,
-  `GI6CfKcMhjY` +3, `1YiAzyCzZzw` -1, `hvvjiE4AdUI` -1, `rEXhAMtbaec` +1) come from a fresh
-  whisper run and from a heard move freeing room for the line before it; the bundles do not
-  split the two. Nothing was listened to.
+- v11 to v12 differences not made by a heard move (scratch compare of final starts and of
+  `transcribe_words`, `words`, `joint_stats.pass1_line_timings` between the backup and the
+  new bundles; nothing was listened to):
+  - `transcribe_words` differ in every song but `22QYya-LGDY` (identical there, with `words`
+    and pass 1 too, so every difference in that song is a heard move). Differing words by
+    song: cue 5, 8, 86, 10, 24 of 374, 340, 777, 414, 221; joint counts also changed in
+    four (`aBt8fN7mJNg` 272 to 275, `GI6CfKcMhjY` 503 to 507, `1YiAzyCzZzw` 443 to 432,
+    `pXNd2V88d60` 343 to 348). Pass 1 differs in the other seven joint songs.
+  - Lines whose final start differs from v11 by 0.3 s or more without a heard move, joint
+    songs: `aBt8fN7mJNg` 2, `hvvjiE4AdUI` 5, `ZrX1XKtShSI` 3, `GI6CfKcMhjY` 10,
+    `1YiAzyCzZzw` 8, `pXNd2V88d60` 25; cue: `MiraOCjABn8` 3, Rent - I'll Cover You 3.
+  - The largest, each already in pass 1 and not a heard move: `hvvjiE4AdUI` lines 41-43
+    ("Rock" x3) v11 237.43 / 237.53 / 243.89, v12 all at 230.62 with zero length;
+    `1YiAzyCzZzw` lines 57-60 v11 178.03 to 180.19, v12 all at 175.14; `pXNd2V88d60` lines
+    56-62 v11 287.98 to 313.56, v12 all at 296.08; `GI6CfKcMhjY` line 12 ("Here we go")
+    v11 27.84, v12 23.48, and line 62 v11 168.64, v12 171.94 (pass 1 values).
