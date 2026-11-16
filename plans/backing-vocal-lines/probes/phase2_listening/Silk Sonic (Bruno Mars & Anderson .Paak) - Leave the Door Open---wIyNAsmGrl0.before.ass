@@ -1,0 +1,70 @@
+[Script Info]
+Title: Karaoke Subtitles
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+Timer: 100.0000
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Karaoke,Arial,60,&H00D7FF&,&H00FFFFFF,&H00000000,&H80000000&,0,0,0,0,100,100,0,0,1,3,2,2,50,50,150,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:10.47,0:00:13.81,Karaoke,,0,0,0,,{\k80}{\kf38}Said {\kf52}baby, {\kf32}said {\kf44}baby, {\k24}{\kf12}said {\kf32}baby
+Dialogue: 0,0:00:12.97,0:00:14.97,Karaoke,,0,0,0,,{\k80}{\kf28}What {\kf22}you {\kf50}doing?
+Dialogue: 0,0:00:14.09,0:00:17.11,Karaoke,,0,0,0,,{\k80}{\kf86}Where {\kf18}you {\k12}{\kf86}at?
+Dialogue: 0,0:00:16.21,0:00:18.44,Karaoke,,0,0,0,,{\k80}{\kf22}Oh, {\k2}{\kf10}you {\kf22}got {\k14}{\kf58}plans?
+Dialogue: 0,0:00:18.09,0:00:19.67,Karaoke,,0,0,0,,{\k80}{\kf10}Don't {\kf22}say {\kf28}that
+Dialogue: 0,0:00:18.67,0:00:22.95,Karaoke,,0,0,0,,{\k80}{\kf92}I'm {\kf34}sipping {\kf34}wine {\kf116}in {\kf18}a {\kf34}robe
+Dialogue: 0,0:00:21.95,0:00:26.39,Karaoke,,0,0,0,,{\k80}{\kf84}I {\kf22}look {\kf20}too {\kf38}good {\k31}{\kf52}to {\kf24}be {\kf72}alone
+Dialogue: 0,0:00:25.50,0:00:29.83,Karaoke,,0,0,0,,{\k80}{\kf57}My {\kf32}house {\kf42}clean {\k45}{\kf43}my {\kf34}pool {\kf80}warm
+Dialogue: 0,0:00:28.93,0:00:30.95,Karaoke,,0,0,0,,{\k80}{\kf66}Just {\kf36}shaved
+Dialogue: 0,0:00:29.95,0:00:35.81,Karaoke,,0,0,0,,{\k80}{\kf158}We {\k10}{\kf110}should {\kf24}be {\kf88}dancing, {\k11}{\kf85}romancing
+Dialogue: 0,0:00:34.81,0:00:38.35,Karaoke,,0,0,0,,{\k80}{\kf40}In {\kf22}the {\kf34}east {\kf32}wing {\kf38}and {\kf18}the {\kf34}west {\kf36}wing
+Dialogue: 0,0:00:37.35,0:00:40.80,Karaoke,,0,0,0,,{\k80}{\kf28}Of {\kf26}this {\kf48}mansion, {\k10}{\kf24}what's {\k30}{\kf79}happening?
+Dialogue: 0,0:00:39.90,0:00:42.52,Karaoke,,0,0,0,,{\k80}{\kf14}I {\kf28}ain't {\kf30}playing {\kf28}no {\kf62}games
+Dialogue: 0,0:00:40.83,0:00:45.97,Karaoke,,0,0,0,,{\k80}{\kf45}Every {\k31}{\kf51}word {\kf26}that {\kf14}I {\kf40}say {\kf24}is {\kf22}coming {\kf34}straight {\kf24}from {\kf14}the {\k16}{\kf73}heart
+Dialogue: 0,0:00:45.42,0:00:51.31,Karaoke,,0,0,0,,{\k80}{\kf31}So {\k15}{\kf45}if {\kf26}you {\kf66}tryna {\kf74}lay {\kf38}in {\kf46}these {\kf148}arms
+Dialogue: 0,0:00:50.41,0:00:57.75,Karaoke,,0,0,0,,{\k80}{\kf40}I'ma {\kf38}leave {\kf34}the {\kf62}door {\kf460}open
+Dialogue: 0,0:00:56.85,0:01:04.07,Karaoke,,0,0,0,,{\k80}{\kf49}I'ma {\kf38}leave {\kf28}the {\kf68}door {\kf96}open, {\k22}{\kf321}girl
+Dialogue: 0,0:01:04.25,0:01:07.69,Karaoke,,0,0,0,,{\k80}{\kf52}That {\kf26}you {\k12}{\kf38}feel {\kf26}the {\kf28}way {\k4}{\kf10}I {\k6}{\kf42}feel
+Dialogue: 0,0:01:06.69,0:01:10.39,Karaoke,,0,0,0,,{\k80}{\kf18}And {\kf10}you {\k7}{\kf23}want {\kf14}me {\kf22}like {\kf12}I {\kf36}want {\kf18}you {\kf46}tonight, {\k34}{\kf30}baby
+Dialogue: 0,0:01:17.03,0:01:21.27,Karaoke,,0,0,0,,{\k80}{\kf62}Ooh, {\k22}{\kf12}you're {\k5}{\kf17}so {\k32}{\kf10}sweet {\k111}{\kf11}so {\kf42}tight
+Dialogue: 0,0:01:20.27,0:01:24.51,Karaoke,,0,0,0,,{\k80}{\kf96}I {\kf36}won't {\kf88}bite {\k43}{\kf11}unless {\kf20}you {\kf30}like
+Dialogue: 0,0:01:23.51,0:01:27.91,Karaoke,,0,0,0,,{\k80}{\kf116}If {\kf14}you {\kf38}smoke {\kf86}I {\kf22}got {\kf24}the {\kf40}haze
+Dialogue: 0,0:01:26.91,0:01:31.15,Karaoke,,0,0,0,,{\k80}{\kf78}And {\kf30}if {\kf12}you're {\k17}{\kf51}hungry, {\k34}{\kf10}girl, {\kf14}I {\kf22}got {\kf60}fillets
+Dialogue: 0,0:01:30.15,0:01:33.97,Karaoke,,0,0,0,,{\k80}{\kf54}Ooh, {\kf118}baby, {\k12}{\kf16}don't {\kf30}keep {\k13}{\kf39}me
+Dialogue: 0,0:01:32.97,0:01:37.49,Karaoke,,0,0,0,,{\k80}{\kf150}There's {\k2}{\kf22}so {\k30}{\kf10}much {\k11}{\kf33}love {\kf30}we {\kf20}could {\kf16}be {\kf28}making
+Dialogue: 0,0:01:36.49,0:01:40.71,Karaoke,,0,0,0,,{\k80}{\kf94}I'm {\kf30}talking {\kf75}kissing, {\k15}{\kf108}cuddling
+Dialogue: 0,0:01:40.20,0:01:43.07,Karaoke,,0,0,0,,{\k80}{\kf53}Rose {\kf28}petals {\kf32}in {\kf14}the {\kf60}bathtub
+Dialogue: 0,0:01:42.07,0:01:45.09,Karaoke,,0,0,0,,{\k80}{\kf52}Girl, {\kf10}let's {\kf48}jump {\kf26}in, {\k6}{\kf10}it's {\kf50}bubbling
+Dialogue: 0,0:01:44.09,0:01:47.27,Karaoke,,0,0,0,,{\k80}{\kf86}I {\kf22}ain't {\kf32}playing {\kf28}no {\k12}{\kf38}games
+Dialogue: 0,0:01:46.45,0:01:50.71,Karaoke,,0,0,0,,{\k80}{\kf16}Every {\kf34}word {\kf24}that {\kf16}I {\kf36}say {\kf30}is {\kf28}coming {\kf26}straight {\kf24}from {\kf16}the {\k19}{\kf57}heart
+Dialogue: 0,0:01:50.42,0:01:55.99,Karaoke,,0,0,0,,{\k80}{\kf66}So {\k10}{\kf17}if {\k8}{\kf16}you {\kf60}tryna {\kf90}lay {\k10}{\kf30}in {\kf22}these {\kf128}arms
+Dialogue: 0,0:01:55.50,0:02:02.62,Karaoke,,0,0,0,,{\k80}{\kf17}I'ma {\kf40}leave {\kf32}the {\kf56}door {\kf467}open
+Dialogue: 0,0:02:01.72,0:02:10.03,Karaoke,,0,0,0,,{\k80}{\kf42}I'ma {\kf38}leave {\k11}{\kf21}the {\kf64}door {\kf120}open, {\k4}{\kf431}girl
+Dialogue: 0,0:02:09.13,0:02:12.51,Karaoke,,0,0,0,,{\k80}{\kf52}That {\kf24}you {\kf52}feel {\kf26}the {\k6}{\kf24}way {\kf20}I {\kf34}feel
+Dialogue: 0,0:02:11.35,0:02:15.44,Karaoke,,0,0,0,,{\k80}{\kf34}And {\kf16}you {\k12}{\kf14}want {\kf16}me {\kf28}like {\kf12}I {\kf26}want {\k6}{\kf14}you {\kf72}tonight, {\k34}{\kf25}baby
+Dialogue: 0,0:02:16.21,0:02:23.99,Karaoke,,0,0,0,,{\k80}{\kf444}come {\k10}{\kf150}on, {\kf74}girl
+Dialogue: 0,0:02:22.99,0:02:27.85,Karaoke,,0,0,0,,{\k80}{\kf280}La-la-la, {\k10}{\kf96}la-la-la-la
+Dialogue: 0,0:02:26.85,0:02:36.54,Karaoke,,0,0,0,,{\k80}{\kf150}La-la-la, {\k43}{\kf676}la-la-la-la
+Dialogue: 0,0:02:35.64,0:02:43.30,Karaoke,,0,0,0,,{\k80}{\kf330}La-la-la, {\k10}{\kf326}la-la-la-la
+Dialogue: 0,0:02:42.40,0:02:47.70,Karaoke,,0,0,0,,{\k80}{\kf233}Ah-ah-ah-ah, {\k10}{\kf187}ah-ah
+Dialogue: 0,0:02:46.80,0:02:53.74,Karaoke,,0,0,0,,{\k80}{\kf52}Hey-hey, {\k8}{\kf18}I'ma {\k30}{\kf10}leave {\kf40}my {\kf32}door {\kf84}open, {\k10}{\kf310}baby
+Dialogue: 0,0:02:52.84,0:02:58.34,Karaoke,,0,0,0,,{\k80}{\kf128}I'ma {\k42}{\kf14}leave, {\k56}{\kf20}I'ma {\k33}{\kf11}leave {\kf38}my {\kf26}door {\k39}{\kf13}open, {\kf30}girl
+Dialogue: 0,0:02:57.34,0:03:02.22,Karaoke,,0,0,0,,{\k80}{\kf150}and {\k46}{\kf22}I'm {\kf150}hoping, {\k10}{\kf11}hoping
+Dialogue: 0,0:03:01.22,0:03:04.36,Karaoke,,0,0,0,,{\k80}{\kf56}That {\kf16}you {\kf38}feel {\kf32}the {\kf20}way {\kf18}I {\kf34}feel
+Dialogue: 0,0:03:03.36,0:03:07.20,Karaoke,,0,0,0,,{\k80}{\kf22}And {\kf18}you {\kf24}want {\kf14}me {\kf28}like {\kf16}I {\kf32}want {\kf16}you {\kf60}tonight, {\k43}{\kf11}baby
+Dialogue: 0,0:03:10.31,0:03:15.27,Karaoke,,0,0,0,,{\k80}{\kf396}woo!
+Dialogue: 0,0:03:14.67,0:03:22.44,Karaoke,,0,0,0,,{\k80}{\kf131}La-la-la, {\k10}{\kf536}la-la-la-la
+Dialogue: 0,0:03:21.86,0:03:27.81,Karaoke,,0,0,0,,{\k80}{\kf235}Woo-woo-woo-woo, {\k10}{\kf103}woo-woo-woo, {\k10}{\kf137}woo-woo-woo
+Dialogue: 0,0:03:26.91,0:03:29.31,Karaoke,,0,0,0,,{\k80}{\kf84}Woo-woo-woo-woo, {\k10}{\kf26}woo-woo-woo, {\k8}{\kf12}woo-woo
+Dialogue: 0,0:03:28.31,0:03:35.71,Karaoke,,0,0,0,,{\k80}{\kf104}La-la-la, {\k18}{\kf518}la-la-la-la
+Dialogue: 0,0:03:34.81,0:03:38.39,Karaoke,,0,0,0,,{\k80}{\kf28}Girl, {\k10}{\kf16}I'm {\kf16}here {\kf42}just {\k18}{\kf54}waiting {\k11}{\kf33}for {\kf30}you
+Dialogue: 0,0:03:37.39,0:03:42.03,Karaoke,,0,0,0,,{\k80}{\kf66}Come {\kf42}on {\kf86}over, {\k16}{\kf20}I'll {\kf42}adore {\k34}{\kf57}you
+Dialogue: 0,0:03:41.03,0:03:46.77,Karaoke,,0,0,0,,{\k80}{\kf92}La-la-la, {\kf382}la-la-la-la
+Dialogue: 0,0:03:45.87,0:03:48.34,Karaoke,,0,0,0,,{\k80}{\kf92}for {\k10}{\kf46}you
+Dialogue: 0,0:03:47.39,0:03:51.39,Karaoke,,0,0,0,,{\k80}{\kf48}Girl, {\k28}{\kf10}I'm {\kf20}here {\k14}{\kf32}just {\kf74}waiting {\kf32}for {\k33}{\kf11}you
+Dialogue: 0,0:03:50.45,0:03:55.81,Karaoke,,0,0,0,,{\k80}{\kf62}Come {\kf87}on {\k10}{\kf19}over, {\k14}{\kf41}I'll {\kf36}adore {\k42}{\kf126}you
+Dialogue: 0,0:03:54.91,0:03:56.79,Karaoke,,0,0,0,,{\k80}{\kf18}La-la-la, {\k64}{\kf10}la-la-la-la

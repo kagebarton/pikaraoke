@@ -1,0 +1,125 @@
+[Script Info]
+Title: Karaoke Subtitles
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+Timer: 100.0000
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Karaoke,Arial,60,&H00D7FF&,&H00FFFFFF,&H00000000,&H80000000&,0,0,0,0,100,100,0,0,1,3,2,2,50,50,150,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.05,0:00:02.55,Karaoke,,0,0,0,,{\k80}{\kf150}Ah
+Dialogue: 0,0:00:00.04,0:00:02.55,Karaoke,,0,0,0,,{\k80}{\kf150}yeah,
+Dialogue: 0,0:00:04.18,0:00:05.33,Karaoke,,0,0,0,,{\k80}{\kf14}Ah
+Dialogue: 0,0:00:06.30,0:00:07.41,Karaoke,,0,0,0,,{\k80}{\kf11}yeah
+Dialogue: 0,0:00:07.27,0:00:09.64,Karaoke,,0,0,0,,{\k80}{\kf22}I {\kf28}got {\kf30}this {\kf58}feeling...
+Dialogue: 0,0:00:09.72,0:00:11.76,Karaoke,,0,0,0,,{\k80}{\kf10}inside {\k11}{\kf31}my {\kf56}bones.
+Dialogue: 0,0:00:11.52,0:00:15.88,Karaoke,,0,0,0,,{\k80}{\kf22}It {\kf40}goes {\k32}{\kf54}electric, {\k8}{\kf26}wavy {\kf36}when {\kf16}I {\kf36}turn {\kf32}it {\kf34}on
+Dialogue: 0,0:00:15.77,0:00:18.26,Karaoke,,0,0,0,,{\k80}{\kf28}All {\kf22}through {\kf26}my {\k18}{\kf55}city,
+Dialogue: 0,0:00:17.89,0:00:21.03,Karaoke,,0,0,0,,{\k80}{\kf31}all {\kf16}through {\kf30}my {\kf136}home.
+Dialogue: 0,0:00:20.09,0:00:24.60,Karaoke,,0,0,0,,{\k80}{\kf28}We're {\kf32}flying {\k11}{\kf33}up, {\kf20}no {\kf42}ceiling {\kf38}when {\kf22}we {\kf34}in {\kf22}our {\kf70}zone.
+Dialogue: 0,0:00:23.75,0:00:27.66,Karaoke,,0,0,0,,{\k80}{\kf16}I {\k33}{\kf11}got {\k13}{\kf39}that {\k14}{\kf42}sunshine {\kf38}in {\kf16}my {\k18}{\kf52}pocket,
+Dialogue: 0,0:00:26.69,0:00:29.66,Karaoke,,0,0,0,,{\k80}{\kf24}got {\kf24}that {\kf22}good {\kf34}soul {\kf24}in {\kf24}my {\kf46}feet.
+Dialogue: 0,0:00:28.76,0:00:32.81,Karaoke,,0,0,0,,{\k80}{\kf10}I {\kf22}feel {\kf28}that {\k20}{\kf10}hot {\kf10}blood {\kf36}in {\kf18}my {\k11}{\kf32}body {\k12}{\kf36}when {\kf26}it {\k10}{\kf30}drops
+Dialogue: 0,0:00:31.80,0:00:33.57,Karaoke,,0,0,0,,{\k80}{\kf76}oh
+Dialogue: 0,0:00:32.57,0:00:36.61,Karaoke,,0,0,0,,{\k80}{\kf68}I {\kf32}can't {\kf28}take {\kf24}my {\kf28}eyes {\kf24}up {\kf26}off {\kf74}it,
+Dialogue: 0,0:00:34.50,0:00:38.01,Karaoke,,0,0,0,,{\k80}{\kf85}Moving {\kf54}so {\kf112}phenomenally
+Dialogue: 0,0:00:36.95,0:00:40.31,Karaoke,,0,0,0,,{\k80}{\kf64}Room {\kf26}on {\kf20}lock {\kf28}the {\kf22}way {\kf18}we {\kf34}rock {\kf24}it
+Dialogue: 0,0:00:39.50,0:00:41.29,Karaoke,,0,0,0,,{\k80}{\kf23}So {\kf20}don't {\kf36}stop
+Dialogue: 0,0:00:40.75,0:00:46.12,Karaoke,,0,0,0,,{\k80}{\kf22}And {\kf50}under {\kf26}the {\kf92}lights {\kf56}when {\k44}{\kf15}everything {\k38}{\kf95}goes
+Dialogue: 0,0:00:45.77,0:00:50.37,Karaoke,,0,0,0,,{\k80}{\kf32}Nowhere {\kf20}to {\kf52}hide {\kf38}when {\kf20}I'm {\kf38}getting {\kf34}you {\kf127}close
+Dialogue: 0,0:00:49.77,0:00:53.96,Karaoke,,0,0,0,,{\k80}{\kf19}When {\kf24}we {\k38}{\kf62}move, {\k20}{\kf12}well, {\kf38}you {\k19}{\kf17}already {\k17}{\kf52}know
+Dialogue: 0,0:00:53.13,0:01:00.06,Karaoke,,0,0,0,,{\k80}{\kf117}So {\kf22}just {\kf82}imagine, {\kf35}just {\k4}{\kf83}imagine, {\k10}{\kf10}just {\k11}{\kf219}imagine
+Dialogue: 0,0:00:59.16,0:01:01.73,Karaoke,,0,0,0,,{\k80}{\kf21}Nothing {\kf40}I {\kf14}can {\kf32}see {\kf30}but {\kf20}you
+Dialogue: 0,0:01:00.74,0:01:03.74,Karaoke,,0,0,0,,{\k80}{\kf26}when {\kf16}you {\k16}{\kf46}dance, {\k48}{\kf10}dance, {\k30}{\kf10}dance
+Dialogue: 0,0:01:02.74,0:01:06.00,Karaoke,,0,0,0,,{\k80}{\kf34}Feeling {\k12}{\kf36}good, {\kf34}good, {\kf20}creeping {\k11}{\kf34}up {\kf22}on {\kf22}you
+Dialogue: 0,0:01:05.00,0:01:07.90,Karaoke,,0,0,0,,{\k80}{\kf20}So {\kf24}just {\k41}{\kf14}dance, {\k17}{\kf52}dance, {\kf22}dance
+Dialogue: 0,0:01:06.92,0:01:08.28,Karaoke,,0,0,0,,{\k80}{\kf20}Come {\kf16}on
+Dialogue: 0,0:01:07.47,0:01:10.21,Karaoke,,0,0,0,,{\k80}{\kf28}All {\kf20}those {\kf26}things {\kf24}I {\kf40}shouldn't {\kf36}do
+Dialogue: 0,0:01:09.21,0:01:12.18,Karaoke,,0,0,0,,{\k80}{\kf24}but {\kf18}you {\kf60}dance, {\k43}{\kf15}dance, {\kf36}dance
+Dialogue: 0,0:01:11.18,0:01:14.48,Karaoke,,0,0,0,,{\k80}{\kf58}And {\kf20}ain't {\kf56}nobody {\kf60}leaving {\kf36}soon
+Dialogue: 0,0:01:13.48,0:01:15.60,Karaoke,,0,0,0,,{\k80}{\kf18}So {\kf30}keep {\k16}{\kf48}dancing
+Dialogue: 0,0:01:14.60,0:01:17.54,Karaoke,,0,0,0,,{\k80}{\kf70}I {\kf22}can't {\kf26}stop {\kf20}the {\kf56}feeling
+Dialogue: 0,0:01:16.64,0:01:20.82,Karaoke,,0,0,0,,{\k80}{\kf130}So {\kf68}just {\k10}{\kf18}dance, {\k34}{\kf11}dance, {\k34}{\kf12}dance
+Dialogue: 0,0:01:19.27,0:01:22.96,Karaoke,,0,0,0,,{\k80}{\kf29}I {\kf30}can't {\kf20}stop {\kf14}the {\kf175}feeling
+Dialogue: 0,0:01:22.06,0:01:24.90,Karaoke,,0,0,0,,{\k80}{\kf10}So {\kf26}just {\k49}{\kf16}dance, {\k35}{\kf12}dance, {\k2}{\kf34}dance
+Dialogue: 0,0:01:23.90,0:01:25.57,Karaoke,,0,0,0,,{\k80}{\kf22}Come {\k34}{\kf11}on
+Dialogue: 0,0:01:24.90,0:01:28.07,Karaoke,,0,0,0,,{\k80}{\kf54}Ooh, {\k10}{\kf16}it's {\kf81}something {\k10}{\kf47}magical
+Dialogue: 0,0:01:27.97,0:01:32.78,Karaoke,,0,0,0,,{\k80}{\kf37}It's {\kf22}in {\kf18}the {\k11}{\kf34}air, {\kf24}it's {\kf14}in {\kf22}my {\kf55}blood, {\k5}{\kf10}it's {\kf34}rushing {\kf99}on
+Dialogue: 0,0:01:31.88,0:01:37.35,Karaoke,,0,0,0,,{\k80}{\kf40}I {\kf32}don't {\kf16}need {\kf22}no {\k41}{\kf14}reason, {\k43}{\kf71}don't {\kf22}need {\k13}{\kf134}control
+Dialogue: 0,0:01:36.45,0:01:40.77,Karaoke,,0,0,0,,{\k80}{\kf36}I {\kf12}fly {\kf28}so {\kf48}high, {\kf10}no {\kf70}ceiling, {\kf14}when {\kf26}I'm {\kf26}in {\kf20}my {\kf42}zone
+Dialogue: 0,0:01:39.79,0:01:43.93,Karaoke,,0,0,0,,{\k80}{\kf58}'Cause {\kf14}I {\kf28}got {\k13}{\kf41}that {\k14}{\kf41}sunshine {\k11}{\kf31}in {\kf16}my {\kf48}pocket
+Dialogue: 0,0:01:42.93,0:01:45.99,Karaoke,,0,0,0,,{\k80}{\kf44}Got {\kf26}that {\kf22}good {\kf34}soul {\kf26}in {\kf22}my {\kf32}feet
+Dialogue: 0,0:01:44.99,0:01:49.29,Karaoke,,0,0,0,,{\k80}{\kf28}I {\kf24}feel {\kf26}that {\kf28}hot {\kf24}blood {\kf24}in {\kf16}my {\k31}{\kf10}body {\kf50}when {\kf26}it {\k11}{\kf31}drops
+Dialogue: 0,0:01:48.29,0:01:50.01,Karaoke,,0,0,0,,{\k80}{\kf72}oh
+Dialogue: 0,0:01:49.01,0:01:52.51,Karaoke,,0,0,0,,{\k80}{\kf70}I {\kf32}can't {\kf26}take {\kf26}my {\kf28}eyes {\kf18}up {\kf32}off {\kf18}it
+Dialogue: 0,0:01:51.51,0:01:54.41,Karaoke,,0,0,0,,{\k80}{\kf50}Moving {\kf36}so {\kf104}phenomenally
+Dialogue: 0,0:01:53.41,0:01:56.79,Karaoke,,0,0,0,,{\k80}{\kf62}Room {\kf26}on {\kf24}lock {\kf28}the {\kf20}way {\kf20}we {\kf34}rock {\kf24}it
+Dialogue: 0,0:01:56.09,0:01:57.73,Karaoke,,0,0,0,,{\k80}{\kf10}So {\kf22}don't {\kf32}stop
+Dialogue: 0,0:01:56.73,0:02:02.60,Karaoke,,0,0,0,,{\k80}{\kf64}And {\kf62}under {\kf77}the {\k10}{\kf21}lights {\kf60}when {\k15}{\kf45}everything {\kf133}goes
+Dialogue: 0,0:02:01.97,0:02:06.82,Karaoke,,0,0,0,,{\k80}{\kf56}Nowhere {\kf20}to {\kf52}hide {\kf40}when {\kf20}I'm {\kf38}getting {\kf36}you {\kf123}close
+Dialogue: 0,0:02:06.22,0:02:11.07,Karaoke,,0,0,0,,{\k80}{\kf20}When {\kf26}we {\k38}{\kf64}move, {\k16}{\kf10}well, {\kf26}you {\kf54}already {\k50}{\kf83}know
+Dialogue: 0,0:02:10.54,0:02:16.46,Karaoke,,0,0,0,,{\k80}{\kf17}So {\kf28}just {\kf88}imagine, {\kf22}just {\k49}{\kf16}imagine, {\k22}{\kf16}just {\k50}{\kf184}imagine
+Dialogue: 0,0:02:15.56,0:02:18.19,Karaoke,,0,0,0,,{\k80}{\kf23}Nothing {\kf36}I {\kf20}can {\kf30}see {\kf30}but {\kf24}you
+Dialogue: 0,0:02:17.20,0:02:20.18,Karaoke,,0,0,0,,{\k80}{\kf22}When {\kf18}you {\k15}{\kf45}dance, {\kf76}dance, {\k10}{\kf12}dance
+Dialogue: 0,0:02:19.18,0:02:22.44,Karaoke,,0,0,0,,{\k80}{\kf32}Feeling {\k38}{\kf12}good, {\kf36}good, {\kf20}creeping {\k33}{\kf11}up {\kf22}on {\kf22}you
+Dialogue: 0,0:02:21.44,0:02:24.38,Karaoke,,0,0,0,,{\k80}{\kf22}So {\kf22}just {\k14}{\kf41}dance, {\k49}{\kf16}dance, {\kf30}dance
+Dialogue: 0,0:02:23.38,0:02:24.72,Karaoke,,0,0,0,,{\k80}{\kf20}Come {\kf14}on
+Dialogue: 0,0:02:23.92,0:02:26.66,Karaoke,,0,0,0,,{\k80}{\kf28}All {\kf22}those {\kf24}things {\kf24}I {\kf48}shouldn't {\kf28}do
+Dialogue: 0,0:02:25.66,0:02:29.24,Karaoke,,0,0,0,,{\k80}{\kf24}But {\kf18}you {\kf60}dance, {\k42}{\kf14}dance, {\k33}{\kf11}dance {\kf56}No, {\kf10}no, {\kf10}no
+Dialogue: 0,0:02:27.37,0:02:30.90,Karaoke,,0,0,0,,{\k80}{\kf65}And {\k3}{\kf41}ain't {\kf48}nobody {\kf58}leaving {\kf38}soon
+Dialogue: 0,0:02:29.94,0:02:32.02,Karaoke,,0,0,0,,{\k80}{\kf14}So {\kf30}keep {\kf64}dancing
+Dialogue: 0,0:02:31.02,0:02:35.18,Karaoke,,0,0,0,,{\k80}{\kf72}I {\kf24}can't {\kf24}stop {\kf22}the {\kf174}feeling
+Dialogue: 0,0:02:34.28,0:02:37.32,Karaoke,,0,0,0,,{\k80}{\kf10}So {\kf26}just {\k17}{\kf53}dance, {\k13}{\kf39}dance, {\k11}{\kf34}dance
+Dialogue: 0,0:02:35.72,0:02:39.33,Karaoke,,0,0,0,,{\k80}{\kf22}I {\kf38}can't {\kf22}stop {\kf10}the {\kf169}feeling
+Dialogue: 0,0:02:38.43,0:02:41.18,Karaoke,,0,0,0,,{\k80}{\kf19}So {\kf26}just {\k49}{\kf16}dance, {\k32}{\kf11}dance, {\k6}{\kf16}dance
+Dialogue: 0,0:02:40.18,0:02:43.40,Karaoke,,0,0,0,,{\k80}{\kf12}I {\kf36}can't {\kf10}stop {\kf16}the {\k41}{\kf109}feeling
+Dialogue: 0,0:02:42.70,0:02:45.46,Karaoke,,0,0,0,,{\k80}{\kf18}So {\kf22}just {\k41}{\kf14}dance, {\k18}{\kf53}dance, {\kf10}dance
+Dialogue: 0,0:02:44.22,0:02:46.66,Karaoke,,0,0,0,,{\k80}{\kf22}I {\kf32}can't {\kf18}stop {\kf22}the {\kf50}feeling
+Dialogue: 0,0:02:45.60,0:02:50.26,Karaoke,,0,0,0,,{\k80}{\kf150}So {\k2}{\kf24}keep {\kf118}dancing, {\k10}{\kf38}come {\kf24}on
+Dialogue: 0,0:02:53.18,0:02:55.68,Karaoke,,0,0,0,,{\k80}{\kf150}Oh
+Dialogue: 0,0:02:53.17,0:02:55.67,Karaoke,,0,0,0,,{\k80}{\kf150}Yeah
+Dialogue: 0,0:02:57.04,0:02:59.11,Karaoke,,0,0,0,,{\k80}{\kf14}I {\kf28}can't {\kf26}stop {\kf38}the-
+Dialogue: 0,0:03:01.27,0:03:03.61,Karaoke,,0,0,0,,{\k80}{\kf11}I {\k18}{\kf14}can't {\kf28}stop {\k16}{\kf47}the-
+Dialogue: 0,0:03:05.51,0:03:07.61,Karaoke,,0,0,0,,{\k80}{\kf19}I {\kf26}can't {\kf30}stop {\kf34}the-
+Dialogue: 0,0:03:06.61,0:03:08.67,Karaoke,,0,0,0,,{\k80}{\kf16}I {\kf26}can't {\kf24}stop {\k10}{\kf30}the-
+Dialogue: 0,0:03:07.67,0:03:09.65,Karaoke,,0,0,0,,{\k80}{\kf14}I {\kf30}can't {\kf22}stop {\kf20}the {\kf12}feeling
+Dialogue: 0,0:03:08.65,0:03:11.31,Karaoke,,0,0,0,,{\k80}{\kf24}Nothing {\kf40}I {\kf18}can {\kf32}see {\kf26}but {\kf26}you
+Dialogue: 0,0:03:10.31,0:03:12.77,Karaoke,,0,0,0,,{\k80}{\kf24}When {\kf16}you {\k15}{\kf44}dance, {\kf24}dance, {\kf24}dance
+Dialogue: 0,0:03:12.33,0:03:15.55,Karaoke,,0,0,0,,{\k80}{\kf28}Feeling {\kf34}good, {\kf27}good, {\k3}{\kf38}creeping {\k34}{\kf12}up {\kf26}on {\kf20}you
+Dialogue: 0,0:03:14.55,0:03:17.53,Karaoke,,0,0,0,,{\k80}{\kf20}So {\kf22}just {\k16}{\kf48}dance, {\k42}{\kf22}dance, {\k22}{\kf10}dance
+Dialogue: 0,0:03:16.53,0:03:17.87,Karaoke,,0,0,0,,{\k80}{\kf18}Come {\kf16}on
+Dialogue: 0,0:03:16.87,0:03:19.77,Karaoke,,0,0,0,,{\k80}{\kf44}All {\kf24}those {\kf22}things {\kf24}I {\kf50}shouldn't {\kf26}do
+Dialogue: 0,0:03:18.77,0:03:21.77,Karaoke,,0,0,0,,{\k80}{\kf22}But {\kf22}you {\kf60}dance, {\k43}{\kf11}dance, {\k31}{\kf10}dance
+Dialogue: 0,0:03:20.77,0:03:24.07,Karaoke,,0,0,0,,{\k80}{\kf36}And {\kf34}ain't {\k15}{\kf47}nobody {\kf56}leaving {\k4}{\kf38}soon
+Dialogue: 0,0:03:23.07,0:03:25.21,Karaoke,,0,0,0,,{\k80}{\kf18}So {\kf24}keep {\k18}{\kf54}dancing
+Dialogue: 0,0:03:24.26,0:03:26.89,Karaoke,,0,0,0,,{\k80}{\kf115}Everybody {\kf48}sing
+Dialogue: 0,0:03:25.89,0:03:29.79,Karaoke,,0,0,0,,{\k80}{\kf40}Got {\kf36}this {\k12}{\kf34}feeling {\k11}{\kf31}in {\kf20}my {\k40}{\kf66}body
+Dialogue: 0,0:03:28.79,0:03:33.91,Karaoke,,0,0,0,,{\k80}{\kf185}Got {\k10}{\kf15}this {\k15}{\kf25}feeling {\k23}{\kf21}in {\k4}{\kf92}my {\k10}{\kf12}body
+Dialogue: 0,0:03:32.91,0:03:39.12,Karaoke,,0,0,0,,{\k80}{\kf182}Wanna {\k10}{\kf58}see {\kf32}you {\kf32}move {\kf62}your {\k10}{\kf135}body
+Dialogue: 0,0:03:38.22,0:03:42.88,Karaoke,,0,0,0,,{\k80}{\kf84}Got {\kf40}this {\k10}{\kf30}feeling {\k10}{\kf30}in {\kf20}my {\k89}{\kf53}body
+Dialogue: 0,0:03:42.09,0:03:43.98,Karaoke,,0,0,0,,{\k80}{\kf38}Break {\kf16}it {\kf34}down
+Dialogue: 0,0:03:42.98,0:03:46.94,Karaoke,,0,0,0,,{\k80}{\kf36}Got {\kf32}this {\k38}{\kf12}feeling {\kf34}in {\kf88}my {\k10}{\kf46}body
+Dialogue: 0,0:03:45.94,0:03:48.16,Karaoke,,0,0,0,,{\k80}{\kf42}Can't {\kf30}stop {\kf34}the {\kf16}feeling
+Dialogue: 0,0:03:47.16,0:03:50.88,Karaoke,,0,0,0,,{\k80}{\kf42}Got {\kf34}this {\k36}{\kf12}feeling {\kf36}in {\kf91}my {\k10}{\kf11}body
+Dialogue: 0,0:03:50.12,0:03:52.38,Karaoke,,0,0,0,,{\k80}{\kf44}Can't {\kf32}stop {\kf34}the {\kf16}feeling
+Dialogue: 0,0:03:51.38,0:03:55.56,Karaoke,,0,0,0,,{\k80}{\kf42}Got {\kf36}this {\k33}{\kf11}feeling {\k30}{\kf10}in {\kf129}my {\k10}{\kf17}body
+Dialogue: 0,0:03:54.56,0:03:57.44,Karaoke,,0,0,0,,{\k80}{\kf48}Come {\kf38}on {\kf103}Oh
+Dialogue: 0,0:04:02.45,0:04:05.31,Karaoke,,0,0,0,,{\k80}{\kf36}Oh {\kf150}yeah
+Dialogue: 0,0:04:04.79,0:04:08.89,Karaoke,,0,0,0,,{\k80}{\kf150}I {\k26}{\kf34}can't {\kf32}stop {\kf68}the-
+Dialogue: 0,0:04:10.95,0:04:12.33,Karaoke,,0,0,0,,{\k80}{\kf37}Oh
+Dialogue: 0,0:04:11.33,0:04:13.83,Karaoke,,0,0,0,,{\k80}{\kf150}Yeah
+Dialogue: 0,0:04:19.60,0:04:22.10,Karaoke,,0,0,0,,{\k80}{\kf150}Oh
+Dialogue: 0,0:04:19.83,0:04:22.33,Karaoke,,0,0,0,,{\k80}{\kf150}Yeah
+Dialogue: 0,0:04:23.50,0:04:25.71,Karaoke,,0,0,0,,{\k80}{\kf13}I {\kf30}can't {\kf26}stop {\kf52}the-
+Dialogue: 0,0:04:24.81,0:04:28.91,Karaoke,,0,0,0,,{\k80}{\kf19}Got {\k12}{\kf38}this {\k12}{\kf38}feeling {\kf34}in {\k4}{\kf18}my {\k7}{\kf128}body
+Dialogue: 0,0:04:28.01,0:04:30.99,Karaoke,,0,0,0,,{\k80}{\kf21}Oh {\kf32}Got {\kf114}the {\kf30}feeling
+Dialogue: 0,0:04:29.99,0:04:32.45,Karaoke,,0,0,0,,{\k80}{\kf15}Got {\kf15}this {\kf15}feeling {\kf15}in {\kf20}my {\k17}{\kf50}body
+Dialogue: 0,0:04:31.55,0:04:34.35,Karaoke,,0,0,0,,{\k80}{\kf90}Got {\kf46}the {\k11}{\kf33}feeling
+Dialogue: 0,0:04:33.35,0:04:37.36,Karaoke,,0,0,0,,{\k80}{\kf34}Got {\kf30}this {\k38}{\kf12}feeling {\kf34}in {\kf70}my {\k10}{\kf73}body
+Dialogue: 0,0:04:36.46,0:04:37.75,Karaoke,,0,0,0,,{\k80}{\kf28}Oh
+Dialogue: 0,0:04:38.70,0:04:39.96,Karaoke,,0,0,0,,{\k80}{\kf13}Yeah, {\kf13}yeah
+Dialogue: 0,0:04:40.65,0:04:42.01,Karaoke,,0,0,0,,{\k80}{\kf13}Come {\kf22}on

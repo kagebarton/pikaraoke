@@ -1424,7 +1424,9 @@ call adds).
   `~/probes/backing_vocal_lines_phase2` and `~/probes/backing_vocal_lines_gateb_fix` and the
   worktree `.claude/worktrees/bvl_phase2_before` are still in place. Their run logs are
   copied to `plans/backing-vocal-lines/probes/{phase2_logs,gateb_fix_logs}` (11-16, so the
-  archive tag carries them); the audio, per-song `.ass`/`.srt` and bundles stay local only.
+  archive tag carries them), and the 16 before/after `.ass` sheets of the 8 listening spots
+  to `plans/backing-vocal-lines/probes/phase2_listening`; the audio, the other per-song
+  `.ass`/`.srt` and the bundles stay local only.
 
 ## Phase 0 record
 

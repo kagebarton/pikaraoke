@@ -1,0 +1,77 @@
+[Script Info]
+Title: Karaoke Subtitles
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+Timer: 100.0000
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Karaoke,Arial,60,&H00D7FF&,&H00FFFFFF,&H00000000,&H80000000&,0,0,0,0,100,100,0,0,1,3,2,2,50,50,150,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:12.89,0:00:15.28,Karaoke,,0,0,0,,{\k80}{\kf139}Oh-oh-oh
+Dialogue: 0,0:00:14.28,0:00:16.89,Karaoke,,0,0,0,,{\k80}{\kf161}Oh-oh-oh-oh
+Dialogue: 0,0:00:17.09,0:00:20.73,Karaoke,,0,0,0,,{\k80}{\kf56}Lying {\k12}{\kf38}in {\kf36}your {\k46}{\kf76}arms
+Dialogue: 0,0:00:20.35,0:00:23.32,Karaoke,,0,0,0,,{\k80}{\kf11}So {\k5}{\kf49}close {\k32}{\kf99}together
+Dialogue: 0,0:00:22.64,0:00:27.42,Karaoke,,0,0,0,,{\k80}{\kf64}Didn't {\kf38}know {\kf28}just {\k50}{\kf16}what {\k36}{\kf12}I {\kf134}had
+Dialogue: 0,0:00:28.00,0:00:31.31,Karaoke,,0,0,0,,{\k80}{\kf49}Now {\kf36}I {\kf36}toss {\kf42}and {\k17}{\kf51}turn
+Dialogue: 0,0:00:31.25,0:00:34.21,Karaoke,,0,0,0,,{\k80}{\kf32}'Cause {\k17}{\kf51}I'm {\kf34}without {\k16}{\kf46}you
+Dialogue: 0,0:00:33.31,0:00:38.47,Karaoke,,0,0,0,,{\k80}{\kf73}How {\kf36}I'm {\kf48}missing {\k48}{\kf16}you {\k12}{\kf38}so {\k13}{\kf131}bad
+Dialogue: 0,0:00:38.85,0:00:42.40,Karaoke,,0,0,0,,{\k80}{\kf21}Where {\k8}{\kf74}was {\kf36}my {\kf116}head?
+Dialogue: 0,0:00:41.22,0:00:44.95,Karaoke,,0,0,0,,{\k80}{\kf62}Where {\kf80}was {\kf30}my {\kf100}heart?
+Dialogue: 0,0:00:45.00,0:00:50.97,Karaoke,,0,0,0,,{\k80}{\kf16}Now {\k39}{\kf13}I {\kf56}cry {\kf148}alone {\k12}{\kf36}in {\kf26}the {\k38}{\kf112}dark
+Dialogue: 0,0:00:49.97,0:00:53.31,Karaoke,,0,0,0,,{\k80}{\kf90}I {\kf44}lie {\k38}{\kf62}awake
+Dialogue: 0,0:00:52.74,0:00:56.17,Karaoke,,0,0,0,,{\k80}{\kf15}I {\kf44}drive {\k39}{\kf85}myself {\k10}{\kf49}crazy
+Dialogue: 0,0:00:55.17,0:00:59.21,Karaoke,,0,0,0,,{\k80}{\kf88}Drive {\k32}{\kf108}myself {\k10}{\kf66}crazy
+Dialogue: 0,0:00:58.31,0:01:01.41,Karaoke,,0,0,0,,{\k80}{\kf64}Thinking {\k17}{\kf51}of {\kf78}you
+Dialogue: 0,0:01:00.41,0:01:03.91,Karaoke,,0,0,0,,{\k80}{\kf150}Made {\k12}{\kf30}a {\k15}{\kf43}mistake
+Dialogue: 0,0:01:02.91,0:01:07.19,Karaoke,,0,0,0,,{\k80}{\kf84}When {\kf24}I {\kf38}let {\kf30}you {\k16}{\kf47}go {\kf90}baby
+Dialogue: 0,0:01:06.32,0:01:09.43,Karaoke,,0,0,0,,{\k80}{\kf39}I {\k11}{\kf31}drive {\k44}{\kf58}myself {\k10}{\kf18}crazy
+Dialogue: 0,0:01:08.49,0:01:16.57,Karaoke,,0,0,0,,{\k80}{\kf150}Wanting {\k26}{\kf32}you {\kf22}the {\k11}{\kf33}way {\kf48}that {\kf26}I {\kf360}do
+Dialogue: 0,0:01:17.80,0:01:20.81,Karaoke,,0,0,0,,{\k80}{\kf23}I {\kf54}was {\kf48}such {\k11}{\kf33}a {\kf32}fool
+Dialogue: 0,0:01:19.71,0:01:24.07,Karaoke,,0,0,0,,{\k80}{\kf140}I {\k20}{\kf58}couldn't {\k10}{\kf30}see {\kf78}it
+Dialogue: 0,0:01:23.37,0:01:28.15,Karaoke,,0,0,0,,{\k80}{\kf29}Just {\kf38}how {\kf22}good {\k10}{\kf32}you {\kf62}were {\kf34}to {\kf150}me
+Dialogue: 0,0:01:27.23,0:01:32.87,Karaoke,,0,0,0,,{\k80}{\kf142}You {\k42}{\kf70}confessed {\k33}{\kf11}your {\kf166}love
+Dialogue: 0,0:01:31.97,0:01:34.82,Karaoke,,0,0,0,,{\k80}{\kf64}Undying {\kf121}devotion
+Dialogue: 0,0:01:33.92,0:01:38.91,Karaoke,,0,0,0,,{\k80}{\kf75}I {\kf52}confessed {\k11}{\kf34}my {\kf38}need {\kf34}to {\kf34}be {\kf120}free
+Dialogue: 0,0:01:38.01,0:01:42.60,Karaoke,,0,0,0,,{\k80}{\kf150}And {\k31}{\kf60}now {\k34}{\kf11}I'm {\kf72}left
+Dialogue: 0,0:01:41.60,0:01:46.22,Karaoke,,0,0,0,,{\k80}{\kf108}With {\k13}{\kf41}all {\k11}{\kf31}this {\k91}{\kf66}pain
+Dialogue: 0,0:01:45.32,0:01:51.40,Karaoke,,0,0,0,,{\k80}{\kf20}I've {\k30}{\kf50}only {\kf64}got {\kf134}myself {\k19}{\kf57}to {\kf94}blame, {\k14}{\kf26}no
+Dialogue: 0,0:01:50.41,0:01:53.63,Karaoke,,0,0,0,,{\k80}{\kf110}I {\kf44}lie {\kf68}awake
+Dialogue: 0,0:01:52.63,0:01:56.85,Karaoke,,0,0,0,,{\k80}{\kf92}I {\kf111}drive {\k10}{\kf87}myself {\k10}{\kf12}crazy
+Dialogue: 0,0:01:55.85,0:01:59.75,Karaoke,,0,0,0,,{\k80}{\kf84}Drive {\k32}{\kf149}myself {\k10}{\kf15}crazy
+Dialogue: 0,0:01:58.85,0:02:02.19,Karaoke,,0,0,0,,{\k80}{\kf72}Thinking {\k15}{\kf45}of {\k38}{\kf64}you
+Dialogue: 0,0:02:01.19,0:02:04.69,Karaoke,,0,0,0,,{\k80}{\kf142}Made {\kf40}a {\k17}{\kf51}mistake
+Dialogue: 0,0:02:03.65,0:02:07.38,Karaoke,,0,0,0,,{\k80}{\kf25}When {\kf38}I {\kf61}let {\k10}{\kf31}you {\k15}{\kf45}go {\kf48}baby
+Dialogue: 0,0:02:06.39,0:02:10.82,Karaoke,,0,0,0,,{\k80}{\kf94}I {\kf38}drive {\k31}{\kf155}myself {\k10}{\kf16}crazy
+Dialogue: 0,0:02:09.82,0:02:17.44,Karaoke,,0,0,0,,{\k80}{\kf108}Wanting {\kf48}you {\kf22}the {\kf42}way {\kf36}that {\kf32}I {\kf374}do
+Dialogue: 0,0:02:19.04,0:02:25.68,Karaoke,,0,0,0,,{\k80}{\kf29}Why {\k38}{\kf128}didn't {\kf18}I {\kf30}know {\kf320}it?
+Dialogue: 0,0:02:24.78,0:02:29.58,Karaoke,,0,0,0,,{\k80}{\kf115}Why {\k10}{\kf45}couldn't {\kf18}I {\kf38}show {\kf155}it?
+Dialogue: 0,0:02:28.68,0:02:32.55,Karaoke,,0,0,0,,{\k80}{\kf43}When {\kf46}I {\kf70}had {\kf79}the {\k10}{\kf39}chance
+Dialogue: 0,0:02:31.55,0:02:38.84,Karaoke,,0,0,0,,{\k80}{\kf150}Oh, {\kf26}I {\k210}{\kf12}had {\kf40}the {\k150}{\kf42}chance
+Dialogue: 0,0:02:43.37,0:02:46.54,Karaoke,,0,0,0,,{\k80}{\kf115}Oh-oh, {\kf14}oh, {\kf46}oh, {\kf42}oh
+Dialogue: 0,0:02:45.50,0:02:48.62,Karaoke,,0,0,0,,{\k80}{\kf211}La-la-la-la-la-la
+Dialogue: 0,0:02:47.71,0:02:50.83,Karaoke,,0,0,0,,{\k80}{\kf212}La-la-la-la
+Dialogue: 0,0:02:49.93,0:02:52.50,Karaoke,,0,0,0,,{\k80}{\kf25}I {\kf24}drive {\kf80}myself {\k10}{\kf18}crazy
+Dialogue: 0,0:02:51.50,0:02:57.87,Karaoke,,0,0,0,,{\k80}{\kf258}Oh, {\k10}{\kf210}so {\k10}{\kf48}crazy
+Dialogue: 0,0:02:57.04,0:02:59.25,Karaoke,,0,0,0,,{\k80}{\kf121}La-la-la-la
+Dialogue: 0,0:02:58.37,0:03:03.46,Karaoke,,0,0,0,,{\k80}{\kf150}Oh, {\kf147}oh, {\k10}{\kf45}oh, {\kf58}oh
+Dialogue: 0,0:03:02.89,0:03:05.72,Karaoke,,0,0,0,,{\k80}{\kf27}I {\kf50}lie {\kf105}awake
+Dialogue: 0,0:03:05.10,0:03:08.84,Karaoke,,0,0,0,,{\k80}{\kf12}I {\kf44}drive {\k15}{\kf115}myself {\k10}{\kf77}crazy
+Dialogue: 0,0:03:08.28,0:03:11.55,Karaoke,,0,0,0,,{\k80}{\kf10}Drive {\k42}{\kf114}myself {\k10}{\kf50}crazy
+Dialogue: 0,0:03:10.87,0:03:13.88,Karaoke,,0,0,0,,{\k80}{\kf45}Thinking {\k14}{\kf41}of {\k38}{\kf64}you
+Dialogue: 0,0:03:12.88,0:03:16.32,Karaoke,,0,0,0,,{\k80}{\kf146}Made {\kf36}a {\kf62}mistake
+Dialogue: 0,0:03:15.32,0:03:19.59,Karaoke,,0,0,0,,{\k80}{\kf132}Let {\kf42}you {\k12}{\kf36}go {\kf104}baby
+Dialogue: 0,0:03:18.59,0:03:22.31,Karaoke,,0,0,0,,{\k80}{\kf54}I {\kf38}drive {\k18}{\kf72}myself {\k37}{\kf54}crazy
+Dialogue: 0,0:03:21.40,0:03:25.76,Karaoke,,0,0,0,,{\k80}{\kf120}Wanting {\kf30}you {\kf42}the {\kf28}way {\kf48}that {\kf28}I {\k10}{\kf30}do
+Dialogue: 0,0:03:24.90,0:03:27.54,Karaoke,,0,0,0,,{\k80}{\kf39}I {\kf46}lie {\kf80}awake
+Dialogue: 0,0:03:26.54,0:03:30.78,Karaoke,,0,0,0,,{\k80}{\kf92}I {\kf95}drive {\k10}{\kf11}myself {\k44}{\kf72}crazy
+Dialogue: 0,0:03:29.78,0:03:33.77,Karaoke,,0,0,0,,{\k80}{\kf64}Drive {\kf150}myself {\k10}{\kf75}crazy
+Dialogue: 0,0:03:36.02,0:03:38.97,Karaoke,,0,0,0,,{\k80}{\kf38}Made {\kf34}a {\kf123}mistake
+Dialogue: 0,0:03:38.07,0:03:41.40,Karaoke,,0,0,0,,{\k80}{\kf68}Let {\kf42}you {\k34}{\kf60}go {\k10}{\kf19}baby
+Dialogue: 0,0:03:40.52,0:03:44.52,Karaoke,,0,0,0,,{\k80}{\kf79}I {\kf34}drive {\k23}{\kf59}myself {\k78}{\kf27}crazy
+Dialogue: 0,0:03:43.62,0:03:47.76,Karaoke,,0,0,0,,{\k80}{\kf103}Wanting {\kf32}you {\k3}{\kf33}the {\k12}{\kf22}way {\k10}{\kf34}that {\k16}{\kf10}I {\kf40}do
+Dialogue: 0,0:03:46.76,0:03:50.28,Karaoke,,0,0,0,,{\k80}{\kf20}I {\kf88}drive {\k10}{\kf109}myself {\k10}{\kf16}crazy
+Dialogue: 0,0:03:49.28,0:04:01.42,Karaoke,,0,0,0,,{\k80}{\kf120}Wanting {\k34}{\kf12}you {\kf78}the {\k10}{\kf18}way {\k10}{\kf115}that {\k10}{\kf54}I {\k10}{\kf643}do

@@ -1,0 +1,60 @@
+[Script Info]
+Title: Karaoke Subtitles
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+Timer: 100.0000
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Karaoke,Arial,60,&H00D7FF&,&H00FFFFFF,&H00000000,&H80000000&,0,0,0,0,100,100,0,0,1,3,2,2,50,50,150,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:03.61,Karaoke,,0,0,0,,{\k73}{\kf12}Wait {\kf12}a {\kf14}minute {\kf24}this {\kf24}love {\kf32}started {\kf20}out {\kf22}so {\kf52}tender, {\k4}{\kf12}so {\k10}{\kf30}sweet
+Dialogue: 0,0:00:03.25,0:00:05.25,Karaoke,,0,0,0,,{\k80}{\kf16}But {\kf20}now {\kf18}she {\kf24}got {\kf22}me
+Dialogue: 0,0:00:04.25,0:00:07.53,Karaoke,,0,0,0,,{\k80}{\kf80}Smokin {\kf40}out {\kf28}the {\k10}{\kf70}window
+Dialogue: 0,0:00:06.53,0:00:16.13,Karaoke,,0,0,0,,{\k80}{\kf274}Must {\k10}{\kf150}have {\k48}{\kf36}spent {\kf76}35, {\k12}{\kf102}$45,000 {\kf24}up {\kf16}in {\kf112}tiffany's
+Dialogue: 0,0:00:15.13,0:00:23.24,Karaoke,,0,0,0,,{\k80}{\kf150}Got {\k4}{\kf20}her {\kf44}bad {\k18}{\kf46}kids {\kf40}runnin {\kf18}round {\kf18}my {\kf22}whole {\kf42}crib {\kf30}like {\kf18}it's {\kf16}chuck {\kf14}e {\kf212}cheese
+Dialogue: 0,0:00:22.34,0:00:27.28,Karaoke,,0,0,0,,{\k80}{\kf10}Put {\kf28}me {\kf22}in {\k2}{\kf10}a {\kf36}jam {\kf28}with {\kf16}her {\kf64}ex-man {\kf30}in {\kf20}the {\kf128}ufc
+Dialogue: 0,0:00:26.28,0:00:29.58,Karaoke,,0,0,0,,{\k80}{\kf130}Can't {\kf38}believe {\k46}{\kf16}it
+Dialogue: 0,0:00:28.58,0:00:31.78,Karaoke,,0,0,0,,{\k80}{\kf140}I'm {\kf12}in {\kf68}disbelief
+Dialogue: 0,0:00:30.78,0:00:36.77,Karaoke,,0,0,0,,{\k80}{\kf112}This {\k54}{\kf70}got {\kf36}me {\kf66}payin {\kf18}her {\kf30}rent, {\k38}{\kf18}payin {\kf12}for {\kf45}trips,
+Dialogue: 0,0:00:36.04,0:00:39.08,Karaoke,,0,0,0,,{\k80}{\kf28}Diamonds {\kf22}on {\kf14}her {\kf40}neck, {\k22}{\kf10}diamonds {\kf24}on {\kf18}her {\kf26}wrists
+Dialogue: 0,0:00:38.27,0:00:41.30,Karaoke,,0,0,0,,{\k80}{\kf21}And {\kf24}here {\kf16}I {\kf22}am {\kf66}all {\k10}{\kf43}alone
+Dialogue: 0,0:00:41.96,0:00:46.40,Karaoke,,0,0,0,,{\k80}{\kf13}I'm {\kf18}so {\k13}{\kf39}cold, {\kf10}I'm {\kf14}so {\kf35}cold, {\k29}{\kf10}you {\kf32}got {\kf36}me {\k10}{\kf31}out {\kf58}here
+Dialogue: 0,0:00:45.50,0:00:48.44,Karaoke,,0,0,0,,{\k80}{\kf52}Smokin {\kf40}out {\kf73}the {\k10}{\kf18}window
+Dialogue: 0,0:00:47.44,0:00:55.10,Karaoke,,0,0,0,,{\k80}{\kf314}Singing {\k10}{\kf60}how {\k28}{\kf56}could {\kf42}she {\kf44}do {\kf38}this {\kf28}to {\k34}{\kf12}me
+Dialogue: 0,0:00:54.10,0:01:02.14,Karaoke,,0,0,0,,{\k80}{\kf150}Oh {\k102}{\kf26}I {\k13}{\kf39}thought {\kf36}that {\kf42}girl {\kf90}belonged {\kf38}to {\k31}{\kf52}only {\k11}{\kf73}me
+Dialogue: 0,0:01:01.14,0:01:05.88,Karaoke,,0,0,0,,{\k80}{\kf104}But {\kf24}I {\kf50}was {\kf196}wrong
+Dialogue: 0,0:01:04.98,0:01:14.02,Karaoke,,0,0,0,,{\k80}{\kf10}Cuz {\kf34}she {\kf175}belong {\k10}{\kf95}to {\kf292}everybody, {\k56}{\kf132}everybody
+Dialogue: 0,0:01:13.14,0:01:18.84,Karaoke,,0,0,0,,{\k80}{\kf214}Just {\k10}{\kf41}the {\kf26}other {\kf36}night {\kf24}she {\kf20}was {\kf38}grippin {\kf22}on {\kf14}me {\kf26}tight
+Dialogue: 0,0:01:18.05,0:01:20.67,Karaoke,,0,0,0,,{\k80}{\kf30}Screamin {\kf132}hercules
+Dialogue: 0,0:01:19.67,0:01:26.77,Karaoke,,0,0,0,,{\k80}{\kf88}Got {\k89}{\kf20}me {\kf24}in {\kf10}the {\kf38}club {\kf26}looking {\kf28}for {\kf20}a {\kf24}new {\kf44}love {\kf28}someone {\kf32}help {\kf16}me {\kf124}please
+Dialogue: 0,0:01:27.11,0:01:33.01,Karaoke,,0,0,0,,{\k80}{\kf14}Baby {\kf40}why {\kf14}you {\kf34}doin {\kf66}this, {\kf34}why {\kf14}you {\k12}{\kf38}doin {\kf38}this {\kf97}to {\k10}{\kf12}me, {\k9}{\kf58}girl
+Dialogue: 0,0:01:32.01,0:01:36.65,Karaoke,,0,0,0,,{\k80}{\kf112}Not {\kf16}to {\kf20}be {\k12}{\kf38}dramatic {\kf38}but {\kf12}I {\kf38}wanna {\k14}{\kf64}die
+Dialogue: 0,0:01:35.75,0:01:41.19,Karaoke,,0,0,0,,{\k80}{\kf54}This {\k62}{\kf64}got {\k30}{\kf10}me {\kf48}paying {\kf28}her {\kf38}rent, {\k14}{\kf24}paying {\kf26}for {\kf46}trips,
+Dialogue: 0,0:01:40.43,0:01:43.51,Karaoke,,0,0,0,,{\k80}{\kf28}Diamonds {\kf24}on {\kf12}her {\kf38}neck, {\k2}{\kf28}diamonds {\kf28}on {\kf14}her {\kf34}wrists
+Dialogue: 0,0:01:42.51,0:01:45.65,Karaoke,,0,0,0,,{\k80}{\kf28}And {\kf28}here {\kf22}I {\kf20}am {\kf59}all {\k10}{\kf47}alone.
+Dialogue: 0,0:01:46.35,0:01:48.93,Karaoke,,0,0,0,,{\k80}{\kf12}I'm {\kf16}so {\k12}{\kf38}cold, {\kf12}I'm {\kf16}so {\k39}{\kf13}cold.
+Dialogue: 0,0:01:47.42,0:01:50.59,Karaoke,,0,0,0,,{\k80}{\kf63}You {\kf40}got {\k33}{\kf11}me {\kf28}out {\kf42}here
+Dialogue: 0,0:01:49.59,0:01:55.06,Karaoke,,0,0,0,,{\k80}{\kf90}Smokin {\kf32}out {\kf22}the {\kf303}window
+Dialogue: 0,0:01:54.16,0:02:00.98,Karaoke,,0,0,0,,{\k80}{\kf112}Singin {\kf68}how {\kf64}could {\kf34}she {\k11}{\kf34}do {\kf44}this {\kf22}to {\k12}{\kf180}me
+Dialogue: 0,0:02:00.08,0:02:07.20,Karaoke,,0,0,0,,{\k80}{\kf81}Oh {\kf40}I {\kf48}thought {\kf38}that {\kf46}girl {\kf66}belonged {\k44}{\kf14}to {\kf99}only {\k10}{\kf126}me
+Dialogue: 0,0:02:06.30,0:02:09.98,Karaoke,,0,0,0,,{\k80}{\kf38}But {\kf14}I {\k38}{\kf12}was {\k114}{\kf52}wrong
+Dialogue: 0,0:02:08.98,0:02:15.52,Karaoke,,0,0,0,,{\k80}{\kf60}Cause {\kf22}she {\kf52}belong {\kf222}to {\k10}{\kf188}everybody,
+Dialogue: 0,0:02:14.62,0:02:20.44,Karaoke,,0,0,0,,{\k80}{\kf483}Everybody
+Dialogue: 0,0:02:20.24,0:02:22.67,Karaoke,,0,0,0,,{\k80}{\kf14}Oh {\k30}{\kf98}no
+Dialogue: 0,0:02:21.77,0:02:26.03,Karaoke,,0,0,0,,{\k80}{\kf60}Look {\kf24}here {\kf24}baby {\kf14}I {\kf20}hope {\kf14}you {\kf32}find {\kf30}whatever {\kf18}it {\kf20}is {\kf16}that {\kf16}you {\kf38}need
+Dialogue: 0,0:02:26.16,0:02:29.28,Karaoke,,0,0,0,,{\k80}{\kf16}But {\kf12}I {\kf32}also {\kf42}hope {\kf50}that {\kf14}your {\kf46}trifling
+Dialogue: 0,0:02:28.28,0:02:31.75,Karaoke,,0,0,0,,{\k80}{\kf30}Is {\kf34}walking {\kf32}round {\kf44}barefoot {\kf20}in {\kf14}these {\kf36}streets, {\k14}{\kf22}lookout
+Dialogue: 0,0:02:30.75,0:02:36.87,Karaoke,,0,0,0,,{\k80}{\kf102}Girl {\kf30}it {\kf32}breaks {\kf26}my {\kf58}heart {\kf30}that {\kf42}you {\kf30}ain't {\kf26}right {\kf40}here {\kf40}with {\kf56}me
+Dialogue: 0,0:02:35.87,0:02:41.15,Karaoke,,0,0,0,,{\k80}{\kf60}Now {\kf16}I {\kf24}gotta {\kf34}give {\kf12}you {\kf36}back {\kf148}to {\kf20}the {\kf78}city
+Dialogue: 0,0:02:40.15,0:02:43.18,Karaoke,,0,0,0,,{\k80}{\kf100}Oh, {\k38}{\kf10}you {\kf32}got {\kf26}me
+Dialogue: 0,0:02:42.18,0:02:45.62,Karaoke,,0,0,0,,{\k80}{\kf92}Smokin {\kf36}out {\kf96}the {\k10}{\kf10}window
+Dialogue: 0,0:02:44.62,0:02:53.57,Karaoke,,0,0,0,,{\k80}{\kf312}Singing {\k10}{\kf84}how {\k48}{\kf12}could {\kf38}she {\kf44}do {\kf36}this {\kf30}to {\kf181}me
+Dialogue: 0,0:02:53.50,0:02:59.24,Karaoke,,0,0,0,,{\k80}{\kf13}Oh {\kf38}I {\k11}{\kf34}thought {\kf40}that {\kf52}girl {\kf82}belonged {\kf38}to {\k31}{\kf53}only {\k31}{\kf51}me
+Dialogue: 0,0:02:58.37,0:03:01.60,Karaoke,,0,0,0,,{\k80}{\kf89}But {\kf22}I {\kf52}was {\kf60}wrong
+Dialogue: 0,0:03:00.60,0:03:08.03,Karaoke,,0,0,0,,{\k80}{\kf150}Cause {\k8}{\kf28}she {\kf90}belong {\k10}{\kf150}to {\k10}{\kf197}everybody
+Dialogue: 0,0:03:07.12,0:03:09.52,Karaoke,,0,0,0,,{\k80}{\kf36}She {\kf34}belong {\kf10}to {\k16}{\kf48}everybody
+Dialogue: 0,0:03:08.52,0:03:10.82,Karaoke,,0,0,0,,{\k80}{\kf130}Ohh

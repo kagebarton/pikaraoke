@@ -1,0 +1,65 @@
+[Script Info]
+Title: Karaoke Subtitles
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+Timer: 100.0000
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Karaoke,Arial,60,&H00D7FF&,&H00FFFFFF,&H00000000,&H80000000&,0,0,0,0,100,100,0,0,1,3,2,2,50,50,150,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.88,0:00:03.10,Karaoke,,0,0,0,,{\k80}{\kf16}Takedown, {\k28}{\kf78}takedown
+Dialogue: 0,0:00:02.20,0:00:05.88,Karaoke,,0,0,0,,{\k80}{\kf30}Takedown, {\kf13}down, {\kf25}down, {\kf10}down {\k24}{\kf42}(HUNTR/X {\kf34}girls {\kf30}to {\kf18}the {\k11}{\kf34}world)
+Dialogue: 0,0:00:04.88,0:00:06.75,Karaoke,,0,0,0,,{\k80}{\kf22}Takedown, {\kf64}takedown
+Dialogue: 0,0:00:05.75,0:00:07.93,Karaoke,,0,0,0,,{\k80}{\kf10}Takedown, {\kf10}down, {\kf10}down, {\kf10}down {\kf10}(it's {\kf22}a {\kf76}takedown)
+Dialogue: 0,0:00:06.93,0:00:11.41,Karaoke,,0,0,0,,{\k80}{\kf50}So {\kf22}sweet, {\k10}{\kf16}so {\kf20}easy {\kf16}on {\kf10}the {\kf40}eyes, {\kf22}but {\k18}{\kf40}hideous {\kf22}on {\kf10}the {\kf52}inside
+Dialogue: 0,0:00:10.41,0:00:14.75,Karaoke,,0,0,0,,{\k80}{\kf50}Whole {\kf18}life {\kf28}spreadin' {\k18}{\kf30}lies, {\k2}{\kf10}but {\kf10}you {\kf20}can't {\k11}{\kf33}hide, {\kf32}baby, {\k12}{\kf36}nice {\kf30}try
+Dialogue: 0,0:00:13.75,0:00:18.32,Karaoke,,0,0,0,,{\k80}{\kf38}I'm {\kf16}'bout {\kf18}to {\kf28}switch {\kf20}up {\kf22}these {\kf54}vibes, {\kf10}I {\kf34}finally {\kf42}opened {\kf30}my {\k36}{\kf12}eyes
+Dialogue: 0,0:00:17.43,0:00:21.12,Karaoke,,0,0,0,,{\k80}{\kf33}It's {\kf20}time {\kf20}to {\kf20}kick {\kf18}you {\kf24}straight {\kf28}back {\kf34}into {\kf22}the {\kf50}night
+Dialogue: 0,0:00:20.30,0:00:24.42,Karaoke,,0,0,0,,{\k80}{\kf27}'Cause {\kf14}I {\kf24}see {\kf24}your {\kf28}real {\kf58}face, {\k6}{\kf18}and {\kf26}it's {\kf36}ugly {\kf24}as {\kf28}sin
+Dialogue: 0,0:00:23.55,0:00:27.72,Karaoke,,0,0,0,,{\k80}{\kf38}Time {\kf22}to {\kf24}put {\kf20}you {\kf20}in {\kf20}your {\kf36}place {\kf32}'cause {\kf28}you're {\kf24}rotten {\kf54}within
+Dialogue: 0,0:00:27.14,0:00:29.68,Karaoke,,0,0,0,,{\k80}{\kf24}When {\kf22}your {\kf34}patterns {\kf28}start {\kf20}to {\kf26}show
+Dialogue: 0,0:00:28.68,0:00:33.19,Karaoke,,0,0,0,,{\k80}{\kf22}It {\kf20}makes {\kf20}the {\kf38}hatred {\kf30}wanna {\k30}{\kf10}grow {\kf32}outta {\kf30}my {\kf118}veins
+Dialogue: 0,0:00:32.19,0:00:36.82,Karaoke,,0,0,0,,{\k80}{\kf82}I {\kf20}don't {\kf20}think {\kf26}you're {\kf28}ready {\kf30}for {\kf20}the {\kf138}takedown
+Dialogue: 0,0:00:35.82,0:00:41.59,Karaoke,,0,0,0,,{\k80}{\kf58}Break {\kf26}you {\kf28}into {\k10}{\kf30}pieces {\kf36}in {\kf14}a {\kf36}world {\kf18}of {\kf62}pain {\kf42}'cause {\kf26}you're {\kf24}all {\kf14}the {\kf52}same
+Dialogue: 0,0:00:40.66,0:00:43.63,Karaoke,,0,0,0,,{\k80}{\kf37}Yeah, {\k12}{\kf10}it's {\kf10}the {\kf131}takedown
+Dialogue: 0,0:00:42.73,0:00:49.24,Karaoke,,0,0,0,,{\k80}{\kf34}A {\kf28}demon {\kf36}with {\kf20}no {\kf30}feelings {\kf40}don't {\kf24}deserve {\kf38}to {\kf85}live, {\k13}{\kf12}it's {\kf20}so {\kf171}obvious
+Dialogue: 0,0:00:48.34,0:00:53.43,Karaoke,,0,0,0,,{\k80}{\kf14}I'ma {\k17}{\kf23}gear {\k10}{\kf31}up {\kf14}and {\kf24}take {\kf18}you {\k52}{\kf205}down
+Dialogue: 0,0:00:52.53,0:00:54.28,Karaoke,,0,0,0,,{\k80}{\kf19}It's {\kf10}a {\kf48}takedown
+Dialogue: 0,0:00:53.25,0:00:58.29,Karaoke,,0,0,0,,{\k80}{\kf220}I'ma {\k10}{\kf84}take {\k10}{\kf16}it {\k48}{\kf16}down
+Dialogue: 0,0:00:57.29,0:01:01.24,Karaoke,,0,0,0,,{\k80}{\kf233}It's {\k10}{\kf51}a {\kf10}takedown
+Dialogue: 0,0:00:59.32,0:01:04.00,Karaoke,,0,0,0,,{\k80}{\kf21}Take {\kf28}it {\kf319}down
+Dialogue: 0,0:01:03.10,0:01:07.57,Karaoke,,0,0,0,,{\k80}{\kf46}It's {\kf10}a {\k47}{\kf16}takedown, {\k12}{\kf10}I'ma {\kf22}take {\kf18}you {\kf26}out, {\k10}{\kf10}you'll {\kf22}break {\kf36}down {\kf24}like, {\k24}{\kf18}"What?"
+Dialogue: 0,0:01:06.92,0:01:10.87,Karaoke,,0,0,0,,{\k80}{\kf10}It's {\kf10}a {\k34}{\kf11}takedown, {\k25}{\kf12}I'ma {\kf22}take {\kf20}you {\kf30}out, {\k2}{\kf10}and {\kf10}it {\kf24}ain't {\k10}{\kf31}gonna {\kf42}stop
+Dialogue: 0,0:01:10.17,0:01:14.48,Karaoke,,0,0,0,,{\k80}{\kf64}정신을 {\kf40}놓고 {\kf30}널 {\kf56}짓밟고 {\kf38}칼을 {\kf102}새겨놔
+Dialogue: 0,0:01:13.57,0:01:17.64,Karaoke,,0,0,0,,{\k80}{\kf14}You'll {\kf14}be {\kf36}beggin' {\k8}{\kf10}and {\kf40}cryin', {\k6}{\kf12}all {\kf10}of {\kf12}you {\kf30}dyin', {\k16}{\kf26}never {\kf30}miss {\kf28}my {\kf16}shot
+Dialogue: 0,0:01:16.32,0:01:19.41,Karaoke,,0,0,0,,{\k80}{\kf75}When {\kf20}your {\kf38}patterns {\kf30}start {\kf18}to {\kf28}show
+Dialogue: 0,0:01:18.35,0:01:23.08,Karaoke,,0,0,0,,{\k80}{\kf24}It {\kf24}makes {\kf18}the {\kf38}hatred {\kf32}wanna {\k10}{\kf30}grow {\kf30}outta {\kf30}my {\k14}{\kf122}veins
+Dialogue: 0,0:01:22.18,0:01:26.51,Karaoke,,0,0,0,,{\k80}{\kf51}I {\kf24}don't {\kf18}think {\kf26}you're {\kf30}ready {\kf28}for {\kf20}the {\kf136}takedown
+Dialogue: 0,0:01:25.51,0:01:31.54,Karaoke,,0,0,0,,{\k80}{\kf126}당당하게 {\kf50}어둠 {\kf32}엪에 {\kf88}다가서 {\kf64}다 {\kf143}무너뜨려
+Dialogue: 0,0:01:30.64,0:01:33.17,Karaoke,,0,0,0,,{\k80}{\kf12}Yeah, {\k10}{\kf10}it's {\kf10}the {\kf114}takedown
+Dialogue: 0,0:01:32.17,0:01:38.93,Karaoke,,0,0,0,,{\k80}{\kf64}A {\kf28}demon {\kf34}with {\kf16}no {\k26}{\kf10}feelings {\k14}{\kf22}don't {\kf26}deserve {\kf38}to {\kf70}live, {\k26}{\kf14}it's {\kf20}so {\kf168}obvious
+Dialogue: 0,0:01:38.03,0:01:41.34,Karaoke,,0,0,0,,{\k80}{\kf18}I'ma {\kf38}gear {\kf36}up {\kf20}and {\kf26}take {\kf16}you {\k20}{\kf58}down
+Dialogue: 0,0:01:40.34,0:01:46.68,Karaoke,,0,0,0,,{\k80}{\kf198}It's {\k10}{\kf20}a {\kf306}takedown
+Dialogue: 0,0:01:45.78,0:01:49.45,Karaoke,,0,0,0,,{\k80}{\kf16}I'ma {\kf26}take {\kf22}it {\k14}{\kf189}down
+Dialogue: 0,0:01:48.55,0:01:55.46,Karaoke,,0,0,0,,{\k80}{\kf72}It's {\kf22}a {\kf82}takedown {\kf102}(oh, {\kf166}da-da-da, {\k10}{\kf69}down, {\kf69}ooh)
+Dialogue: 0,0:01:54.46,0:01:58.28,Karaoke,,0,0,0,,{\k80}{\kf20}Oh, {\k12}{\kf10}you're {\kf20}the {\k19}{\kf59}master {\k17}{\kf51}of {\k58}{\kf19}illusion
+Dialogue: 0,0:01:57.28,0:02:01.36,Karaoke,,0,0,0,,{\k80}{\kf112}나를 {\kf88}속이려 {\kf108}하지마
+Dialogue: 0,0:02:00.39,0:02:05.73,Karaoke,,0,0,0,,{\k80}{\kf84}Look {\kf28}at {\kf22}all {\kf16}the {\kf78}masses {\kf64}that {\k11}{\kf33}you're {\kf98}foolin'
+Dialogue: 0,0:02:04.73,0:02:08.80,Karaoke,,0,0,0,,{\k80}{\kf34}But {\kf24}they'll {\kf44}turn {\kf26}on {\kf16}you {\kf44}soon, {\k16}{\kf24}so {\k30}{\kf50}how?
+Dialogue: 0,0:02:07.92,0:02:12.00,Karaoke,,0,0,0,,{\k80}{\kf20}How {\kf32}can {\kf22}you {\kf52}sleep {\kf40}or {\kf32}live {\kf30}with {\k30}{\kf50}yourself?
+Dialogue: 0,0:02:11.12,0:02:15.67,Karaoke,,0,0,0,,{\k80}{\kf20}A {\kf42}broken {\kf38}soul {\kf40}trapped {\kf30}in {\kf20}the {\kf82}nastiest {\kf83}shell
+Dialogue: 0,0:02:14.77,0:02:23.66,Karaoke,,0,0,0,,{\k80}{\kf65}용혼 {\kf44}없는 {\k42}{\kf16}네 {\kf138}목숨을 {\k41}{\kf99}근어러 {\kf68}and {\kf62}watch {\k8}{\kf16}you {\kf190}die-ie-ie
+Dialogue: 0,0:02:22.76,0:02:26.38,Karaoke,,0,0,0,,{\k80}{\kf116}You {\k10}{\kf10}can {\kf34}try, {\k4}{\kf10}but {\kf14}you {\kf26}can't {\kf38}hide
+Dialogue: 0,0:02:25.38,0:02:29.82,Karaoke,,0,0,0,,{\k80}{\kf48}It's {\kf10}a {\kf65}takedown, {\k3}{\kf12}I'ma {\kf20}take {\kf14}you {\kf32}out, {\kf18}you'll {\kf22}break {\kf36}down {\kf42}like, {\kf22}"What?"
+Dialogue: 0,0:02:29.10,0:02:33.10,Karaoke,,0,0,0,,{\k80}{\kf18}It's {\kf12}a {\k41}{\kf14}takedown, {\k9}{\kf16}I'ma {\kf18}take {\kf18}you {\kf32}out, {\kf10}and {\kf12}it {\kf28}ain't {\kf24}gonna {\k12}{\kf36}stop
+Dialogue: 0,0:02:32.27,0:02:36.64,Karaoke,,0,0,0,,{\k80}{\kf51}I'ma {\kf22}cut {\kf18}you {\kf42}open, {\kf24}lose {\kf50}control, {\kf12}then {\kf26}rip {\kf30}out {\kf28}your {\kf34}heart
+Dialogue: 0,0:02:35.64,0:02:38.92,Karaoke,,0,0,0,,{\k80}{\kf38}You'll {\kf12}be {\kf30}beggin' {\k10}{\kf10}and {\kf40}cryin', {\k4}{\kf16}all {\kf10}of {\kf14}you {\kf48}dyin'
+Dialogue: 0,0:02:37.98,0:02:41.37,Karaoke,,0,0,0,,{\k80}{\kf24}I'ma {\kf36}gear {\kf38}up {\kf18}and {\kf24}take {\kf16}you {\k34}{\kf49}down
+Dialogue: 0,0:02:40.47,0:02:44.50,Karaoke,,0,0,0,,{\k80}{\kf125}It's {\kf80}a {\kf98}takedown
+Dialogue: 0,0:02:41.18,0:02:47.34,Karaoke,,0,0,0,,{\k80}{\kf18}I'ma {\kf10}take {\kf10}it {\kf10}down {\kf10}(oh, {\kf32}da-da-da, {\k12}{\kf164}down, {\k10}{\kf241}ooh)
+Dialogue: 0,0:02:46.44,0:02:51.42,Karaoke,,0,0,0,,{\k80}{\kf277}It's {\k10}{\kf18}a {\kf94}takedown
+Dialogue: 0,0:02:50.42,0:02:55.09,Karaoke,,0,0,0,,{\k80}{\kf257}Take {\k10}{\kf11}it {\k49}{\kf40}down

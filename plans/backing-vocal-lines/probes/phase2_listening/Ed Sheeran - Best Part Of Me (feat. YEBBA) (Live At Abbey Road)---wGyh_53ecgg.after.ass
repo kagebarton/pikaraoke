@@ -1,0 +1,52 @@
+[Script Info]
+Title: Karaoke Subtitles
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+Timer: 100.0000
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Karaoke,Arial,60,&H00D7FF&,&H00FFFFFF,&H00000000,&H80000000&,0,0,0,0,100,100,0,0,1,3,2,2,50,50,150,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:13.76,0:00:16.94,Karaoke,,0,0,0,,{\k80}{\kf14}My {\kf34}lungs {\kf22}are {\kf60}black, {\kf10}my {\kf34}heart {\kf14}is {\kf32}pure
+Dialogue: 0,0:00:19.24,0:00:22.59,Karaoke,,0,0,0,,{\k80}{\kf11}My {\k12}{\kf36}hands {\kf22}are {\kf48}scarred {\kf26}from {\kf30}nights {\k12}{\kf38}before
+Dialogue: 0,0:00:24.65,0:00:28.37,Karaoke,,0,0,0,,{\k80}{\kf12}And {\kf18}my {\k14}{\kf40}hair {\kf20}is {\kf50}thinnin', {\k14}{\kf58}falling {\k12}{\kf34}out
+Dialogue: 0,0:00:27.37,0:00:30.90,Karaoke,,0,0,0,,{\k80}{\kf44}Of {\k12}{\kf36}all {\kf18}the {\kf26}wrong {\k65}{\kf52}places
+Dialogue: 0,0:00:30.37,0:00:33.61,Karaoke,,0,0,0,,{\k80}{\kf22}I {\k11}{\kf31}am {\kf32}a {\kf60}little {\k17}{\kf51}insecure
+Dialogue: 0,0:00:36.07,0:00:39.61,Karaoke,,0,0,0,,{\k80}{\kf14}My {\k13}{\kf41}eyes {\kf18}are {\kf54}crossed, {\k4}{\kf12}but {\kf30}they're {\kf32}still {\kf36}blue
+Dialogue: 0,0:00:41.77,0:00:45.27,Karaoke,,0,0,0,,{\k80}{\kf10}I {\kf32}bite {\kf28}my {\k15}{\kf45}nails {\k20}{\kf14}and {\kf20}tell {\kf24}the {\kf42}truth
+Dialogue: 0,0:00:47.27,0:00:51.03,Karaoke,,0,0,0,,{\k80}{\kf30}I {\kf32}go {\k10}{\kf32}from {\kf30}thin {\k10}{\kf30}to {\kf102}overweight
+Dialogue: 0,0:00:50.45,0:00:53.81,Karaoke,,0,0,0,,{\k80}{\kf36}Day {\kf38}to {\kf32}day {\kf32}it {\k37}{\kf61}fluctuates
+Dialogue: 0,0:00:52.92,0:00:56.57,Karaoke,,0,0,0,,{\k80}{\kf34}My {\kf30}skin {\kf54}is {\kf70}inked, {\kf10}but {\kf28}faded {\k11}{\kf31}too
+Dialogue: 0,0:00:58.06,0:01:02.12,Karaoke,,0,0,0,,{\k80}{\kf36}But {\k36}{\kf12}she {\k36}{\kf12}loves {\k31}{\kf10}me, {\kf12}she {\k73}{\kf10}loves {\kf38}me
+Dialogue: 0,0:01:01.72,0:01:04.98,Karaoke,,0,0,0,,{\k80}{\kf30}Why {\k33}{\kf11}the {\kf38}hell {\kf26}she {\kf32}love {\k42}{\kf14}me
+Dialogue: 0,0:01:04.60,0:01:08.52,Karaoke,,0,0,0,,{\k80}{\kf17}When {\kf16}she {\kf24}could {\kf38}have {\kf170}anyone {\k10}{\kf17}else?
+Dialogue: 0,0:01:09.41,0:01:13.42,Karaoke,,0,0,0,,{\k80}{\kf25}Oh {\kf52}you {\k12}{\kf36}love {\k43}{\kf15}me, {\k4}{\kf30}you {\k13}{\kf39}love {\kf32}me
+Dialogue: 0,0:01:12.95,0:01:16.72,Karaoke,,0,0,0,,{\k80}{\kf32}Why {\k33}{\kf11}the {\k31}{\kf11}hell {\kf18}do {\kf12}you {\k34}{\kf12}love {\k31}{\kf52}me?
+Dialogue: 0,0:01:15.82,0:01:19.22,Karaoke,,0,0,0,,{\k80}{\kf22}'Cause {\kf14}I {\kf34}don't {\k31}{\kf11}even {\kf54}love {\k19}{\kf55}myself
+Dialogue: 0,0:01:20.77,0:01:33.05,Karaoke,,0,0,0,,{\k80}{\kf124}Baby, {\k42}{\kf144}the {\kf150}best {\k42}{\kf150}part {\k42}{\kf96}of {\kf96}me {\kf96}is {\kf144}you
+Dialogue: 0,0:01:32.33,0:01:40.76,Karaoke,,0,0,0,,{\k80}{\kf20}And {\kf150}lately {\k10}{\kf222}everything's {\k10}{\kf86}making {\kf150}sense {\k48}{\kf48}too
+Dialogue: 0,0:01:40.68,0:01:45.23,Karaoke,,0,0,0,,{\k80}{\kf14}Oh {\kf48}baby, {\k6}{\kf10}I'm {\kf42}so {\kf36}in {\k31}{\kf11}love {\k70}{\kf10}with {\k58}{\kf19}you
+Dialogue: 0,0:01:54.76,0:01:58.78,Karaoke,,0,0,0,,{\k80}{\kf40}I {\k36}{\kf60}overthink {\kf46}and {\k12}{\kf36}still {\k18}{\kf54}forget
+Dialogue: 0,0:02:00.73,0:02:05.29,Karaoke,,0,0,0,,{\k80}{\kf10}I {\kf34}lose {\kf30}my {\k11}{\kf33}phone {\kf28}and {\kf42}place {\k14}{\kf41}my {\kf114}bets
+Dialogue: 0,0:02:06.27,0:02:10.21,Karaoke,,0,0,0,,{\k80}{\kf34}And {\kf26}I {\kf32}never {\kf60}catch {\kf20}the {\kf40}train {\kf28}on {\k14}{\kf40}time
+Dialogue: 0,0:02:09.57,0:02:13.11,Karaoke,,0,0,0,,{\k80}{\kf44}Always {\kf66}thirty {\kf82}minutes {\kf62}behind
+Dialogue: 0,0:02:12.11,0:02:17.34,Karaoke,,0,0,0,,{\k80}{\kf74}Your {\kf80}worries {\kf102}ain't {\kf42}seen {\kf50}nothin' {\kf74}yet
+Dialogue: 0,0:02:17.33,0:02:21.49,Karaoke,,0,0,0,,{\k80}{\kf31}But {\k13}{\kf41}you {\kf84}love {\k10}{\kf19}me, {\kf34}you {\k39}{\kf13}love {\kf34}me
+Dialogue: 0,0:02:21.13,0:02:24.39,Karaoke,,0,0,0,,{\k80}{\kf38}Why {\kf30}the {\k11}{\kf33}hell {\kf20}you {\kf38}love {\kf26}me {\kf30}so
+Dialogue: 0,0:02:23.94,0:02:27.42,Karaoke,,0,0,0,,{\k80}{\kf16}When {\kf17}you {\kf20}could {\k10}{\kf30}have {\kf130}anyone {\k10}{\kf14}else?
+Dialogue: 0,0:02:28.19,0:02:33.06,Karaoke,,0,0,0,,{\k80}{\kf25}Yeah {\kf88}yeah, {\kf38}he {\k11}{\kf33}loves {\k54}{\kf18}me, {\k6}{\kf28}he {\kf34}loves {\k39}{\kf13}me
+Dialogue: 0,0:02:32.44,0:02:36.12,Karaoke,,0,0,0,,{\k80}{\kf25}And {\kf14}I {\kf18}bet {\kf18}he {\kf82}never {\k10}{\kf30}lets {\kf34}me {\kf36}go
+Dialogue: 0,0:02:35.54,0:02:39.92,Karaoke,,0,0,0,,{\k80}{\kf15}And {\kf40}shows {\kf22}me {\kf52}how {\kf20}to {\kf56}love {\k50}{\kf82}myself
+Dialogue: 0,0:02:40.64,0:02:50.64,Karaoke,,0,0,0,,{\k80}{\kf84}'Cause, {\k30}{\kf123}baby, {\kf38}the {\k41}{\kf38}best {\k11}{\kf33}part {\k2}{\kf24}of {\k11}{\kf117}me {\k10}{\kf13}is {\kf184}you, {\k10}{\kf130}woah
+Dialogue: 0,0:02:49.74,0:03:00.90,Karaoke,,0,0,0,,{\k80}{\kf329}Lately {\k10}{\kf150}everything's {\k195}{\kf84}making {\kf190}sense {\k10}{\kf48}too
+Dialogue: 0,0:03:00.89,0:03:05.30,Karaoke,,0,0,0,,{\k80}{\kf50}Baby, {\k12}{\kf16}I'm {\kf36}so {\k10}{\kf30}in {\k33}{\kf90}love {\k10}{\kf13}with {\k30}{\kf10}you
+Dialogue: 0,0:03:04.90,0:03:16.80,Karaoke,,0,0,0,,{\k80}{\kf200}(With {\k398}{\kf492}you)
+Dialogue: 0,0:03:17.24,0:03:28.22,Karaoke,,0,0,0,,{\k80}{\kf110}Baby, {\k63}{\kf10}the {\k1}{\kf41}best {\k33}{\kf11}part {\kf24}of {\k34}{\kf96}me {\k10}{\kf13}is {\kf157}you, {\k105}{\kf290}woah
+Dialogue: 0,0:03:27.32,0:03:36.27,Karaoke,,0,0,0,,{\k80}{\kf267}Lately {\k65}{\kf131}everything's {\kf151}making {\k10}{\kf121}sense {\kf50}too
+Dialogue: 0,0:03:36.29,0:03:41.76,Karaoke,,0,0,0,,{\k80}{\kf18}Oh {\k34}{\kf12}baby, {\kf14}I'm {\kf38}so {\k30}{\kf10}in {\k36}{\kf58}love {\k10}{\kf61}with {\k10}{\kf17}you {\kf100}(Ooh)
+Dialogue: 0,0:03:40.76,0:03:49.08,Karaoke,,0,0,0,,{\k80}{\kf194}Baby, {\k10}{\kf12}I'm {\k31}{\kf10}so {\kf36}in {\k33}{\kf11}love {\k47}{\kf16}with {\kf231}you, {\k36}{\kf16}yeah, {\k34}{\kf16}yeah
+Dialogue: 0,0:03:48.27,0:03:51.91,Karaoke,,0,0,0,,{\k80}{\kf16}Oh {\kf28}baby, {\k2}{\kf10}I'm {\k10}{\kf30}so {\k31}{\kf11}in {\k34}{\kf11}love {\k48}{\kf16}with {\kf19}you

@@ -1,0 +1,70 @@
+[Script Info]
+Title: Karaoke Subtitles
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+Timer: 100.0000
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Karaoke,Arial,60,&H00D7FF&,&H00FFFFFF,&H00000000,&H80000000&,0,0,0,0,100,100,0,0,1,3,2,2,50,50,150,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.79,Karaoke,,0,0,0,,{\k57}{\kf14}You're {\kf88}obsessed.
+Dialogue: 0,0:00:00.79,0:00:03.25,Karaoke,,0,0,0,,{\k80}{\kf26}You're {\kf10}like {\kf14}a {\kf16}drug. {\kf16}I'm {\kf26}addicted {\kf32}to {\kf10}you.
+Dialogue: 0,0:00:02.25,0:00:05.05,Karaoke,,0,0,0,,{\k80}{\kf10}You're {\kf10}like {\kf14}a {\kf35}drug. {\k25}{\kf14}I'm {\kf74}obsessed.
+Dialogue: 0,0:00:04.07,0:00:06.73,Karaoke,,0,0,0,,{\k80}{\kf26}No, {\k12}{\kf26}me. {\kf10}No, {\k19}{\kf45}me. {\kf16}No, {\kf16}me.
+Dialogue: 0,0:00:05.73,0:00:07.85,Karaoke,,0,0,0,,{\k80}{\kf10}I'm {\kf34}strung {\kf18}out. {\kf18}It's {\kf10}because {\kf12}of {\kf12}you.
+Dialogue: 0,0:00:06.85,0:00:08.82,Karaoke,,0,0,0,,{\k80}{\kf12}It's {\kf20}because {\kf20}of {\k34}{\kf11}you.
+Dialogue: 0,0:00:12.02,0:00:17.02,Karaoke,,0,0,0,,{\k80}{\kf150}Ooh, {\k100}{\kf150}oh
+Dialogue: 0,0:00:16.70,0:00:19.20,Karaoke,,0,0,0,,{\k80}{\kf150}Oh
+Dialogue: 0,0:00:19.80,0:00:22.50,Karaoke,,0,0,0,,{\k80}{\kf170}Oh
+Dialogue: 0,0:00:22.21,0:00:25.82,Karaoke,,0,0,0,,{\k80}{\kf261}Oh
+Dialogue: 0,0:00:29.48,0:00:35.20,Karaoke,,0,0,0,,{\k80}{\kf70}Want {\k10}{\kf30}to, {\kf29}but {\k3}{\kf18}I {\kf32}can't {\kf28}help {\k10}{\kf31}it, {\k20}{\kf10}I {\kf36}love {\kf26}the {\kf28}way {\kf24}it {\k17}{\kf52}feels
+Dialogue: 0,0:00:34.19,0:00:39.37,Karaoke,,0,0,0,,{\k80}{\kf44}This {\kf26}got {\kf22}me {\kf32}stuck {\kf44}between {\kf36}my {\k16}{\kf48}fantasy {\k12}{\kf34}and {\kf38}what {\kf18}is {\k12}{\kf36}real
+Dialogue: 0,0:00:38.50,0:00:43.77,Karaoke,,0,0,0,,{\k80}{\kf41}I {\k12}{\kf34}need {\kf14}it {\kf40}when {\kf18}I {\kf36}want {\kf38}it, {\kf28}I {\k10}{\kf32}want {\kf16}it {\k10}{\kf30}when {\kf22}I {\k12}{\kf34}don't
+Dialogue: 0,0:00:43.05,0:00:48.25,Karaoke,,0,0,0,,{\k80}{\kf22}Tell {\k14}{\kf42}myself {\kf34}I'll {\kf30}stop {\kf98}everyday, {\k14}{\kf36}knowing {\kf46}that {\kf20}I {\kf64}won't
+Dialogue: 0,0:00:47.25,0:00:52.51,Karaoke,,0,0,0,,{\k80}{\kf42}I {\kf36}got {\kf24}a {\k14}{\kf40}problem, {\k28}{\kf10}and {\kf28}I {\kf26}don't {\kf26}know {\kf20}what {\kf24}to {\kf34}do {\kf50}about {\kf24}it
+Dialogue: 0,0:00:51.63,0:00:57.03,Karaoke,,0,0,0,,{\k80}{\kf36}Even {\k12}{\kf34}if {\kf16}I {\kf46}did, {\k2}{\kf12}I {\kf24}don't {\kf26}know {\kf36}if {\kf20}I {\kf24}would {\kf24}quit {\kf40}but {\kf18}I {\k10}{\kf30}doubt {\kf30}it
+Dialogue: 0,0:00:56.03,0:01:03.31,Karaoke,,0,0,0,,{\k80}{\kf104}I'm {\kf122}taken {\k45}{\kf15}by {\kf24}the {\kf36}thought {\kf22}of {\k18}{\kf242}it
+Dialogue: 0,0:01:02.41,0:01:06.08,Karaoke,,0,0,0,,{\k80}{\kf93}And {\kf20}I {\kf30}know {\kf24}this {\kf36}much {\kf22}is {\kf42}true
+Dialogue: 0,0:01:05.06,0:01:11.94,Karaoke,,0,0,0,,{\k80}{\kf158}Baby, {\k10}{\kf22}you {\kf88}have {\kf54}become {\k17}{\kf94}my {\k10}{\kf135}addiction
+Dialogue: 0,0:01:11.04,0:01:14.87,Karaoke,,0,0,0,,{\k80}{\kf96}I'm {\kf20}so {\kf42}strung {\kf26}out {\kf24}on {\k13}{\kf62}you
+Dialogue: 0,0:01:13.97,0:01:19.90,Karaoke,,0,0,0,,{\k80}{\kf55}I {\kf16}can {\kf44}barely {\kf154}move, {\k10}{\kf54}but {\kf16}I {\kf66}like {\k19}{\kf59}it
+Dialogue: 0,0:01:19.21,0:01:25.28,Karaoke,,0,0,0,,{\k80}{\kf45}And {\kf44}it's {\kf32}all {\kf78}because {\kf66}of {\kf32}you {\kf10}(all {\kf120}because {\k14}{\kf42}of {\kf26}you)
+Dialogue: 0,0:01:23.80,0:01:29.10,Karaoke,,0,0,0,,{\k80}{\kf36}And {\kf36}it's {\kf36}all {\kf84}because {\kf24}of {\kf36}you {\kf36}(all {\kf84}because {\kf24}of {\kf36}you)
+Dialogue: 0,0:01:28.18,0:01:33.23,Karaoke,,0,0,0,,{\k80}{\kf34}And {\kf34}it's {\kf34}all {\kf79}because {\kf22}of {\kf34}you {\kf34}(all {\kf79}because {\kf22}of {\kf34}you)
+Dialogue: 0,0:01:32.41,0:01:35.07,Karaoke,,0,0,0,,{\k80}{\kf36}And {\kf36}it's {\k36}{\kf12}all {\kf46}because
+Dialogue: 0,0:01:34.07,0:01:39.15,Karaoke,,0,0,0,,{\k80}{\kf86}Never {\kf137}get {\k10}{\kf175}enough
+Dialogue: 0,0:01:38.25,0:01:43.03,Karaoke,,0,0,0,,{\k80}{\kf111}She's {\kf16}the {\k24}{\kf150}sweetest {\k16}{\kf60}drug
+Dialogue: 0,0:01:42.03,0:01:49.27,Karaoke,,0,0,0,,{\k80}{\kf150}Think {\k88}{\kf32}of {\kf36}it {\kf34}every {\k16}{\kf50}second, {\kf34}I {\k20}{\kf34}can't {\kf18}get {\k31}{\kf11}nothing {\kf70}done
+Dialogue: 0,0:01:48.55,0:01:53.51,Karaoke,,0,0,0,,{\k80}{\kf42}Only {\kf50}concern {\k10}{\kf34}is {\kf22}the {\k10}{\kf30}next {\k12}{\kf34}time {\kf34}I'm {\kf26}gon' {\kf18}get {\kf22}me {\kf52}some
+Dialogue: 0,0:01:52.51,0:01:57.85,Karaoke,,0,0,0,,{\k80}{\kf64}Know {\kf28}I {\kf20}should {\k10}{\kf30}stay {\k11}{\kf33}away {\kf66}from, {\k16}{\kf10}'cause {\kf30}it's {\kf20}no {\kf34}good {\kf28}for {\kf36}me
+Dialogue: 0,0:01:56.99,0:02:02.45,Karaoke,,0,0,0,,{\k80}{\kf44}I {\kf38}try {\kf26}and {\kf44}try, {\kf10}but {\kf28}my {\k17}{\kf51}obsession {\kf74}won't {\kf32}let {\kf34}me {\kf48}leave
+Dialogue: 0,0:02:01.45,0:02:06.93,Karaoke,,0,0,0,,{\k80}{\kf43}I {\kf30}got {\kf24}a {\kf78}problem, {\kf26}and {\kf14}I {\kf60}don't {\kf10}know {\kf10}what {\kf40}to {\kf24}do {\kf62}about {\kf37}it
+Dialogue: 0,0:02:06.03,0:02:11.54,Karaoke,,0,0,0,,{\k80}{\kf10}Even {\k39}{\kf13}if {\kf18}I {\kf50}did, {\kf10}I {\kf22}don't {\kf30}know {\kf38}if {\kf22}I {\kf20}would {\kf28}quit {\kf36}but {\kf16}I {\k30}{\kf10}doubt {\kf66}it
+Dialogue: 0,0:02:10.64,0:02:17.05,Karaoke,,0,0,0,,{\k80}{\kf72}I'm {\kf130}taken {\kf46}by {\kf16}the {\kf42}thought {\k41}{\kf13}of {\kf180}it
+Dialogue: 0,0:02:16.15,0:02:20.18,Karaoke,,0,0,0,,{\k80}{\kf76}Hey, {\kf62}and {\kf18}I {\kf28}know {\kf26}this {\kf34}much {\kf24}is {\kf36}true
+Dialogue: 0,0:02:19.24,0:02:26.68,Karaoke,,0,0,0,,{\k80}{\kf162}Baby, {\k10}{\kf18}you {\kf90}have {\kf96}become {\k10}{\kf19}my {\k39}{\kf201}addiction
+Dialogue: 0,0:02:25.78,0:02:29.79,Karaoke,,0,0,0,,{\k80}{\kf43}I'm {\kf22}so {\kf44}strung {\kf24}out {\kf20}on {\kf20}you, {\k22}{\kf24}strung {\kf22}out {\kf20}on {\k30}{\kf10}you
+Dialogue: 0,0:02:28.80,0:02:34.96,Karaoke,,0,0,0,,{\k80}{\kf38}I {\kf30}can {\kf10}barely {\kf108}move, {\k10}{\kf74}but {\kf38}I {\kf48}like {\k11}{\kf91}it, {\k10}{\kf12}but {\kf12}I {\kf12}like {\kf12}it
+Dialogue: 0,0:02:33.96,0:02:41.64,Karaoke,,0,0,0,,{\k80}{\kf15}And {\kf15}it's {\k10}{\kf30}all {\kf70}because {\k14}{\kf42}of {\k12}{\kf38}you {\kf18}(all {\kf92}because {\k34}{\kf163}of {\k10}{\kf106}you)
+Dialogue: 0,0:02:35.93,0:02:43.22,Karaoke,,0,0,0,,{\k80}{\kf192}And {\k10}{\kf65}it's {\kf48}all {\kf64}because {\kf20}of {\kf68}you {\kf26}(all {\kf98}because {\kf10}of {\kf30}you)
+Dialogue: 0,0:02:42.26,0:02:47.47,Karaoke,,0,0,0,,{\k80}{\kf35}And {\kf35}it's {\kf35}all {\kf82}because {\kf23}of {\kf35}you {\kf35}(all {\kf82}because {\kf23}of {\kf35}you)
+Dialogue: 0,0:02:46.52,0:02:49.36,Karaoke,,0,0,0,,{\k80}{\kf46}And {\kf46}it's {\kf34}all {\kf58}because
+Dialogue: 0,0:02:48.36,0:02:53.98,Karaoke,,0,0,0,,{\k80}{\kf86}Never {\kf160}get {\k10}{\kf54}enough {\kf50}(never {\k12}{\kf36}get {\k41}{\kf14}enough)
+Dialogue: 0,0:02:52.98,0:02:59.00,Karaoke,,0,0,0,,{\k80}{\kf68}She's {\kf18}the {\kf150}sweetest {\k20}{\kf246}drug
+Dialogue: 0,0:02:58.10,0:03:03.73,Karaoke,,0,0,0,,{\k80}{\kf87}Ain't {\kf66}no {\k37}{\kf61}doubt, {\kf32}no {\k50}{\kf82}doubt, {\k16}{\kf32}hey
+Dialogue: 0,0:03:02.73,0:03:08.35,Karaoke,,0,0,0,,{\k80}{\kf18}So {\kf126}strung {\kf56}out, {\k40}{\kf24}strung {\k19}{\kf57}out, {\k25}{\kf97}hey
+Dialogue: 0,0:03:07.35,0:03:12.43,Karaoke,,0,0,0,,{\k80}{\kf82}Ain't {\k10}{\kf10}no {\k36}{\kf12}doubt, {\k6}{\kf26}there's {\kf25}ain't {\kf25}no {\kf25}grain {\kf28}of {\kf62}doubt, {\k34}{\kf26}oh
+Dialogue: 0,0:03:11.43,0:03:15.49,Karaoke,,0,0,0,,{\k80}{\kf18}So {\k41}{\kf140}strung {\k10}{\kf12}out, {\k11}{\kf75}hey
+Dialogue: 0,0:03:14.49,0:03:17.57,Karaoke,,0,0,0,,{\k80}{\kf70}Over {\kf137}you
+Dialogue: 0,0:03:16.67,0:03:20.90,Karaoke,,0,0,0,,{\k80}{\kf55}Over {\kf114}you, {\k10}{\kf144}you
+Dialogue: 0,0:03:19.71,0:03:23.92,Karaoke,,0,0,0,,{\k80}{\kf128}Over {\kf96}you, {\kf96}you
+Dialogue: 0,0:03:23.37,0:03:26.67,Karaoke,,0,0,0,,{\k80}{\kf230}Oh-oh
+Dialogue: 0,0:03:27.18,0:03:29.92,Karaoke,,0,0,0,,{\k80}{\kf18}Because {\k2}{\kf114}of {\kf41}you
+Dialogue: 0,0:03:30.41,0:03:34.27,Karaoke,,0,0,0,,{\k80}{\kf12}And {\kf44}it's {\kf48}all {\kf42}because {\kf62}of {\kf78}you
+Dialogue: 0,0:03:37.00,0:03:40.64,Karaoke,,0,0,0,,{\k80}{\kf24}Never {\kf66}get {\k76}{\kf98}enough
+Dialogue: 0,0:03:41.29,0:03:45.71,Karaoke,,0,0,0,,{\k80}{\kf30}She's {\kf82}the {\k43}{\kf71}sweetest {\kf115}drug
+Dialogue: 0,0:03:44.81,0:03:51.94,Karaoke,,0,0,0,,{\k80}{\kf113}She's {\kf112}the {\k10}{\kf131}sweetest {\k36}{\kf213}drug

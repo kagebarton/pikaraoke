@@ -1,0 +1,82 @@
+[Script Info]
+Title: Karaoke Subtitles
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+Timer: 100.0000
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Karaoke,Arial,60,&H00D7FF&,&H00FFFFFF,&H00000000,&H80000000&,0,0,0,0,100,100,0,0,1,3,2,2,50,50,150,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:09.79,0:00:12.07,Karaoke,,0,0,0,,{\k80}{\kf19}Smooth {\kf64}like {\k35}{\kf11}butter
+Dialogue: 0,0:00:11.11,0:00:14.25,Karaoke,,0,0,0,,{\k80}{\kf50}Like {\kf26}a {\kf32}criminal {\k40}{\kf66}undercover
+Dialogue: 0,0:00:13.25,0:00:16.49,Karaoke,,0,0,0,,{\k80}{\kf66}Gon' {\kf48}pop {\kf58}like {\kf52}trouble
+Dialogue: 0,0:00:15.49,0:00:18.61,Karaoke,,0,0,0,,{\k80}{\kf76}Breakin' {\k2}{\kf22}into {\kf24}your {\kf28}heart {\kf26}like {\kf34}that
+Dialogue: 0,0:00:18.35,0:00:20.89,Karaoke,,0,0,0,,{\k80}{\kf36}Cool {\kf58}shade {\kf60}stunner
+Dialogue: 0,0:00:19.36,0:00:23.02,Karaoke,,0,0,0,,{\k80}{\kf70}Yeah {\kf58}I {\kf14}owe {\kf20}it {\kf12}all {\kf24}to {\kf28}my {\k10}{\kf30}mother
+Dialogue: 0,0:00:22.22,0:00:25.15,Karaoke,,0,0,0,,{\k80}{\kf83}Hot {\kf66}like {\k11}{\kf33}summer
+Dialogue: 0,0:00:24.15,0:00:27.29,Karaoke,,0,0,0,,{\k80}{\kf50}Yeah {\kf32}I'm {\kf26}makin' {\k14}{\kf10}you {\kf26}sweat {\kf32}like {\kf24}that
+Dialogue: 0,0:00:26.29,0:00:28.09,Karaoke,,0,0,0,,{\k80}{\kf22}Break {\kf18}it {\kf40}down
+Dialogue: 0,0:00:27.09,0:00:30.35,Karaoke,,0,0,0,,{\k80}{\kf54}Oh {\kf40}when {\kf10}I {\kf32}look {\kf14}in {\kf16}the {\k31}{\kf30}mirror
+Dialogue: 0,0:00:29.45,0:00:32.31,Karaoke,,0,0,0,,{\k80}{\kf50}I'll {\kf14}melt {\kf22}your {\kf28}heart {\kf26}into {\kf46}2
+Dialogue: 0,0:00:31.48,0:00:34.69,Karaoke,,0,0,0,,{\k80}{\kf51}I {\kf32}got {\kf18}that {\kf44}superstar {\k33}{\kf11}glow {\kf32}so
+Dialogue: 0,0:00:33.69,0:00:36.71,Karaoke,,0,0,0,,{\k80}{\kf42}Do {\k46}{\kf76}the {\kf24}boogie {\kf14}like
+Dialogue: 0,0:00:35.71,0:00:39.33,Karaoke,,0,0,0,,{\k80}{\kf44}Side {\kf38}step {\kf34}right {\kf50}left {\kf28}to {\kf42}my {\kf26}beat
+Dialogue: 0,0:00:40.18,0:00:44.46,Karaoke,,0,0,0,,{\k80}{\kf22}High {\kf54}like {\kf26}the {\k10}{\kf30}moon {\kf34}rock {\kf38}with {\kf38}me {\kf76}baby
+Dialogue: 0,0:00:44.40,0:00:46.97,Karaoke,,0,0,0,,{\k80}{\kf22}Know {\kf28}that {\kf22}I {\kf24}got {\kf40}that {\kf22}heat
+Dialogue: 0,0:00:46.17,0:00:49.38,Karaoke,,0,0,0,,{\k80}{\kf12}Let {\kf28}me {\kf30}show {\kf22}you {\kf26}'cause {\kf30}talk {\kf26}is {\kf46}cheap
+Dialogue: 0,0:00:48.72,0:00:52.46,Karaoke,,0,0,0,,{\k80}{\kf44}Side {\kf44}step {\kf34}right {\kf50}left {\kf30}to {\kf30}my {\kf42}beat
+Dialogue: 0,0:00:51.62,0:00:54.74,Karaoke,,0,0,0,,{\k80}{\kf19}Get {\kf36}it, {\k16}{\kf10}let {\k2}{\kf28}it {\kf105}roll
+Dialogue: 0,0:00:53.84,0:00:55.80,Karaoke,,0,0,0,,{\k80}{\kf10}Smooth {\kf30}like {\kf56}butter
+Dialogue: 0,0:00:55.35,0:00:58.13,Karaoke,,0,0,0,,{\k80}{\kf25}Pull {\kf20}you {\kf22}in {\kf28}like {\kf28}no {\kf56}other
+Dialogue: 0,0:00:57.23,0:01:00.21,Karaoke,,0,0,0,,{\k80}{\kf50}Don't {\kf34}need {\k14}{\kf44}no {\kf56}Usher
+Dialogue: 0,0:00:59.21,0:01:02.65,Karaoke,,0,0,0,,{\k80}{\kf44}To {\kf24}remind {\kf28}me {\kf22}you {\kf36}got {\kf20}it {\kf70}bad
+Dialogue: 0,0:01:02.18,0:01:04.47,Karaoke,,0,0,0,,{\k80}{\kf31}Ain't {\k11}{\kf33}no {\k13}{\kf41}other
+Dialogue: 0,0:01:03.47,0:01:06.90,Karaoke,,0,0,0,,{\k80}{\kf42}That {\kf22}can {\kf24}sweep {\kf26}you {\kf14}up {\kf34}like {\kf24}a {\kf56}robber
+Dialogue: 0,0:01:06.00,0:01:08.99,Karaoke,,0,0,0,,{\k80}{\kf22}Straight {\k10}{\kf72}up, {\k8}{\kf16}I {\kf44}got {\kf28}ya
+Dialogue: 0,0:01:07.97,0:01:10.99,Karaoke,,0,0,0,,{\k80}{\kf100}Makin' {\kf14}you {\kf28}fall {\kf30}like {\kf30}that
+Dialogue: 0,0:01:09.99,0:01:11.69,Karaoke,,0,0,0,,{\k80}{\kf16}Break {\kf18}it {\kf36}down
+Dialogue: 0,0:01:10.97,0:01:13.79,Karaoke,,0,0,0,,{\k80}{\kf30}Oh {\kf34}when {\kf10}I {\kf34}look {\kf12}in {\kf18}the {\k33}{\kf11}mirror
+Dialogue: 0,0:01:13.10,0:01:16.10,Karaoke,,0,0,0,,{\k80}{\kf51}I'll {\kf14}melt {\kf20}your {\kf30}heart {\kf28}into {\kf56}2
+Dialogue: 0,0:01:15.40,0:01:18.31,Karaoke,,0,0,0,,{\k80}{\kf19}I {\kf34}got {\kf16}that {\kf56}superstar {\kf36}glow {\kf30}so
+Dialogue: 0,0:01:17.31,0:01:20.33,Karaoke,,0,0,0,,{\k80}{\kf141}Do {\k10}{\kf14}the {\kf24}boogie {\kf14}like
+Dialogue: 0,0:01:19.33,0:01:23.07,Karaoke,,0,0,0,,{\k80}{\kf48}Side {\kf40}step {\kf34}right {\k11}{\kf33}left {\kf32}to {\kf24}my {\kf52}beat
+Dialogue: 0,0:01:23.84,0:01:28.17,Karaoke,,0,0,0,,{\k80}{\kf29}High {\kf40}like {\kf32}the {\kf40}moon {\kf36}rock {\kf30}with {\k14}{\kf44}me {\kf68}baby
+Dialogue: 0,0:01:27.17,0:01:30.61,Karaoke,,0,0,0,,{\k80}{\kf112}Know {\kf26}that {\kf20}I {\kf26}got {\kf30}that {\kf30}heat
+Dialogue: 0,0:01:29.93,0:01:32.93,Karaoke,,0,0,0,,{\k80}{\kf11}Let {\kf16}me {\kf32}show {\kf20}you {\kf20}'cause {\kf36}talk {\kf20}is {\kf46}cheap
+Dialogue: 0,0:01:32.32,0:01:36.09,Karaoke,,0,0,0,,{\k80}{\kf55}Side {\kf40}step {\kf34}right {\kf48}left {\kf28}to {\kf24}my {\k36}{\kf12}beat
+Dialogue: 0,0:01:34.65,0:01:38.10,Karaoke,,0,0,0,,{\k80}{\kf83}Get {\kf36}it, {\k14}{\kf10}let {\kf26}it {\kf80}roll
+Dialogue: 0,0:01:43.95,0:01:46.97,Karaoke,,0,0,0,,{\k80}{\kf25}Get {\kf40}it, {\kf22}let {\kf22}it {\kf94}roll
+Dialogue: 0,0:01:52.47,0:01:56.04,Karaoke,,0,0,0,,{\k80}{\kf45}Get {\kf10}it, {\kf32}let {\k24}{\kf18}it {\kf128}roll
+Dialogue: 0,0:01:55.14,0:01:56.76,Karaoke,,0,0,0,,{\k80}{\kf10}No {\kf10}ice {\kf16}on {\kf18}my {\kf18}wrist
+Dialogue: 0,0:01:55.76,0:01:57.70,Karaoke,,0,0,0,,{\k80}{\kf22}I'm {\kf10}that {\kf28}n-ice {\kf36}guy
+Dialogue: 0,0:01:56.85,0:02:00.06,Karaoke,,0,0,0,,{\k80}{\kf45}Got {\kf10}that {\kf28}right {\kf30}body {\kf16}and {\kf10}that {\kf24}right {\kf58}mind
+Dialogue: 0,0:01:59.16,0:02:02.10,Karaoke,,0,0,0,,{\k80}{\kf50}Rollin' {\kf10}up {\kf14}to {\kf26}party {\kf16}got {\kf14}the {\kf18}right {\kf48}vibe
+Dialogue: 0,0:02:01.10,0:02:03.00,Karaoke,,0,0,0,,{\k80}{\kf28}Smooth {\k10}{\kf31}like {\kf20}butter
+Dialogue: 0,0:02:02.00,0:02:04.22,Karaoke,,0,0,0,,{\k80}{\kf60}Hate {\kf30}us {\kf16}love {\kf16}us
+Dialogue: 0,0:02:03.22,0:02:06.55,Karaoke,,0,0,0,,{\k80}{\kf60}Fresh {\kf36}boy {\kf24}pull {\kf18}up {\kf10}and {\kf10}we {\kf18}lay {\kf57}low
+Dialogue: 0,0:02:05.65,0:02:08.74,Karaoke,,0,0,0,,{\k80}{\kf11}All {\kf12}the {\kf30}playas {\kf20}get {\kf12}to {\kf24}movin' {\kf14}when {\kf12}the {\kf20}bass {\kf54}low
+Dialogue: 0,0:02:07.84,0:02:10.70,Karaoke,,0,0,0,,{\k80}{\kf12}Got {\kf32}ARMY {\kf24}right {\kf26}behind {\kf12}us {\kf14}when {\kf10}we {\kf20}say {\kf38}so
+Dialogue: 0,0:02:09.70,0:02:12.70,Karaoke,,0,0,0,,{\k80}{\kf150}Let's {\k12}{\kf38}go
+Dialogue: 0,0:02:11.70,0:02:15.36,Karaoke,,0,0,0,,{\k80}{\kf52}Side {\kf32}step {\kf36}right {\kf44}left {\kf28}to {\k12}{\kf34}my {\kf28}beat
+Dialogue: 0,0:02:14.36,0:02:20.50,Karaoke,,0,0,0,,{\k80}{\kf150}High {\k70}{\kf34}like {\kf36}the {\kf32}moon {\kf52}rock {\kf18}with {\k11}{\kf33}me {\kf78}baby
+Dialogue: 0,0:02:19.50,0:02:22.84,Karaoke,,0,0,0,,{\k80}{\kf118}Know {\kf28}that {\kf14}I {\kf28}got {\kf26}that {\k10}{\kf10}heat
+Dialogue: 0,0:02:21.84,0:02:25.08,Karaoke,,0,0,0,,{\k80}{\kf52}Let {\kf20}me {\kf32}show {\kf14}you {\kf28}'cause {\kf36}talk {\kf22}is {\kf20}cheap
+Dialogue: 0,0:02:24.08,0:02:28.40,Karaoke,,0,0,0,,{\k80}{\kf110}Side {\kf46}step {\kf36}right {\k34}{\kf12}left {\kf32}to {\kf24}my {\kf38}beat
+Dialogue: 0,0:02:27.78,0:02:30.10,Karaoke,,0,0,0,,{\k80}{\kf12}Get {\kf28}it, {\kf25}let {\k3}{\kf22}it {\kf42}roll
+Dialogue: 0,0:02:29.10,0:02:31.00,Karaoke,,0,0,0,,{\k80}{\kf54}Smooth {\kf36}like
+Dialogue: 0,0:02:30.00,0:02:31.96,Karaoke,,0,0,0,,{\k80}{\kf62}Cool {\kf34}shade
+Dialogue: 0,0:02:30.96,0:02:34.24,Karaoke,,0,0,0,,{\k80}{\kf78}And {\kf20}you {\kf26}know {\kf24}we {\kf28}don't {\kf52}stop
+Dialogue: 0,0:02:33.24,0:02:35.40,Karaoke,,0,0,0,,{\k80}{\kf68}Hot {\kf48}like
+Dialogue: 0,0:02:34.40,0:02:36.42,Karaoke,,0,0,0,,{\k80}{\kf70}Ain't {\kf32}no
+Dialogue: 0,0:02:35.57,0:02:38.50,Karaoke,,0,0,0,,{\k80}{\kf44}You {\kf30}be {\kf32}like {\kf24}oh {\kf20}my {\k11}{\kf33}god
+Dialogue: 0,0:02:38.03,0:02:41.14,Karaoke,,0,0,0,,{\k80}{\kf17}We {\kf14}gon' {\kf14}make {\kf16}you {\kf22}rock {\kf20}and {\kf14}you {\kf94}say
+Dialogue: 0,0:02:40.24,0:02:42.64,Karaoke,,0,0,0,,{\k80}{\kf12}We {\kf20}gon' {\kf10}make {\kf12}you {\kf28}bounce {\kf16}and {\kf14}you {\kf28}say
+Dialogue: 0,0:02:41.64,0:02:43.82,Karaoke,,0,0,0,,{\k80}{\kf118}Hotter?
+Dialogue: 0,0:02:42.92,0:02:44.54,Karaoke,,0,0,0,,{\k80}{\kf62}Sweeter!
+Dialogue: 0,0:02:43.54,0:02:45.06,Karaoke,,0,0,0,,{\k80}{\kf52}Cooler?
+Dialogue: 0,0:02:44.10,0:02:45.72,Karaoke,,0,0,0,,{\k80}{\kf62}Butter!
+Dialogue: 0,0:02:44.57,0:02:47.94,Karaoke,,0,0,0,,{\k80}{\kf73}Get {\kf32}it, {\k14}{\kf12}let {\kf24}it {\kf83}roll
