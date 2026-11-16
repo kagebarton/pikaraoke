@@ -765,23 +765,28 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
     job is not (`test_add_songs.py`, `test_regen_alignment_bundles.py`).
   Commit: `feat(pipeline): downloads and add_songs arm the LRCLIB timing check`.
 
-- [ ] **4f. Parity check, read-only, where the library and the fresh `<out>` are** (`<out>`
-  is `~/probes/lrclib-shift-check-handoff/lrclib_shift_check_holdout`, the handoff copy of
-  the probe's `~/.pikaraoke/tmp/lrclib_shift_check_holdout`). A scratch script outside
+- [ ] **4f. Parity check, read-only, on the fifty bundles' snapshot and the fresh `<out>`**
+  (`<out>` is `~/probes/lrclib-shift-check-handoff/lrclib_shift_check_holdout`, the handoff
+  copy of the probe's `~/.pikaraoke/tmp/lrclib_shift_check_holdout`; `<bundles>` is
+  `~/probes/lrclib-shift-check-handoff/fresh50_bundles_v11`). A scratch script outside
   the repo: for each of the fifty fresh songs, call `lrc_auto_timing.check` with
-  `search_query` replaced by that song's `<out>/cache/<youtube_id>.json` records, the
-  bundle's `transcribe_words` and its `media_duration_s`. The picked id must equal
+  `search_query` replaced by that song's `<out>/cache/<youtube_id>.json` records, its
+  `<bundles>` bundle's `transcribe_words` and `media_duration_s`. The picked id must equal
   `songs.tsv`'s `pick_id` for all fifty (31 picks, 19 none), and for the twenty Set E
   songs the query built from the bundle's `lyrics.genius` must equal the cache file's
-  `query`. Any difference is a STOP. If the library or `<out>` cannot be reached, STOP and
-  say so; do not skip the step. Record the counts in the Results log. No library write
-  (`find <library> -newer` as in Phase 2).
+  `query`. Any difference is a STOP. If `<bundles>` or `<out>` cannot be reached, STOP and
+  say so; do not skip the step. Record the counts in the Results log. Nothing under the
+  library is read or written.
   Added 2026-11-16: `songs.tsv` was written by this branch's code on `dev` `37d8d93`, so
   the fifty equal picks are also the check that `dev`'s edits to `clean_cue_texts` and
   `srt_slice_fit` since then moved no pick. The check sees cleaned lines with or without
   4d2, so 4d2 does not change this step. Checked 2026-11-16 on this computer: the library
   is `~/pikaraoke-songs`, with all fifty videos and their bundles (none modified after the
-  11-12 probe run; the twenty Set E bundles carry `lyrics.genius`). `<out>` was not at
+  11-12 probe run; the twenty Set E bundles carry `lyrics.genius`). The fifty bundles are
+  copied as they were to `<bundles>`, 50 files with `fresh50_bundles_v11.SHA256SUMS` beside
+  them, verified: `onset_loud_start` Phase 3 reruns whisper on three of the fifty (Kickapoo
+  `hvvjiE4AdUI`, Savages `1YiAzyCzZzw`, Over the Moon `pXNd2V88d60`) and its later full
+  regen on all of them, which would change the library's `transcribe_words`. `<out>` was not at
   `~/.pikaraoke/tmp/`; it was copied from the USB drive
   (`/media/ken/Data/probes/lrclib-shift-check-handoff/`) to the path above, `diff -rq`
   clean: `songs.tsv` has 50 rows (31 picks, 19 none) and `cache/` has 50 files whose
