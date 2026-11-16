@@ -47,7 +47,7 @@ When Ken proposes a larger feature (anything that would get a plan or span sever
 
 At a commit with its plan-log row written, or a phase/GATE boundary (never mid-commit), say which of these apply, each with a ready-to-paste prompt (≤10 lines, paths and hashes rather than prose):
 
-- **`/compact`** — a `/compact Keep: ...` line naming branch + HEAD, the plan file and section, the next step and where to stop, open decisions with their options, and approaches ruled out this session. One fenced block of ≤5 lines with no blank lines, headings, or bullets; anything longer or broken up gets read as a regular message, not a command to paste.
+- **`/compact` or `/clear`** — if a cold session can resume from the plan file, the plan log, and git, tell Ken to `/clear` and offer no compact prompt. Offer `/compact` only when a cold start would lose context that is in none of those (open decisions with their options, approaches ruled out this session). Then give a single brief line in a fenced block, `/compact Keep: ...`, naming branch + HEAD, the next step, and only the lost context; no second line, blank lines, headings, or bullets, or it gets read as a regular message, not a command to paste.
 - **Review due** — the exact `/code-review` line: commit range, files in scope, and exactly 3 finder angles, one per Self-Review axis (not the tool's default spread). Never launch it unprompted; run it only when asked. `/code-review ultra` is user-triggered only, never launched for any reason.
 - **Model handoff** (e.g. Sonnet handing a GATE read to Opus, Opus escalating to Fable) — branch + HEAD, the plan file and section, what's done (don't redo it), the next step, and where to stop.
 

@@ -606,7 +606,7 @@ class TestSongInfoHistory:
         assert history.index("21 Sep 2026") < history.index("16 Jul 2026")
         assert "20261019T175506Z" in history
         assert "20260921T170629Z" in history
-        assert ">v11<" in history and ">v10<" in history and ">v8<" in history
+        assert f">v{SCHEMA_VERSION}<" in history and ">v10<" in history and ">v8<" in history
         assert "51 of 89 lines" in history
         tabs = html.split('id="tab-history"')[0]
         assert "A version saved in several backups is listed once" in tabs  # the History tab's (i)
@@ -614,7 +614,7 @@ class TestSongInfoHistory:
     def test_a_version_notes_what_it_added(self, env):
         history = text(env.page(self.song_with_backups(env))).split('id="tab-history"')[1]
 
-        # v10 gained LRCLIB over v8; v11 and v10 hold the same picks.
+        # v10 gained LRCLIB over v8; the current version and v10 hold the same picks.
         assert "LRCLIB 5:54 added" in history
         assert history.count("si-chg") == 1
         assert "no LRCLIB" in history

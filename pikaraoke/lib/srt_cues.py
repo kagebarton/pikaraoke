@@ -10,6 +10,9 @@ Shared helpers for working with uploader-synced SRT cue times:
 - :func:`clean_cue_texts` is the per-cue cleaning on its own, one text per cue
   in its own position, and :func:`cues_to_srt` writes cleaned lines back as an
   SRT, so a sheet's words can be edited without moving a line's time.
+- :func:`sheet_parens` reads what those cleaners delete: each cue's parenthetical groups, with
+  where each sits in the cleaned line, so a caller that has more evidence than the text can
+  decide which were sung.
 - :func:`offset_mad_against_cues` fits the robust median display lead of a
   set of audio placements against a cue reference, with a MAD bail-out when
   the anchors are too few or too spread to trust a single constant offset.
@@ -18,12 +21,19 @@ Shared helpers for working with uploader-synced SRT cue times:
 """
 
 import re
+from bisect import bisect_left
+from dataclasses import dataclass
 from datetime import timedelta
 from statistics import median
 
 import srt
 
-from pikaraoke.lib.genius_lyrics import clean_srt_line, strip_srt_markup
+from pikaraoke.lib.genius_lyrics import (
+    PAREN_GROUP_RE,
+    clean_srt_line,
+    strip_markup,
+    strip_srt_markup,
+)
 
 # A caption file this share of capitals (or more) was typed in all caps and is
 # recased. Decided per file, so one shouted line in a normally cased file stays
@@ -89,6 +99,85 @@ def cue_spans_from_srt(srt_text: str) -> tuple[list[str], list[tuple[float, floa
     )
 
 
+@dataclass(frozen=True)
+class ParenGroup:
+    """One ``(...)`` group of a cue: its words, and where it sits in the cue's cleaned line.
+
+    ``at`` is the number of the line's space-split tokens before the group. ``None`` when the
+    group cannot be placed in the line: glued inside a word ("love(oh)you"), or after text with
+    no letter in it ("1, 2 (hey) go").
+    """
+
+    text: str
+    at: int | None
+
+
+@dataclass(frozen=True)
+class ParenCue:
+    """A cue that holds parenthetical groups, as :func:`sheet_parens` reads it.
+
+    ``index`` is the cue's place in the sheet, every cue counted. An ``inline`` cue still has
+    words once cleaned, and ``line`` is its line in :func:`cue_spans_from_srt`'s list. A
+    paren-only cue has no line: ``line`` is the line it goes before (the line count after the
+    last line), and its groups carry ``at`` 0.
+    """
+
+    index: int
+    span: tuple[float, float]
+    inline: bool
+    line: int
+    groups: tuple[ParenGroup, ...]
+
+
+def sheet_parens(srt_text: str) -> list[ParenCue]:
+    """The parenthetical groups the cue cleaners delete, cue by cue.
+
+    The cleaners drop every group because most are stage directions; a caller with more
+    evidence than the text (the transcript) can tell which were sung. Groups are found as
+    :func:`clean_srt_line` finds them, once tags, ``[stage directions]`` and note glyphs are
+    gone: from the first ``(`` to the next ``)``, so a stray ``(`` inside a group is dropped
+    from its text. A group's text is its words with spacing collapsed, recased in a file typed
+    in capitals with the rest of its cue, so a group in mid-sentence starts lower case. An
+    empty group is skipped, and so is a cue with no group.
+    """
+    cues = list(srt.parse(srt_text))
+    all_caps = _is_caps_file([sub.content for sub in cues])
+    cleaned = [_clean_file_cue(sub.content, all_caps) for sub in cues]
+    kept = [i for i, text in enumerate(cleaned) if text]
+    out: list[ParenCue] = []
+    for i, sub in enumerate(cues):
+        markup = strip_markup(sub.content)
+        if all_caps:
+            markup = _recase_line(markup)
+        groups = []
+        for match in PAREN_GROUP_RE.finditer(markup):
+            text = " ".join(match.group()[1:-1].replace("(", " ").split())
+            if not text:
+                continue
+            at = _group_at(markup[: match.start()], cleaned[i], all_caps) if cleaned[i] else 0
+            groups.append(ParenGroup(text, at))
+        if groups:
+            span = (sub.start.total_seconds(), sub.end.total_seconds())
+            # Lines before this cue: its own line id if it has a line, else the next line's.
+            out.append(ParenCue(i, span, bool(cleaned[i]), bisect_left(kept, i), tuple(groups)))
+    return out
+
+
+def _group_at(before: str, line: str, all_caps: bool) -> int | None:
+    """How many of the cleaned ``line``'s tokens come before a group.
+
+    ``before`` is the cue's text up to the group, cleaned as the cue is, so a speaker label or
+    dash in front goes the way it went from the line. ``None`` when the line does not start
+    with those tokens, and when the text before the group has no letter: cleaned alone it is
+    empty, which would read as the start of the line.
+    """
+    bare = " ".join(PAREN_GROUP_RE.sub("", before).split())
+    if bare and not any(char.isalpha() for char in bare):
+        return None
+    tokens = _clean_file_cue(before, all_caps).split()
+    return len(tokens) if line.split()[: len(tokens)] == tokens else None
+
+
 def clean_cue_texts(contents: list[str]) -> list[str]:
     """Each cue's cleaned text in its own position, ``""`` for one that cleans to nothing.
 
@@ -99,9 +188,19 @@ def clean_cue_texts(contents: list[str]) -> list[str]:
     the whole list, and speaker labels are left alone in such a file, where
     every line would look like one.
     """
-    all_caps = is_all_caps([clean_srt_line(content) for content in contents])
-    cleaned = [_clean_cue(content, labels=not all_caps) for content in contents]
-    return [_recase_line(text) for text in cleaned] if all_caps else cleaned
+    all_caps = _is_caps_file(contents)
+    return [_clean_file_cue(content, all_caps) for content in contents]
+
+
+def _is_caps_file(contents: list[str]) -> bool:
+    """The per-file capitals decision, which every cue of the file is cleaned under."""
+    return is_all_caps([clean_srt_line(content) for content in contents])
+
+
+def _clean_file_cue(content: str, all_caps: bool) -> str:
+    """One cue cleaned as :func:`clean_cue_texts` cleans it in a file with this capitals decision."""
+    text = _clean_cue(content, labels=not all_caps)
+    return _recase_line(text) if all_caps else text
 
 
 def _clean_cue(content: str, labels: bool) -> str:

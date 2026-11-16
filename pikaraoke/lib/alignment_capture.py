@@ -25,6 +25,18 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+# v12: loud-start onset exit (plans/onset-loud-start.md). A milestone bump
+#     (run-affecting) -- no field renamed or removed, but output_line_timings
+#     move, so regen treats v11 bundles as stale:
+#   - the onset snap moves a line it took as on time (a loud start) when the
+#     transcriber heard the line's first word within 0.25 s of a later rise and
+#     did not also hear it earlier in the line. A line timed from the heard
+#     words (source "transcribe") never takes the exit.
+#     Additive fields (no bump of their own): joint_stats.edge_snap.onset gains
+#     n_heard_snapped, heard_snaps (line_id and shift_s per move, shaped like
+#     snaps) and n_heard_earlier (lines the guard kept). These moves are not
+#     counted in n_snapped or n_fired, so n_fired == n_snapped + n_no_rise +
+#     n_below_min_shift still holds.
 # Additive since v11 (no bump -- additions only):
 #   - cue_inputs: cue-align runs only (None on the other routes, absent from
 #     earlier bundles). What the per-line rescue consumed, so it and the edge
@@ -33,7 +45,24 @@ logger = logging.getLogger(__name__)
 #     ``sections``, the line objects (line_id/text/words/start/end/source) the
 #     section align produced before any rescue; ``realigns``, one {line_id, w0, w1, words} per one-line
 #     re-align in call order, ``words`` the aligner's raw result at absolute
-#     song time, null when the align failed.
+#     song time, null when the align failed. When backing vocals were kept (line
+#     ids are the song's new ones): ``spans`` and ``sections`` hold
+#     the added lines too, an added line with no words; ``rescue_offset``, the
+#     display lead the rescue was given (today's lines' lead, exact float) so
+#     an offline replay passes it back to ``repace_bad_lines(offset=)``, and
+#     the ids of the added lines to ``added_lines=`` (read from
+#     ``joint_stats.backing.old_line_ids``, the entries that are null).
+#   - joint_stats.backing: cue-align runs whose sheet has parenthetical groups
+#     and whose transcript judged them. ``groups``, one per group: ``cue``
+#     (the cue's place in the sheet), ``group``, ``kind`` (inline / paren_only),
+#     ``verdict`` (heard, vocable, consistency, quote, not_heard, unplaced,
+#     overlap), ``share``, and for a kept group its ``line_id`` and ``tokens``
+#     [first, end) in that line's words: its align tokens less those that
+#     normalise to nothing, a lone "-" or "," (null for a dropped one). With a
+#     keep: ``old_line_ids``, each line's id before the keep (null for an added
+#     line), and ``aligned_sections``, the [lid_lo, lid_hi] of each section
+#     sent back to the aligner. The bundle's ``lyrics.lines`` and ``align_lines``
+#     are then the song's lines with the kept groups in, not the sheet's.
 # v11: interior-pause end repair (plans/edge-snap-coverage-accuracy.md
 #     Phase 6). A milestone bump (run-affecting) -- no field renamed or
 #     removed, but output_line_timings move, so regen treats v10 bundles as
@@ -164,8 +193,9 @@ logger = logging.getLogger(__name__)
 #     hold the align/refine words on joint runs). Both sources are saved
 #     verbatim so the joint matcher can be re-run at future α values
 #     without paying for whisper. Cue-align runs save the words the de-reverb
-#     gate transcribed too (the cue route doesn't use them): the heard words a
-#     movie-subtitle slice is checked against. Bundles from before hold None.
+#     gate transcribed too: the heard words the cue rescue weighs against the
+#     cues (a replay needs them), the edge snap checks a loud start against, and
+#     a movie-subtitle slice is checked against. Bundles from before hold None.
 # v4: tiling scores are raw matched-token counts (n - dist), not
 #     normalized ratios. Previously score in [0, 1]; now score in [0, n].
 #     Affects tiling_stats.selected_windows[].score,
@@ -175,7 +205,7 @@ logger = logging.getLogger(__name__)
 # v2: added tiling per-unit fields (units, zero_candidate_unit_ids,
 #     anchor_recovered_unit_ids, selected_windows replacing window_widths).
 # v1: initial.
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 
 def build_bundle(

@@ -11,6 +11,7 @@ from pikaraoke.lib import lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION, output_line_timings
 from pikaraoke.lib.cue_align import SOURCE_REALIGN
 from pikaraoke.lib.joint_match import match_words_to_lines_joint_with_stats
+from pikaraoke.lib.library_regen import LRC_ORIGIN, MOVIE_ORIGIN
 from pikaraoke.lib.srt_provenance import is_generated, mark_generated
 from pikaraoke.lib.windowed_realign import merge_spans, replay_span
 from pikaraoke.pipeline.config import PipelineConfig
@@ -223,6 +224,17 @@ def _make_stage_and_ctx(tmp_path, *, dereverb_yield_wpm=0.0):
     return stage, ctx, worker
 
 
+def _pass_through_snap() -> MagicMock:
+    """A ``snap_line_edges`` stand-in that returns its lines as given and records the call."""
+
+    def snap(
+        objs, _path, env=None, doubted_sources=None, heard_words=None, heard_timed_sources=None
+    ):
+        return objs, {}
+
+    return MagicMock(side_effect=snap)
+
+
 class TestJointRoute:
     """Alignment mode runs align_refine + transcribe(refine=False) →
     joint matcher; no escalation, no gating."""
@@ -286,6 +298,51 @@ class TestJointRoute:
         h, m, s = start_str.split(":")
         start_secs = int(h) * 3600 + int(m) * 60 + float(s)
         assert start_secs >= 14.0, f"expected start near 15s; got {start_secs}"
+
+
+class TestShowParensWiring:
+    """A line's display text keeps its parentheses on the karaoke words; no time changes."""
+
+    @staticmethod
+    def _ass(tmp_path, lyrics: str) -> str:
+        tmp_path.mkdir()
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        ctx.artifacts["lyrics_path"].write_text(lyrics, encoding="utf-8")
+        words = [
+            {"word": w, "start": 1.0 + 0.5 * i, "end": 1.4 + 0.5 * i}
+            for i, w in enumerate(["I", "can't", "help", "Falling"])
+        ]
+        worker.align_refine.return_value = words
+        worker.transcribe_words.return_value = words
+        stage.run(ctx)
+        ass_path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
+        return ass_path.read_text(encoding="utf-8")
+
+    def test_the_joint_route_shows_a_lines_parentheses_at_unchanged_times(self, tmp_path):
+        with_parens = self._ass(tmp_path / "with", "(I can't help) Falling\n")
+        bare = self._ass(tmp_path / "bare", "I can't help Falling\n")
+        assert "(I" in with_parens and "help)" in with_parens
+        assert with_parens.replace("(I", "I").replace("help)", "help") == bare
+
+    def test_transcribe_mode_does_not_go_through_it(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        del ctx.artifacts["lyrics_path"]
+        worker.transcribe_refine.return_value = [
+            {
+                "text": "(hi)",
+                "words": [{"word": "hi", "start": 0.0, "end": 1.0}],
+                "start": 0.0,
+                "end": 1.0,
+            }
+        ]
+        show = MagicMock()
+        monkeypatch.setattr(la_mod, "show_parens", show)
+
+        stage.run(ctx)
+
+        show.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -602,34 +659,56 @@ class TestCueAlignRoute:
         ]
 
     def test_srt_shares_dereverb_gate(self, tmp_path, monkeypatch):
-        # Gate transcribes once even though the cue route never uses the words.
+        # The gate transcribes once; the cue route reuses its words rather than transcribing again.
         stage, ctx, worker, _ = self._make_srt(tmp_path, monkeypatch)
         stage.run(ctx)
         worker.transcribe_words.assert_called_once()
         assert worker.transcribe_words.call_args.kwargs["refine"] is False
 
+    HEARD = [
+        {"word": "glowing", "start": 10.0, "end": 10.4},
+        {"word": "river", "start": 11.0, "end": 11.4},
+    ]
+
     def test_the_gates_transcribe_words_reach_the_bundle(self, tmp_path, monkeypatch):
-        """The cue route doesn't use them, but a movie-subtitle slice is checked
-        against the heard words a song's bundle keeps."""
+        """A movie-subtitle slice is checked against the heard words a song's bundle
+        keeps, and a replay of the rescue needs them."""
         stage, ctx, worker, _ = self._make_srt(tmp_path, monkeypatch)
-        heard = [
-            {"word": "glowing", "start": 10.0, "end": 10.4},
-            {"word": "river", "start": 11.0, "end": 11.4},
-        ]
-        worker.transcribe_words.return_value = heard
+        worker.transcribe_words.return_value = self.HEARD
 
         stage.run(ctx)
 
         bundle = _read_bundle(ctx)
         assert bundle["pipeline_decisions"]["method_used"] == "cue_align"
-        assert bundle["transcribe_words"] == heard
+        assert bundle["transcribe_words"] == self.HEARD
+
+    def test_the_edge_snap_checks_a_loud_start_against_the_gates_words(self, tmp_path, monkeypatch):
+        stage, ctx, worker, la_mod = self._make_srt(tmp_path, monkeypatch)
+        worker.transcribe_words.return_value = self.HEARD
+        snap = _pass_through_snap()
+        monkeypatch.setattr(la_mod, "snap_line_edges", snap)
+
+        stage.run(ctx)
+
+        assert snap.call_args.kwargs["heard_words"] == self.HEARD
+        assert snap.call_args.kwargs["heard_timed_sources"] == frozenset({"transcribe"})
+
+    def test_the_gates_words_reach_the_rescue(self, tmp_path, monkeypatch):
+        stage, ctx, worker, la_mod = self._make_srt(tmp_path, monkeypatch)
+        worker.transcribe_words.return_value = self.HEARD
+        align = MagicMock(wraps=la_mod.align_song)
+        monkeypatch.setattr(la_mod, "align_song", align)
+
+        stage.run(ctx)
+
+        assert align.call_args.kwargs["heard_words"] == self.HEARD
 
     def test_one_decode_places_the_windows_and_feeds_the_edge_snap(self, tmp_path, monkeypatch):
         stage, ctx, _worker, la_mod = self._make_srt(tmp_path, monkeypatch)
         env = np.full(1201, -20.0)  # 30 s, sung throughout
         decode = MagicMock(return_value=env)
         align = MagicMock(wraps=la_mod.align_song)
-        snap = MagicMock(side_effect=lambda objs, _path, env=None, doubted_sources=None: (objs, {}))
+        snap = _pass_through_snap()
         monkeypatch.setattr(la_mod, "decode_env_db", decode)
         monkeypatch.setattr(la_mod, "align_song", align)
         monkeypatch.setattr(la_mod, "snap_line_edges", snap)
@@ -643,7 +722,7 @@ class TestCueAlignRoute:
 
     def test_the_edge_snap_doubts_re_aligned_starts(self, tmp_path, monkeypatch):
         stage, ctx, _worker, la_mod = self._make_srt(tmp_path, monkeypatch)
-        snap = MagicMock(side_effect=lambda objs, _path, env=None, doubted_sources=None: (objs, {}))
+        snap = _pass_through_snap()
         monkeypatch.setattr(la_mod, "snap_line_edges", snap)
 
         stage.run(ctx)
@@ -688,9 +767,188 @@ class TestCueAlignRoute:
 # ---------------------------------------------------------------------------
 
 
+class TestBackingVocalsWiring:
+    """Caption and LRC songs show the backing vocals the transcriber heard, on the lines the
+    bundle then records."""
+
+    SHEET = (
+        "1\n00:00:10,000 --> 00:00:12,000\nglowing river (hey)\n"
+        "\n2\n00:00:12,500 --> 00:00:13,500\n(oh, oh)\n"
+        "\n3\n00:00:14,000 --> 00:00:16,000\nphantom parade\n"
+    )
+    # What each align text is sung as (absolute seconds), and what the transcriber heard.
+    SUNG = {
+        "glowing river": [(10.0, 10.4), (10.5, 10.9)],
+        "glowing river hey": [(10.0, 10.4), (10.5, 10.9), (11.5, 11.9)],
+        "oh, oh": [(12.6, 12.8), (12.9, 13.1)],
+        "phantom parade": [(14.0, 14.4), (14.5, 14.9)],
+    }
+    HEARD = [
+        {"word": w, "start": s, "end": s + 0.3}
+        for w, s in [
+            ("glowing", 10.0),
+            ("river", 10.5),
+            ("hey", 11.5),
+            ("oh", 12.6),
+            ("oh", 12.9),
+            ("phantom", 14.0),
+            ("parade", 14.5),
+        ]
+    ]
+
+    def _make(self, tmp_path, monkeypatch, sheet=SHEET, origin="srt"):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        subs = ctx.song_path.parent / "subtitles"
+        subs.mkdir()
+        srt_path = subs / f"{ctx.song_path.stem}.en.srt"
+        srt_path.write_text(sheet, encoding="utf-8")
+        ctx.artifacts["lyrics_path"] = srt_path
+        ctx.artifacts["lyrics_origin"] = origin
+        slice_start = {}
+
+        def ffmpeg(cmd, _ctx, _phase):
+            slice_start["t0"] = float(cmd[cmd.index("-ss") + 1])
+
+        def align(*, lyrics_text, **_kwargs):
+            return [
+                {"word": tok, "start": s - slice_start["t0"], "end": e - slice_start["t0"]}
+                for line in lyrics_text.split("\n")
+                for tok, (s, e) in zip(line.split(), self.SUNG.get(line, ()))
+            ]
+
+        worker.align_refine.side_effect = align
+        worker.transcribe_words.return_value = self.HEARD
+        monkeypatch.setattr(la_mod, "run_ffmpeg", ffmpeg)
+        monkeypatch.setattr(la_mod, "_wav_duration", lambda _p: 30.0)
+        return stage, ctx, worker, la_mod
+
+    @staticmethod
+    def _ass(ctx) -> str:
+        path = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
+        return path.read_text(encoding="utf-8")
+
+    def test_a_caption_sheet_shows_a_paren_only_echo_and_an_inline_one(self, tmp_path, monkeypatch):
+        stage, ctx, _worker, _la = self._make(tmp_path, monkeypatch)
+
+        stage.run(ctx)
+
+        bundle = _read_bundle(ctx)
+        assert bundle["lyrics"]["lines"] == ["glowing river (hey)", "(oh, oh)", "phantom parade"]
+        assert bundle["lyrics"]["align_lines"] == ["glowing river hey", "oh, oh", "phantom parade"]
+        assert [t["line_id"] for t in bundle["output_line_timings"]] == [0, 1, 2]
+        backing = bundle["joint_stats"]["backing"]
+        assert backing["old_line_ids"] == [0, None, 1]
+        assert [(g["verdict"], g["line_id"]) for g in backing["groups"]] == [
+            ("heard", 0),
+            ("heard", 1),
+        ]
+        ass = self._ass(ctx)
+        assert ass.count("Dialogue:") == 3
+        assert "(hey)" in ass and "(oh," in ass and "oh)" in ass
+
+    def test_an_lrclib_sheet_takes_the_same_path_as_a_caption(self, tmp_path, monkeypatch):
+        stage, ctx, _worker, _la = self._make(tmp_path, monkeypatch, origin=LRC_ORIGIN)
+
+        stage.run(ctx)
+
+        assert _read_bundle(ctx)["lyrics"]["lines"] == [
+            "glowing river (hey)",
+            "(oh, oh)",
+            "phantom parade",
+        ]
+
+    def test_a_movie_sheet_is_timed_as_today(self, tmp_path, monkeypatch):
+        stage, ctx, _worker, la_mod = self._make(tmp_path, monkeypatch, origin=MOVIE_ORIGIN)
+        align = MagicMock(wraps=la_mod.align_song)
+        monkeypatch.setattr(la_mod, "align_song", align)
+
+        stage.run(ctx)
+
+        assert align.call_args.kwargs["parens"] == []
+        bundle = _read_bundle(ctx)
+        assert bundle["lyrics"]["lines"] == ["glowing river", "phantom parade"]
+        assert "backing" not in bundle["joint_stats"]
+        assert "(hey)" not in self._ass(ctx)
+
+    def test_an_edited_sheet_with_its_groups_cleaned_out_is_timed_as_today(
+        self, tmp_path, monkeypatch
+    ):
+        cleaned = (
+            "1\n00:00:10,000 --> 00:00:12,000\nglowing river\n"
+            "\n2\n00:00:14,000 --> 00:00:16,000\nphantom parade\n"
+        )
+        stage, ctx, _worker, la_mod = self._make(tmp_path, monkeypatch, cleaned)
+        align = MagicMock(wraps=la_mod.align_song)
+        monkeypatch.setattr(la_mod, "align_song", align)
+
+        stage.run(ctx)
+
+        assert align.call_args.kwargs["parens"] == []
+        bundle = _read_bundle(ctx)
+        assert bundle["lyrics"]["lines"] == ["glowing river", "phantom parade"]
+        assert "backing" not in bundle["joint_stats"]
+
+    def test_the_joint_route_gets_no_parens(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, _worker = _make_stage_and_ctx(tmp_path)
+        ctx.artifacts["lyrics_origin"] = "srt"
+        parens = MagicMock()
+        align = MagicMock()
+        monkeypatch.setattr(la_mod, "sheet_parens", parens)
+        monkeypatch.setattr(la_mod, "align_song", align)
+
+        stage.run(ctx)
+
+        parens.assert_not_called()
+        align.assert_not_called()
+
+
 def _read_bundle(ctx) -> dict:
     path = ctx.song_path.parent / "alignment_debug" / f"{ctx.song_path.stem}.json"
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+class TestEdgeSnapHeardWords:
+    """The edge snap gets the transcriber's words on every route that has them."""
+
+    def test_the_joint_route_passes_its_words_and_the_source_timed_from_them(
+        self, tmp_path, monkeypatch
+    ):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        snap = _pass_through_snap()
+        monkeypatch.setattr(la_mod, "decode_env_db", MagicMock(return_value=np.full(100, -30.0)))
+        monkeypatch.setattr(la_mod, "snap_line_edges", snap)
+
+        stage.run(ctx)
+
+        assert snap.call_args.kwargs["heard_words"] == worker.transcribe_words.return_value
+        assert snap.call_args.kwargs["heard_timed_sources"] == frozenset({"transcribe"})
+
+    def test_transcription_mode_has_no_heard_words(self, tmp_path, monkeypatch):
+        import pikaraoke.pipeline.stages.lyric_align as la_mod
+
+        stage, ctx, worker = _make_stage_and_ctx(tmp_path)
+        del ctx.artifacts["lyrics_path"]
+        worker.transcribe_refine.return_value = [
+            {
+                "text": "hi",
+                "words": [{"word": "hi", "start": 0.0, "end": 1.0}],
+                "start": 0.0,
+                "end": 1.0,
+            }
+        ]
+        snap = _pass_through_snap()
+        monkeypatch.setattr(la_mod, "decode_env_db", MagicMock(return_value=np.full(100, -30.0)))
+        monkeypatch.setattr(la_mod, "snap_line_edges", snap)
+
+        stage.run(ctx)
+
+        assert snap.call_args.kwargs["heard_words"] is None
 
 
 class TestEvidenceVetoWiring:
@@ -704,7 +962,7 @@ class TestEvidenceVetoWiring:
         env = np.array([-30.0, -30.0], dtype=np.float32)
         decode = MagicMock(return_value=env)
         veto = MagicMock(side_effect=lambda objs, _env: (objs, {"n_vetoed": 0}))
-        snap = MagicMock(side_effect=lambda objs, _path, env=None, doubted_sources=None: (objs, {}))
+        snap = _pass_through_snap()
         monkeypatch.setattr(la_mod, "decode_env_db", decode)
         monkeypatch.setattr(la_mod, "veto_uncorroborated_lines", veto)
         monkeypatch.setattr(la_mod, "snap_line_edges", snap)

@@ -251,6 +251,15 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
   the last line"). Nothing after the last line bounds the extension. Likely
   the end-side blind spot (extension onto another voice) recorded on
   `archive/edge_snap_refine`. Record: `lyric-source-lists.md` Results row 21.
+- **Whisper's refine pass may not earn its cost.** Refine is about 80% of every
+  align+refine call: 78-157 s per cue song and 36-59 s per joint song in a
+  14-song probe (2026-11-11). On the joint route it barely moves the output
+  (most lines take transcribe timings, and edge snap owns line starts). On the
+  cue route it moves many words about 0.4 s later, the direction of whisper's
+  early-onset bias, but no reference on hand can say whether that is right.
+  Not ruled; next is an A/B listen on 2-3 cue songs. Record:
+  `plans/refine-ablation.md` on branch `refine_ablation` (probe, report script
+  and raw results under `scripts/`).
 
 ## Song rename (pre-existing on `dev`)
 
@@ -448,13 +457,17 @@ Heard at GATE B, not fixed:
 - **Pocahontas "wind" is placed before the singer's pause.** The window holds
   the whole note, but both aligns put "wind" before the 1.2 s pause; the line
   has every word, so nothing flags it (Decision 12, rows 14, 57).
-- **The guard rejects a correct re-align at Miss Independent 3:59** (line 79:
+- ~~**The guard rejects a correct re-align at Miss Independent 3:59** (line 79:
   the unguarded re-align matched the transcriber). Ken left it (Decision 16,
-  row 61).
+  row 61).~~
+  Fixed by the guard lift (`fecebdd2` on tag `archive/cue_heard_rescue`):
+  a re-align the transcriber confirms as the aligner returned it is no longer cut to
+  the previous line's end. 3:59 itself was not heard again: the staged copy of the
+  song has no lifted line (`plans/cue-heard-rescue.md` on that tag, GATE H item 3).
 
 Onset snap:
 
-- **A line starting on the previous line's held note is taken as on time.**
+- ~~**A line starting on the previous line's held note is taken as on time.**
   Onset snap skips a line whose first word is loud at its claimed start, and the
   end snap then stops the held note just before it (Someone Like You 3:48
   "instead"). `bb7c8ca` lifts the skip for re-aligned lines only. Lifting it for
@@ -462,6 +475,39 @@ Onset snap:
   test songs, 13 further from the heard start; it needs its own probe over the
   library. Older than this branch, shared by every timing source (Decisions 12,
   17; rows 36, 63).
+  Library probe 2026-11-10 (133 cue songs replayed on the CPU): 1174 of 6553
+  lines start more than 0.3 s before the transcriber's first word, 954 of them
+  skipped as on time, 678 of those starting at the previous line's end. The "13
+  further" above is not a cost: the same reference calls 601 of the 1710 snaps
+  that ship today further, so it cannot judge a start move, and Ken's ear has
+  to. Ken, 2026-11-10: own branch, first rule to try is a move only where the
+  transcriber's first word agrees with the rise. Record:
+  `plans/onset-loud-start.md` on branch `onset_loud_start`.~~
+  Fixed where the transcriber hears the first word at the rise (`fa91d145`,
+  `eb7d1ffb`, `ff76a886` on `dev`, schema 12): a loud start moves there, and a
+  first word the transcriber also heard earlier keeps its start. The 133-song
+  replay moves 589 lines and holds 4. A line whose first word the transcriber
+  does not hear at the rise is still taken as on time. Library songs change only
+  when regenerated; the full regen is Ken's, later. Record:
+  `plans/onset-loud-start.md` on tag `archive/onset_loud_start`.
+- **The repeated-first-word guard needs both copies heard** (Results row 13).
+  A line that starts with an echo of its own next word keeps its start only when
+  the transcriber heard both copies; with only the second heard it still moves
+  to a sliver before word 2. The two lines of that shape in the replay are among
+  the four held, so none of the 589 moves is one. Said in `snap_line_onsets`'s
+  docstring.
+- **A joint song's lines can stack on one instant, zero length, when the heard
+  words shift** (Results row 14). Already in pass 1, so not the onset snap's:
+  `hvvjiE4AdUI` lines 41-43 all at 230.62, `1YiAzyCzZzw` lines 57-60 at 175.14,
+  `pXNd2V88d60` lines 56-62 at 296.08, each on a song whose v11 bundle was a
+  Windows capture. Heard in Ken's listen of the 13 songs, 2026-11-16.
+- **Windows and Linux whisper give different words for the same song** (Results
+  row 14). 11 of the 13 regenerated songs had Windows v11 bundles; their heard
+  words differ from this box's by 5 to 88 of 340 to 777, with the config equal
+  but the model path, and a second run here repeats the first exactly. So a regen
+  on one box moves lines on songs last captured on the other, apart from any rule
+  change. Ken, 2026-11-16: does not gate the onset snap. The cause is not settled
+  in this file.
 
 The rescue (review findings and decisions kept as built):
 
@@ -470,10 +516,15 @@ The rescue (review findings and decisions kept as built):
   on a later one. Fix: carry each word's token index on the line object from
   `_match_words_to_tokens`, which also removes `_assign_in_order`. Same
   prerequisite as Decision 12's unruled splice (keep the section's words, take
-  only the missing ones from the re-align).
+  only the missing ones from the re-align). `backing_vocal_lines`: an echo line
+  repeats its lead's words within one line ("Baby (baby)"), so the in-order
+  guess can put an echo's timing on the lead's token, now a common case, not a
+  rare one; watched at that plan's GATE B (B3, B4).
 - **Duet ending** (row 44, finding 6): the song's last line is the last by
   index, not the latest-ending one, so an earlier line held past the last cue
   gets no tail window and the last line's tail runs over the other singer.
+  `backing_vocal_lines`: a paren-only line after the last caption becomes the
+  song's last line and takes the uncapped tail window.
 - **The last line's window has no hold cap** (row 44, finding 5). Uncapped on
   purpose (the final note is often the longest), but outro ad-libs widen the
   window and the span the re-align is checked against. A cap needs the length
@@ -483,21 +534,44 @@ The rescue (review findings and decisions kept as built):
   but it can still start on that word's note past its timed end. How often is
   not measured (Decision 16).
 - **The guard looks only backward** (row 51, finding 6): a rescued line's last
-  word is never checked against the next line's first.
+  word is never checked against the next line's first. The heard-aimed retry
+  (rule B of `cue_heard_rescue`) moves a line's window 1.5 s or more, so it has
+  the same gap, and a next line placed with every word is then kept as it is
+  (`plans/cue-heard-rescue.md` on tag `archive/cue_heard_rescue`, Results log
+  row 15, review finding 3). Measured on the 24-song copy: none of the 10 kept
+  rule B lines ends after the next line's first word starts (row 17). Rule D,
+  which had three such lines (Smokin Out The Window 45, Closer 45, Takedown 49),
+  was left out. A bound would let a neighbour placed by its cue overrule a line
+  the transcriber confirmed.
 - **A re-paced line can start before the previous line's end** (row 51,
   finding 3). Not built: the 3 cases on the test songs (Miss Independent 5, 7,
   37) are fills placed right, with the previous line overrunning into them;
   starting them later would put line 7's six words in 0.62 s (row 65).
-- **Zero-length words a failed rescue leaves stay on screen** (Decision 14,
+- ~~**Zero-length words a failed rescue leaves stay on screen** (Decision 14,
   kept as built by Decision 16). The guess pass skips a line with a word for
   every token, so they show as 0.1 s fills. Guessing them instead is option
-  (b), measurable on the CPU from the bundles' `cue_inputs`.
+  (b), measurable on the CPU from the bundles' `cue_inputs`.~~
+  Fixed (`65438683` on tag `archive/cue_heard_rescue`): the guess pass
+  re-times them like words the aligner dropped. Library songs change when
+  regenerated (see "Cue rescue by the heard words" below).
 - **One zero-length word makes a line crammed** (Decision 15, kept as built).
   Costs 75 more one-line aligns on the 10 test songs (209 against 134, row 45);
   every partial line takes its own slice align too (row 24, finding 10).
   Options (b) two or more words, (c) a bound on how far timed words may move.
-- **Should Song Info's guessed-words count include zero-length words left on
-  screen?** (Decision 13.) Unchanged today.
+- ~~**A partial line's guessed words take their pace from its zero-length
+  words too** (found by the `cue_heard_rescue` review, Results log row 15 of
+  `plans/cue-heard-rescue.md`, finding 6). The guess pass sets a guessed
+  word's length from the median length of the line's words, and in a line
+  with fewer words than tokens a zero-length word counts in that median, so a
+  guessed word can come out as short as half the line's shortest timed word.
+  Never zero: a kept line has at most half its words instant. The zero-length
+  rule (`65438683`) re-times them only in a line with a word for every token.
+  Fix: pace from the timed words only.~~
+  Fixed (`ccb80211` on `dev`): the guess pass paces from the timed words only.
+- ~~**Should Song Info's guessed-words count include zero-length words left on
+  screen?** (Decision 13.) Unchanged today.~~
+  Yes, since `65438683`: a zero-length word that gets guessed timing is one, and
+  `n_guessed_words` and `guessed_word_line_ids`, which Song Info reads, count it.
 - **`align_song` deep-copies sections and re-align words with debug capture
   off** (row 51, finding 10).
 
@@ -507,6 +581,154 @@ Older than this branch:
   every word at least 0.1 s, so a run of floored words pushes the rest of the
   line late until its next gap: overrun of 0.3 s or more on 34 lines in 23 cue
   songs (Decision 14, row 43).
+
+## Cue rescue by the heard words (on `dev`)
+
+Branch `cue_heard_rescue`, ruled by Ken 2026-11-15: the rescue keeps a line the
+transcriber confirms (A1), a re-align it confirms is not cut to the previous
+line (the guard lift), a line heard 1.5 s or more from its cue is first looked
+for there (B), and a kept line's zero-length words get guessed timing. Left
+out by Ken's ear: A2 (hold a confirmed line against a re-align), D (whole lines
+far from where heard) and C (retry between neighbours). Record:
+`plans/cue-heard-rescue.md` on tag `archive/cue_heard_rescue`, with the probe
+and compare scripts (`scripts/cue_heard_probe.py`, `scripts/cue_heard_compare.py`),
+which read the stats of the three cut rules and stay on the tag.
+
+- **Library songs change only when regenerated.** They wait for one full regen
+  from `dev` now that `onset_loud_start` has landed (2026-11-16, after this
+  branch and `backing_vocal_lines`); its schema bump makes every bundle stale
+  anyway. Ken, 2026-11-15: no `--song` batch for this branch alone.
+- **Reflection line 36 (3:11) is still about 5 s early.** The transcriber
+  hears nothing there, and the line's cue-aimed retry timed three of five words
+  before its window ended. Lines 35 to 37 are word for word the same in the old
+  and new `.ass`.
+- **Quit Playing Games line 1 is still 4 s late.** The first pass was right;
+  one of its words is 1.72 s from where the transcriber heard it, so the line is
+  not confirmed (A1 needs every paired word within 1.0 s) and a one-line
+  re-align moves it.
+- **Rule B aims at a stretched first word after a pause.** When the first heard
+  word runs on from the line before ("lone first": it starts 2 s or more before
+  the second), the heard start is not the line's start. Before You Go 27 now
+  shows its first word about 2.5 s early (Ken: a little early).
+- **Tangled line 30 stays late.** It is heard 1.47 s before its cue, 0.03 s
+  under rule B's 1.5 s threshold.
+- **A failed re-align cannot be told from a refused one.** The 24-song regen
+  logged 18 aligner failures in 6 songs (`'NoneType' object has no attribute
+  'language'` from `stable_whisper`'s `align`; 15 one-line re-aligns, 3 section
+  aligns, all of those in Will I). The stats record a re-align that was not
+  kept the same whether the aligner failed or a check refused it; only the log
+  tells (Results log row 16).
+- **If rule D or C is ever revisited.** D's three wrong moves were two lines moved
+  before the previous line's start (Takedown 33, Bring It All Back 52) and one
+  twin's audio in a run the transcriber only seemed to hear in full (Closer 45).
+  C gave no audible gain in eight listens, and for 22 of its 96 tries on the
+  library the stretch ended at a twin the cue test rejects (row 15, finding 4).
+- **Rule B measures the singing end against the next line's unmoved cue.** A
+  line heard early can have its window and aimed span stretch back over its own
+  cue position; one heard late past the next cue's start gets no singing end at
+  all. Confirmation still refuses a result on the cue position, so the cost is a
+  rule B miss, not a wrong line. Fixing it reopens the ruled "the next line's
+  cue stays where it is" (review of the landed set, Results log row 22,
+  finding 5).
+- **The heard match splits duet lines by order, not by voice.** `heard_lines`
+  matches the whole song in line order, so where two cues overlap and share
+  words, one line can take the other singer's words, and rule B could then move
+  a right line. Needs a match that knows lines overlap; wait for a duet that
+  shows it (row 22, finding 9).
+
+## Backing vocal lines (on `dev`)
+
+Landed 2026-11-16 from branch `backing_vocal_lines`: a parenthetical group in a
+caption or LRCLIB sheet ("(oh, oh)") is shown when the transcriber heard it in
+its cue's window. An inline group joins its line, and a cue of only a group
+becomes a line of its own, timed by the rescue's one-line retry. Genius and
+custom songs show their parentheses too. Record: `plans/backing-vocal-lines.md`
+on tag `archive/backing_vocal_lines` (the Phase 2 run logs and the GATE B
+listening sheets are in its `plans/backing-vocal-lines/probes/`).
+
+- **Edit words drops a song's backing lines on save.** The page opens the
+  sheet's cleaned lines, which hold no parenthetical group, and saves them as
+  typed, so a song that shows backing lines loses them the next time its words
+  are edited. Keeping them needs the page to show the bundle's kept groups and
+  an edited sheet that keeps them as typed: a step of its own (plan, Design
+  choice 3).
+- **Repair's LRCLIB search scores against the backing lines too.**
+  `library_tools.current_lines` returns the bundle's `lyrics.lines`, which now
+  hold the added lines with their parentheses, so "mapped N of M" counts them in
+  M and a record with no echo cues maps fewer of them.
+- **Song Info counts an added line like any other.** `library_status._cue_fields`
+  counts it among the re-aligned or paced lines, and a paced one toward the 15%
+  guessed-lines share (`POOR_GUESSED_SHARE`), so a song can read as poor from
+  new lines alone.
+- **Re-aligning a section for an echo can cost another line its held last
+  word.** A section goes back to the aligner when one of its lines gains a kept
+  group, and its other lines are re-made with it. Where the aligner returns a
+  line's last word shorter or later than before, the end snap that used to
+  stretch it to the note's release may not fire, so the word ends seconds early
+  with no echo near it. 4 old lines in 34 songs at that plan's GATE B (NSYNC -
+  Thinking Of You 3:54, 5.7 s; three of about 1.1 s). Accepted (Ken,
+  2026-11-15): the same re-align fixed two lines that were 6 s off. The fix, if
+  wanted, is to keep every non-gaining line's first-pass words when its section
+  is re-aligned, which gives those two back.
+- **A group kept only because it repeats elsewhere can lead a line it was not
+  sung in.** Leave the Door Open 3:46: `(Tell me that you're coming through)
+  for you`, kept on a repeat elsewhere (nothing heard in its own cue), is placed
+  first and "for you" lands 1.6 s later than before. Ken (2026-11-15): "for
+  you" is roughly right, but he would rather the group were not in that line.
+  Not ruled as a change. The candidate: do not keep a group on consistency
+  alone when it leads its line (13 inline groups are kept on consistency; this
+  is the one found worse).
+- **An echo the aligner cannot find can cost its line a good retry.** Takedown
+  2:46, `I'ma take it down (oh, da-da-da, down, ooh)`: the first pass puts the
+  line 4.3 s before its cue, on `dev` as well, where the words come back clean
+  and a clean line is trusted outside its cue (the transcript hears it on the
+  cue, so rule B has nothing to look for). With the echo joined the line is
+  squeezed and gets a retry, which finds the lead on its cue with high
+  confidence and parks the echo's last word 0.2 s past the end bound, so the
+  whole retry is refused and the line stays early. Ken (2026-11-16): it starts
+  at 2:46 and is shown quite early; logged, nothing built. 28 retries on lines
+  with a kept group ran past the end bound at that plan's GATE B; this is the
+  one where the lead it found was seconds from what shipped. Two candidates,
+  each a change to what the rescue keeps and needing its own replay: judge
+  such a retry on the lead's words when only the echo overruns; or give a
+  clean line a retry when it sits seconds off its cue and the transcript hears
+  it on the cue, which fixes the line on `dev` too.
+- **An echo on its cue can show over the next line's early first word.** The
+  first pass can start a line's first word at the previous line's end, well
+  before its own cue, and the end snap holds it to the second word. Where an
+  added line now fills that time, both are lit at once. Can't Stop The Feeling
+  3:29 and 3:34: `(I can't stop the feeling)` over "Got" and over "Wanna", each
+  placed about 1.5 s before its cue (on `dev` as well) and held 1.9 and 2.3 s;
+  overlaps of 1.34 and 1.44 s. 5 added-line pairs overlap by over 1 s in 47
+  songs at that plan's GATE B (these two; the other three not read for
+  cause). No old word moves for it. Not heard by Ken as of 2026-11-16. The
+  candidate: the line after an added line starts no earlier than the echo's
+  end, or is a doubted start for the onset snap; either moves an old line's
+  first word and needs a replay.
+- **A group after a dialogue dash or song star is dropped as unplaced.**
+  `srt_cues._group_at` gives up on a group when the text before it has no
+  letter, which also catches a mark the cleaner removes ("- (hey) go",
+  "* (oh) go"), where the group's place is the line's start. A group glued to
+  the word before it ("Hello(oh), there") is dropped the same way, and a glued
+  label is misread: in "OK:(oh)go", "OK:" cut off at the group reads as a
+  speaker label, so the group lands before it. The letter check is a second,
+  looser copy of the cleaner's own rule. None of the library's 261 kept groups
+  is unplaced, and a dropped group leaves its line as it is today. Fix: place
+  the group from the cleaner's own output, not a check before it (stage 2
+  review, findings 4 and 9).
+- **The stage reads the sheet twice.** `srt_cues.sheet_parens` parses and
+  cleans the sheet again after `cue_spans_from_srt` has, and works out again
+  which cues are lines. Both use the same cleaning helpers, so their line ids
+  agree today; a change to which cues count as lines in one and not the other
+  would put inline groups into the wrong line with no error. Fix: one function
+  that returns the lines, spans and groups from a single parse (stage 2
+  review, finding 8).
+- **The LRCLIB origin name is spelled twice.** `backing_vocals.ORIGINS` writes
+  out `"lrclib_srt"` because the align stage cannot import `library_regen`,
+  where `LRC_ORIGIN` lives with the other origin names; a test keeps the two
+  equal. Moving only that one to `lrclib` would split the list, so the fix is
+  a small module the stage can import that holds every origin name (stage 2
+  review, finding 11).
 
 ## Test suite (Windows box)
 
@@ -563,3 +785,34 @@ Older than this branch:
   fitted time is mistimed, 2 mistimed lines make a flagged run, 3 unheard
   lines make a "couldn't check" note, and the gap limit is 15 s. Decision 11
   (2026-10-30): a fit that passes may override the gap limit with a checkbox.
+- **Flag finished-karaoke lines that are shifted, for an eyeball and a repair.**
+  Raised by Ken 2026-11-12 after the Decision 30 listen (record:
+  `plans/lrclib-shift-check.md` Results row 9 on branch `lrclib_fit_pick`): on
+  three LRCLIB-timed songs, lines that "come in early but end on time" and one late
+  stretch. Tried once, scratch only, on those three songs' bundles: the finished
+  lines (`output_line_timings` + `lyrics.lines`, as an SRT) put through
+  `srt_slice_fit.fit_slice` against the bundle's `transcribe_words`, then each
+  line's `offsets` at the bar's 1.5 s. It caught three of the five spots Ken heard:
+  Crazy 1:51 (+4.6 s early), Quit Playing Games 2:32 (+3.2 s) and the first two lines
+  of its late stretch (rest unheard by whisper). It missed Reflection 3:11 (line unheard)
+  and Quit Playing Games 0:52 (0.7 s). It also flags lines nobody listened to
+  (7 / 2 / 4); the false-alarm rate is unknown. A long first `\k` word is no signal: nearly
+  every line has one. Possible shape: computed at the end of each run, a Tools-tab
+  list beside "poor" and the flagged lines with time and direction on Song Info. Open:
+  no tool fixes one line's time today (Edit words keeps times, Repair swaps the whole
+  source), so the flag needs a nudge tool or an automatic fix; `onset_loud_start`
+  (landed 2026-11-16, tag `archive/onset_loud_start`) fixes the early-start kind
+  where the transcriber hears the first word at the rise, once a song is regenerated. Cheap
+  next step: run the check over the whole library (VM, read-only) and have Ken
+  listen to a sample of flagged lines.
+  `cue_heard_rescue` (record: `plans/cue-heard-rescue.md` on tag
+  `archive/cue_heard_rescue`) sized the kinds on the library's 177 cue-route
+  bundles, 2026-11-13. Most far-off whole lines have only their first word early
+  and the rest of the line agrees with the transcriber (about 250 caption lines
+  and 40 LRCLIB lines); that large group is `onset_loud_start`'s. Whole lines
+  displaced as a whole number about 27. Rule D re-aligned them where heard, and
+  by ear 3 of its 6 kept lines went onto the wrong audio, so it was left out.
+  Of Ken's five spots, Quit Playing Games 1:57 and Crazy 1:51 are fixed (rules
+  A1 and B); Quit Playing Games 0:52 and 2:32 and Reflection 3:11 are not. The
+  flag itself is still unbuilt. Not ruled; ask the CLAUDE.md design questions
+  before any plan.

@@ -13,8 +13,10 @@ stem's RMS envelope for the first sustained rise that lands near the
 line's own sung level, then shifts the word start forward to it. A
 reverb tail decays monotonically, so it cannot fake a rise — the exact
 failure mode that defeats an absolute silence threshold. Shifts are
-forward-only and bounded by word 2, so an on-time line is never made
-worse.
+forward-only and bounded by word 2. A line already loud at its claimed
+start is taken as on time and left alone, unless the transcriber heard
+its first word at a later rise (see :func:`snap_line_onsets`, which also
+names the one on-time line that exit can still move).
 """
 
 import logging
@@ -22,6 +24,8 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
+
+from pikaraoke.lib.token_align import _normalize_token
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +61,11 @@ MIN_SHIFT_S = 0.15
 
 # Never shrink word 1 below this, and skip search windows narrower.
 MIN_WORD_DUR_S = 0.1
+
+# A loud start the snap took as on time moves anyway when the transcriber
+# heard the line's first word this close to the rise it finds. The distance
+# is what Ken's ear passed at GATE S (plans/onset-loud-start.md).
+HEARD_AGREE_S = 0.25
 
 # Line-end snap: a line-final word has released once the level stays
 # below the sung reference (by SUSTAIN_NEAR_DB) for this long. Shorter
@@ -222,11 +231,115 @@ def _detect_rise(
     return None
 
 
+def _search_new_start(
+    env: np.ndarray, words: list[dict], ref: float, bound: float
+) -> tuple[str, float | None]:
+    """Where a searched line's first word moves to, and the exit the search takes.
+
+    ``("snapped", new_start)``, or ``("no_rise", None)`` when no rise qualifies, or
+    ``("below_min_shift", None)`` when the move is within whisper's jitter.
+    """
+    w1s = words[0]["start"]
+    onset = _detect_rise(env, w1s, bound, ref, trust_bound=len(words) >= 2)
+    if onset is None:
+        return "no_rise", None
+    new_start = min(max(onset - SNAP_MARGIN_S, w1s), bound - MIN_WORD_DUR_S)
+    if new_start - w1s < MIN_SHIFT_S:
+        return "below_min_shift", None
+    return "snapped", new_start
+
+
+def _moved_line(obj: dict, new_start: float, bound: float) -> dict:
+    """Copy of ``obj`` with its first word starting at ``new_start``."""
+    words = obj["words"]
+    w1s, w1e = words[0]["start"], words[0]["end"]
+    # Whisper's word ends are bounded by the next word's attention, so
+    # keep the end when it still lies past the snapped start; otherwise
+    # the whole span sat in the gap — carry the duration forward.
+    if w1e >= new_start + MIN_WORD_DUR_S:
+        new_end = w1e
+    else:
+        new_end = min(max(new_start + (w1e - w1s), new_start + MIN_WORD_DUR_S), bound)
+
+    new_obj = dict(obj)
+    new_obj["words"] = [{**words[0], "start": new_start, "end": new_end}] + words[1:]
+    new_obj["start"] = new_start
+    return new_obj
+
+
+def _loud_at_start(env: np.ndarray, words: list[dict], ref: float) -> bool:
+    """Whether word 1 is near sung level at its claimed start and across its claimed span.
+
+    Such a line is taken as on time and not searched, or an on-time word followed by an
+    intra-line pause would snap to the NEXT word's onset (back-to-back lines leave no quiet
+    before word 1 for the rise detector). The span check keeps a loud reverb tail at the
+    start from passing as on time: a tail collapses over the span, sustained singing holds.
+    """
+    w1s, w1e = words[0]["start"], words[0]["end"]
+    # Clamp into the envelope like _detect_rise: a first word at/after the stem's end
+    # (the envelope omits the final window) would slice empty and warn.
+    a = min(max(int(w1s / HOP_S), 0), max(len(env) - EDGE_FRAMES, 0))
+    span1 = env[a : max(int(w1e / HOP_S), a + 1)]
+    return bool(
+        env[a : a + EDGE_FRAMES].mean() >= ref - NEAR_SUNG_DB
+        and float(np.median(span1)) >= ref - SUSTAIN_NEAR_DB
+    )
+
+
+def _agrees(start: float, t: float) -> bool:
+    return abs(start - t) <= HEARD_AGREE_S
+
+
+def _heard_near(heard: list[tuple[float, str]], first_word: str, t: float) -> bool:
+    """Whether a heard word equal to ``first_word`` starts within :data:`HEARD_AGREE_S` of ``t``.
+
+    ``heard`` is the transcriber's words as ``(start, normalized token)`` pairs.
+    """
+    token = _normalize_token(first_word)
+    return bool(token) and any(
+        _agrees(start, t) and heard_token == token for start, heard_token in heard
+    )
+
+
+def _heard_earlier(heard: list[tuple[float, str]], first_word: str, w1s: float, t: float) -> bool:
+    """Whether a heard word equal to ``first_word`` starts in ``[w1s, t)`` without agreeing.
+
+    "Agreeing" is :func:`_heard_near`'s test against ``t``. A line whose second word repeats
+    its first would otherwise move to a sliver before the second word, passing the
+    transcriber's earlier copy of the first.
+    """
+    token = _normalize_token(first_word)
+    return bool(token) and any(
+        heard_token == token and w1s <= start < t and not _agrees(start, t)
+        for start, heard_token in heard
+    )
+
+
+def _heard_exit(
+    env: np.ndarray, words: list[dict], ref: float, bound: float, heard: list[tuple[float, str]]
+) -> tuple[str, float | None]:
+    """Where an on-time line's first word moves on the heard words, and the exit taken.
+
+    ``("moved", new_start)`` when a heard copy of the first word agrees with the searched
+    start; ``("held", None)`` when another copy starts earlier in the line without agreeing
+    (:func:`_heard_earlier`); otherwise ``("kept", None)``.
+    """
+    _, new_start = _search_new_start(env, words, ref, bound)
+    first_word = words[0]["word"]
+    if new_start is None or not _heard_near(heard, first_word, new_start):
+        return "kept", None
+    if _heard_earlier(heard, first_word, words[0]["start"], new_start):
+        return "held", None
+    return "moved", new_start
+
+
 def snap_line_onsets(
     line_objects: list[dict],
     vocal_path: str | Path,
     env: np.ndarray | None = None,
     doubted_sources: frozenset[str] = frozenset(),
+    heard_words: list[dict] | None = None,
+    heard_timed_sources: frozenset[str] = frozenset(),
 ) -> tuple[list[dict], dict]:
     """Snap each line's first word to the detected vocal onset.
 
@@ -247,6 +360,23 @@ def snap_line_onsets(
     trimmed to the previous line's end, so a loud claimed start there is
     usually that line's held note, not this line's onset.
 
+    A loud start still counts as on time and leaves the line, unless the
+    transcriber heard the line's first word at a later rise: the line is
+    then searched as a doubted one is, and moves only when a word in
+    ``heard_words`` (``word``, ``start``, in song time) equal to its first
+    word starts within :data:`HEARD_AGREE_S` of the new start. This is the
+    one case a back-to-back line shows, its first word placed on the
+    previous line's held note. It stays put, counted in ``n_heard_earlier``,
+    when the transcriber also heard that word from the claimed start up to
+    the new start without it agreeing: a line whose second word repeats its
+    first would otherwise move to a sliver before the second. Where the
+    transcriber heard only the second copy, that line still moves. Doubted lines
+    and the fired path never consult this. A line whose ``source`` is in
+    ``heard_timed_sources`` took its word times from ``heard_words``, so
+    its first word would agree with itself and it never takes this exit.
+    No ``heard_words`` means no on-time line is searched. These moves are
+    counted apart from the snaps, in ``heard_snaps`` / ``n_heard_snapped``.
+
     Returns ``(line_objects, stats)``. Lines are replaced by copies only
     when moved; on decode failure the input is returned unchanged and
     ``stats["bailed"]`` names the reason. ``env`` reuses a precomputed
@@ -257,8 +387,10 @@ def snap_line_onsets(
         if env is None:
             return line_objects, {"bailed": "decode_failed"}
 
+    heard = [(w["start"], _normalize_token(w["word"])) for w in heard_words or []]
     snaps: list[dict] = []
-    n_low_ref = 0
+    heard_snaps: list[dict] = []
+    n_low_ref = n_heard_earlier = 0
     n_fired = n_no_rise = n_below_min_shift = n_undetectable = n_single_word = 0
     out: list[dict] = []
     for obj in line_objects:
@@ -268,7 +400,7 @@ def snap_line_onsets(
             continue
         if len(words) == 1:
             n_single_word += 1
-        w1s, w1e = words[0]["start"], words[0]["end"]
+        w1s = words[0]["start"]
         bound = words[1]["start"] if len(words) >= 2 else words[0]["end"]
         if bound - w1s < MIN_WORD_DUR_S:
             out.append(obj)
@@ -283,63 +415,43 @@ def snap_line_onsets(
             out.append(obj)
             continue
 
-        # An on-time word 1 is near sung level at its claimed start AND
-        # across its claimed span; skip those, or an on-time word followed
-        # by an intra-line pause would get snapped to the NEXT word's
-        # onset (back-to-back lines leave no quiet before word 1 for the
-        # rise detector). The span check keeps a loud reverb tail at the
-        # start from passing as on time — a tail collapses over the span,
-        # sustained singing holds.
-        # Clamp into the envelope like _detect_rise: a first word at/after
-        # the stem's end (the envelope omits the final window) would slice
-        # empty and warn.
-        a = min(max(int(w1s / HOP_S), 0), max(len(env) - EDGE_FRAMES, 0))
-        span1 = env[a : max(int(w1e / HOP_S), a + 1)]
-        if (
-            obj.get("source") not in doubted_sources
-            and env[a : a + EDGE_FRAMES].mean() >= ref - NEAR_SUNG_DB
-            and float(np.median(span1)) >= ref - SUSTAIN_NEAR_DB
-        ):
-            out.append(obj)
-            continue
-
-        n_fired += 1
-        lo = min(int(w1s / HOP_S), len(env) - 1)
-        hi = min(max(int(bound / HOP_S), lo + 1), len(env))
-        p20 = float(np.percentile(env[lo:hi], 20))
-        if ref - p20 < STEP_DB:
-            n_undetectable += 1
-
-        onset = _detect_rise(env, w1s, bound, ref, trust_bound=len(words) >= 2)
-        if onset is None:
-            n_no_rise += 1
-            out.append(obj)
-            continue
-
-        new_start = min(max(onset - SNAP_MARGIN_S, w1s), bound - MIN_WORD_DUR_S)
-        if new_start - w1s < MIN_SHIFT_S:
-            n_below_min_shift += 1
-            out.append(obj)
-            continue
-
-        # Whisper's word ends are bounded by the next word's attention, so
-        # keep the end when it still lies past the snapped start; otherwise
-        # the whole span sat in the gap — carry the duration forward.
-        if w1e >= new_start + MIN_WORD_DUR_S:
-            new_end = w1e
+        if obj.get("source") not in doubted_sources and _loud_at_start(env, words, ref):
+            # On time unless the transcriber heard this line's first word at
+            # a later rise. Never counted among the fired lines.
+            if not heard or obj.get("source") in heard_timed_sources:
+                out.append(obj)
+                continue
+            exit_name, new_start = _heard_exit(env, words, ref, bound, heard)
+            if exit_name == "held":
+                n_heard_earlier += 1
+            moves = heard_snaps
         else:
-            new_end = min(max(new_start + (w1e - w1s), new_start + MIN_WORD_DUR_S), bound)
+            n_fired += 1
+            lo = min(int(w1s / HOP_S), len(env) - 1)
+            hi = min(max(int(bound / HOP_S), lo + 1), len(env))
+            p20 = float(np.percentile(env[lo:hi], 20))
+            if ref - p20 < STEP_DB:
+                n_undetectable += 1
+            exit_name, new_start = _search_new_start(env, words, ref, bound)
+            if exit_name == "no_rise":
+                n_no_rise += 1
+            elif exit_name == "below_min_shift":
+                n_below_min_shift += 1
+            moves = snaps
 
-        new_obj = dict(obj)
-        new_obj["words"] = [{**words[0], "start": new_start, "end": new_end}] + words[1:]
-        new_obj["start"] = new_start
-        out.append(new_obj)
-        snaps.append({"line_id": obj.get("line_id"), "shift_s": round(new_start - w1s, 3)})
+        if new_start is None:
+            out.append(obj)
+            continue
+        out.append(_moved_line(obj, new_start, bound))
+        moves.append({"line_id": obj.get("line_id"), "shift_s": round(new_start - w1s, 3)})
 
     # Invariant: n_fired == n_snapped + n_no_rise + n_below_min_shift.
+    # Invariant: n_heard_snapped == len(heard_snaps); those lines are not among n_fired.
     stats = {
         "n_lines": len(line_objects),
         "n_snapped": len(snaps),
+        "n_heard_snapped": len(heard_snaps),
+        "n_heard_earlier": n_heard_earlier,
         "n_low_ref": n_low_ref,
         "n_fired": n_fired,
         "n_no_rise": n_no_rise,
@@ -347,13 +459,15 @@ def snap_line_onsets(
         "n_undetectable": n_undetectable,
         "n_single_word": n_single_word,
         "snaps": snaps,
+        "heard_snaps": heard_snaps,
     }
-    if snaps:
+    moved = snaps + heard_snaps
+    if moved:
         logger.info(
             "onset snap: %d/%d line starts moved forward (max %+.2fs)",
-            len(snaps),
+            len(moved),
             len(line_objects),
-            max(s["shift_s"] for s in snaps),
+            max(s["shift_s"] for s in moved),
         )
     return out, stats
 
@@ -530,6 +644,8 @@ def snap_line_edges(
     vocal_path: str | Path,
     env: np.ndarray | None = None,
     doubted_sources: frozenset[str] = frozenset(),
+    heard_words: list[dict] | None = None,
+    heard_timed_sources: frozenset[str] = frozenset(),
 ) -> tuple[list[dict], dict]:
     """Run the onset and end snaps sharing a single envelope decode.
 
@@ -537,12 +653,15 @@ def snap_line_edges(
     previous line's end may legitimately extend into. ``env`` reuses a
     precomputed :func:`rms_envelope_db` envelope instead of decoding
     ``vocal_path`` (the stage shares it with the evidence veto).
-    ``doubted_sources`` as in :func:`snap_line_onsets`.
+    ``doubted_sources``, ``heard_words`` and ``heard_timed_sources`` as in
+    :func:`snap_line_onsets`.
     """
     if env is None:
         env = decode_env_db(vocal_path, "edge snap")
         if env is None:
             return line_objects, {"bailed": "decode_failed"}
-    out, onset_stats = snap_line_onsets(line_objects, vocal_path, env, doubted_sources)
+    out, onset_stats = snap_line_onsets(
+        line_objects, vocal_path, env, doubted_sources, heard_words, heard_timed_sources
+    )
     out, end_stats = snap_line_ends(out, vocal_path, env)
     return out, {"onset": onset_stats, "end": end_stats}
