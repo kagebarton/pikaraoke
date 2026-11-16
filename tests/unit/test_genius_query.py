@@ -219,7 +219,7 @@ def test_at_most_eight_hits_are_kept():
 
 def test_a_title_with_nothing_that_reads_asks_the_title_as_its_box_shows_it():
     hits = [_hit(1, "Official Video", "Someone", views=0)]
-    search = FakeSearch({"Official Video": hits, "official video someone": []})
+    search = FakeSearch({"Official Video": [], "official video someone": hits})
     found = gq.find_song(search, "  Official Video ", typed="official video someone", max_calls=3)
     assert search.asked == ["Official Video", "official video someone"]
     assert search.asked[0] == gq.start_query("  Official Video ")
@@ -239,10 +239,12 @@ def test_an_empty_title_asks_nothing(text):
 TITLE_ONLY = "Bohemian Rhapsody"  # ladder: 'Bohemian Rhapsody'; never sure, no act is named
 
 
-def test_the_typed_term_is_asked_last_when_nothing_matched_for_sure():
-    search = FakeSearch({TITLE_ONLY: [], "bohemian rhapsody queen": []})
-    gq.find_song(search, TITLE_ONLY, typed="bohemian rhapsody queen", max_calls=3)
+def test_the_typed_term_is_asked_when_the_titles_queries_find_nothing():
+    typed_hit = _hit(1, "Bohemian Rhapsody", "Queen")
+    search = FakeSearch({TITLE_ONLY: [], "bohemian rhapsody queen": [typed_hit]})
+    found = gq.find_song(search, TITLE_ONLY, typed="bohemian rhapsody queen", max_calls=3)
     assert search.asked == [TITLE_ONLY, "bohemian rhapsody queen"]
+    assert [h.id for h in found.hits] == [1]
 
 
 def test_the_typed_term_is_not_asked_after_a_sure_match():
@@ -251,9 +253,25 @@ def test_the_typed_term_is_not_asked_after_a_sure_match():
     assert search.asked == ["Queen Bohemian Rhapsody"]
 
 
-def test_the_typed_term_is_not_asked_past_the_call_limit():
+def test_the_typed_term_is_not_asked_when_the_titles_queries_found_hits_that_are_not_sure():
     unsure = [_hit(1, "Bohemian Rhapsody", "Queen", views=0)]
-    table = {q: unsure for q in gq.ladder(gq.parse(QUEEN))}
+    search = FakeSearch({"Bohemian Rhapsody": unsure})  # a title with no act: one rung, unsure
+    found = gq.find_song(search, TITLE_ONLY, typed="queen bohemian rhapsody lyrics", max_calls=3)
+    assert search.asked == [TITLE_ONLY]
+    assert (found.hits[0].id, found.preselect) == (1, None)
+
+
+def test_the_typed_term_is_not_asked_when_only_a_later_query_found_hits():
+    table = {q: [] for q in gq.ladder(gq.parse(QUEEN))}
+    # the last rung finds a page by the act, not the song
+    table["Queen"] = [_hit(1, "Under Pressure", "Queen")]
+    search = FakeSearch(table)
+    gq.find_song(search, QUEEN, typed="not in the table", max_calls=4)
+    assert "not in the table" not in search.asked
+
+
+def test_the_typed_term_is_not_asked_past_the_call_limit():
+    table = {q: [] for q in gq.ladder(gq.parse(QUEEN))}
     search = FakeSearch(table)
     gq.find_song(search, QUEEN, typed="not in the table", max_calls=3)
     assert len(search.asked) == 3 and "not in the table" not in search.asked
@@ -273,15 +291,3 @@ def test_a_typed_term_with_no_words_is_not_asked(typed):
     search = FakeSearch({TITLE_ONLY: []})
     gq.find_song(search, TITLE_ONLY, typed=typed, max_calls=3)
     assert search.asked == [TITLE_ONLY]
-
-
-def test_the_typed_terms_hits_merge_and_can_be_first():
-    unread = _hit(1, "Bohemian Rhapsody", "Queen", views=0)
-    read = _hit(2, "Bohemian Rhapsody", "Queen", views=900)
-    table = {q: [unread] for q in gq.ladder(gq.parse(QUEEN))}
-    table["queen bohemian rhapsody lyrics"] = [unread, read]
-    found = gq.find_song(
-        FakeSearch(table), QUEEN, typed="queen bohemian rhapsody lyrics", max_calls=4
-    )
-    assert [h.id for h in found.hits] == [2, 1]  # merged by id, the typed term's page first
-    assert found.preselect == 2

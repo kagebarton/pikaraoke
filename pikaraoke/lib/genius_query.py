@@ -530,8 +530,10 @@ def find_song(
     that reads as a song asks the title itself, as ``start_query`` shows it.
 
     ``typed`` is the search the guest ran on YouTube: one more query after the title's own,
-    asked only when a call is left, nothing has stopped the ladder and it is not a rewording of
-    a query already asked. The title stays what hits are matched against.
+    asked only when the title's queries found no hit at all, a call is left and it is not a
+    rewording of a query already asked. It is the fallback for a title Genius could not find,
+    not a second opinion on one it did: hits of any kind, sure or not, keep it unasked. The
+    title stays what hits are matched against.
     """
     parsed = parse(text, channel)
     asked: list[str] = []
@@ -547,11 +549,10 @@ def find_song(
     for query in _queries(parsed)[:max_calls]:
         if ask(query):
             break
-    else:
-        typed_words = _folded_words(typed)
-        repeats = typed_words in [_folded_words(q) for q in asked]
-        if typed_words and len(asked) < max_calls and not repeats:
-            ask(typed.strip())
+    typed_words = _folded_words(typed)
+    repeats = typed_words in [_folded_words(q) for q in asked]
+    if not merged and typed_words and len(asked) < max_calls and not repeats:
+        ask(typed.strip())
     ordered = sorted(merged.values(), key=lambda h: _order_key(h, parsed), reverse=True)
     hits = ordered[:HITS_LISTED]
     preselect = hits[0].id if hits and _confident(hits[0], parsed) else None
