@@ -56,7 +56,7 @@ for path in sorted(Path(sys.argv[1]).glob("*.jsonl")):
             continue
         seen.add(v["id"])
         kept += 1
-        videos.append({"yt_title": v["title"], "channel": v.get("channel"), "title": title, "alts": [], "artist": artist or "", "kind": "artist" if artist else "film", "genius": None})
+        videos.append({"id": v["id"], "yt_title": v["title"], "channel": v.get("channel"), "title": title, "alts": [], "artist": artist or "", "kind": "artist" if artist else "film", "genius": None})
 
 
 def today(text):
