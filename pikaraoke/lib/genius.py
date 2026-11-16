@@ -50,6 +50,9 @@ class GeniusHit:
     id: int
     title: str
     artist: str
+    primary_artist: str = ""  # the first-named act alone; the artist line when empty
+    year: int | None = None
+    views: int = 0  # page views; 0 when Genius gives none
 
 
 @dataclass(frozen=True)
