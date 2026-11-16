@@ -230,7 +230,7 @@ def _hit_json(hit: GeniusHit) -> dict:
 @search_bp.route("/lyrics_search")
 def lyrics_search():
     """GET ``?title=<video title>[&channel=..&typed=..]`` or ``?q=<typed text>`` →
-    ``{hits: [{id, title, artist, year}], preselect: id | null, query}``.
+    ``{hits: [{id, title, artist, year}], preselect: id | null}``.
 
     ``title`` finds the song the video is of (``genius_query.find_song``); a ``channel``
     parameter, even an empty one, marks the search page and allows three Genius calls rather
@@ -251,11 +251,11 @@ def lyrics_search():
             typed=request.args.get("typed", ""),
             max_calls=SEARCH_PAGE_CALLS if "channel" in request.args else LIBRARY_CALLS,
         )
-        hits, preselect, query = found.hits, found.preselect, found.query
+        hits, preselect = found.hits, found.preselect
     else:
         hits = k.genius_client.search(typed_text) if typed_text else []
-        preselect, query = None, typed_text
-    return jsonify({"hits": [_hit_json(h) for h in hits], "preselect": preselect, "query": query})
+        preselect = None
+    return jsonify({"hits": [_hit_json(h) for h in hits], "preselect": preselect})
 
 
 @search_bp.route("/lyrics_select", methods=["POST"])

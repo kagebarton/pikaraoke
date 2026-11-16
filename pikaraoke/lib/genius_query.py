@@ -102,7 +102,6 @@ class Parsed:
 class Found:
     hits: list[GeniusHit]  # at most HITS_LISTED, in the order to list them
     preselect: int | None  # hits[0].id when it is safe to preselect, else None
-    query: str  # what a search box shows: the first query asked
 
 
 @dataclass
@@ -556,4 +555,4 @@ def find_song(
     ordered = sorted(merged.values(), key=lambda h: _order_key(h, parsed), reverse=True)
     hits = ordered[:HITS_LISTED]
     preselect = hits[0].id if hits and _confident(hits[0], parsed) else None
-    return Found(hits=hits, preselect=preselect, query=asked[0] if asked else text)
+    return Found(hits=hits, preselect=preselect)

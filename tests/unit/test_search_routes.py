@@ -87,7 +87,7 @@ class TestLyricsSearch:
         for url in ("/lyrics_search", "/lyrics_search?q=", "/lyrics_search?q=+&title="):
             resp = client.get(url)
             assert resp.status_code == 200
-            assert resp.json == {"hits": [], "preselect": None, "query": ""}
+            assert resp.json == {"hits": [], "preselect": None}
         genius.search.assert_not_called()
 
     @patch("pikaraoke.routes.search.get_karaoke_instance")
@@ -96,13 +96,11 @@ class TestLyricsSearch:
         mock_get_k.return_value = _get_karaoke(client.application)
         typed = client.get("/lyrics_search?q=rick+astley")
         assert typed.status_code == 200
-        assert typed.json == {"hits": [], "preselect": None, "query": "rick astley"}
+        assert typed.json == {"hits": [], "preselect": None}
 
         found = client.get("/lyrics_search", query_string={"title": self.TITLE, "channel": ""})
         assert found.status_code == 200
-        assert found.json["hits"] == []
-        assert found.json["preselect"] is None
-        assert found.json["query"] == ladder(parse(self.TITLE))[0]
+        assert found.json == {"hits": [], "preselect": None}
 
     def test_typed_text_is_one_call_as_typed_in_genius_order(self, client, genius):
         genius.search.return_value = [
@@ -124,7 +122,6 @@ class TestLyricsSearch:
                 },
             ],
             "preselect": None,
-            "query": "Rick Astley Karaoke_(HD) 🎤",
         }
 
     def test_title_with_channel_asks_three_calls_of_twenty_hits(self, client, genius):
@@ -135,7 +132,7 @@ class TestLyricsSearch:
 
         assert self._queries(genius) == rungs[:3]
         assert {call.kwargs["limit"] for call in genius.search.call_args_list} == {20}
-        assert resp.json["query"] == rungs[0]
+        assert resp.status_code == 200
 
     def test_empty_channel_still_means_the_search_page(self, client, genius):
         client.get("/lyrics_search", query_string={"title": self.TITLE, "channel": ""})
@@ -166,7 +163,6 @@ class TestLyricsSearch:
                 {"id": 1, "title": "Never Gonna Give You Up", "artist": "Rick Astley", "year": 1987}
             ],
             "preselect": 1,
-            "query": ladder(parse(self.TITLE))[0],
         }
 
     def test_title_wins_when_both_are_sent(self, client, genius):
