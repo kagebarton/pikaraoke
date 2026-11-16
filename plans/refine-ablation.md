@@ -2,9 +2,11 @@
 
 Model: Claude Opus 5.5
 
-Status: **cue decided 2026-11-14: refine stays on; nothing in the pipeline
-changed.** Joint refine and a coarser `precision` are untested and open (Next
-step). Branch `refine_ablation`, off `dev` at `1016e20`.
+Status: **refine stays on in both routes; nothing in the pipeline changed.**
+Cue decided 2026-11-14 after the blind listen; joint refine-off closed no-go
+2026-11-16 (Ken), untested. A coarser `precision` is **open**: closed and then
+reopened 2026-11-16 (Ken), untested (Next step). Branch `refine_ablation`, off
+`dev` at `1016e20`.
 
 ## Question
 
@@ -143,15 +145,19 @@ the direction refine corrects. A consistent +0.4 s is also what an overshoot
 would look like. No word-level ground truth exists in the corpus (as in June:
 every reference is start-only).
 
-## Open decision (Ken)
+## Decisions (Ken)
 
 1. **Joint route: refine off?** Saves the per-song figure in table 1 (36-59 s
-   here, plus the windowed re-align spans). Output moves little.
+   here, plus the windowed re-align spans). Output moves little. **Closed
+   2026-11-16 (Ken): no-go, exploration ended; not listened to.**
 2. **Cue route: refine off?** Saves 78-157 s/song here, and moves word timing
    substantially, mostly later by ~0.4 s. **Decided 2026-11-14 (Ken): keep refine
    on**, after the blind listen below (on tighter on 3 of 4 songs, 1 tie).
 3. **Untested middle:** a coarser `RefineKwargs.precision` (stable-ts default
-   0.1 s) to cut refine time without dropping it.
+   0.1 s) to cut refine time without dropping it. Closed no-go 2026-11-16
+   (Ken), then **reopened the same day** once the option was explained (it is
+   the step of refine's search, so a coarser value tries fewer positions per
+   word). Untested: no timing or word-start figure exists for it.
 
 Small, certain waste (re-sectioned songs' first-pass refine; rescued lines'
 section refine) is recorded above but would need the worker to split align from
@@ -234,8 +240,12 @@ leaned hardest to refine-off.
 
 ## Next step
 
-Cue route: decided, refine stays on (Ken, 2026-11-14), so no config change
-follows from the listen. Decisions 1 (joint refine off) and 3 (coarser
-`precision`) were not tested by the listen and stay open; neither is scheduled.
-Whatever follows lands on `dev` as code commits only, then the branch is
-retired as `archive/refine_ablation`.
+Cue route decided 2026-11-14 (refine stays on); decision 1 (joint refine off)
+closed no-go 2026-11-16, untested. Decision 3 (coarser `precision`) is the one
+open item and is not scheduled. If run: rerun the four listen songs through
+`probe_refine_ablation.py` at one or two coarser values (e.g. 0.2, 0.25) and
+compare refine time and word-start shift against the 0.1 arm.
+
+Whatever follows lands on `dev` as code commits only, then the branch is retired
+as `archive/refine_ablation`. Until then the branch stays: it is the only home
+of this plan, the probe and report scripts, and the raw results.
