@@ -1138,6 +1138,20 @@ class TestHeardAimedRetry:
         assert out[4]["source"] == SOURCE_FILL and len(calls) == 1
         assert stats["heard_aimed_line_ids"] == []
 
+    def test_an_added_line_is_never_looked_for_where_it_was_heard(self):
+        # The scenario above, with line 4 an added line: its words may be another line's
+        # audio, so the one call is the cue-aimed slice and, finding nothing, the line is spaced.
+        song = self._song((8.0, 9.5))
+        heard = _words(*self._sung(12.6))
+
+        def answer(w0, w1):
+            return _words(*self._sung(12.65)) if w0 > 11 else None
+
+        out, stats, calls = self._rescue(song, answer, heard, added_lines=[4])
+        assert calls == [(7.25, 10.25)]
+        assert stats["heard_aimed_line_ids"] == [] and stats["heard_aimed_kept_line_ids"] == []
+        assert out[4]["source"] == SOURCE_FILL and stats["repaced_line_ids"] == [4]
+
     def test_a_result_the_heard_words_do_not_confirm_falls_back_to_the_cue_aimed_retry(self):
         # In the moved window the stub answers 2 s off the heard words, inside the moved span.
         def answer(w0, w1):
@@ -1844,27 +1858,25 @@ class TestAlignSongBacking:
         assert run.objs[2]["source"] == SOURCE_REALIGN
         assert run.objs[2]["start"] == pytest.approx(5.3)
 
-    def test_an_added_line_heard_two_seconds_before_its_cue_is_aimed_there_first(self):
+    def test_an_added_line_heard_two_seconds_before_its_cue_is_aimed_at_its_cue_only(self):
+        # The transcript has the echo's words 2 s before its cue, and the aligner would time
+        # them there; the line is still looked for in its own cue window and nowhere else.
         heard = [
             {"word": "oh", "start": 3.2, "end": 3.4},
             {"word": "oh", "start": 3.5, "end": 3.7},
         ]
-        script = _sung(**{"oh,_oh": lambda t0, _t1: [(3.25, 3.45), (3.5, 3.7)] if t0 < 4 else None})
+        script = _sung(
+            **{
+                "oh,_oh": lambda t0, _t1: (
+                    [(3.25, 3.45), (3.5, 3.7)] if t0 < 4 else [(5.25, 5.45), (5.5, 5.7)]
+                )
+            }
+        )
         run = _backing_run(script, [_echo(2, _ECHO_SPAN, 2)], heard)
 
-        first = run.aligner.calls[2]
-        assert first[:2] == pytest.approx((3.2 - 0.75, 3.8 + 0.75))
-        repace = run.stats["repace"]
-        assert repace["heard_aimed_line_ids"] == [2] and repace["heard_aimed_kept_line_ids"] == [2]
-        assert run.objs[2]["source"] == SOURCE_REALIGN and run.objs[2]["start"] == 3.25
-
-    def test_a_one_word_added_line_is_never_aimed_where_its_word_was_heard(self):
-        heard = [{"word": "yeah", "start": 3.2, "end": 3.5}]
-        script = _sung(yeah=lambda t0, _t1: [(3.25, 3.5)] if t0 < 4 else [(5.3, 5.6)])
-        run = _backing_run(script, [_echo(2, _ECHO_SPAN, 2, "yeah")], heard)
-
-        assert run.stats["repace"]["heard_aimed_line_ids"] == []
         assert [c[:2] for c in run.aligner.calls[2:]] == [pytest.approx((4.45, 6.55))]
+        assert run.stats["repace"]["heard_aimed_line_ids"] == []
+        assert run.objs[2]["source"] == SOURCE_REALIGN and run.objs[2]["start"] == 5.25
 
     def test_the_rescue_keeps_the_lead_of_todays_lines_though_the_regained_section_would_move_it(
         self,

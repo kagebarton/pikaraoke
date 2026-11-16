@@ -37,7 +37,9 @@ logger = logging.getLogger(__name__)
 #     ids are the song's new ones): ``spans`` and ``sections`` hold
 #     the added lines too, an added line with no words; ``rescue_offset``, the
 #     display lead the rescue was given (today's lines' lead, exact float) so
-#     an offline replay passes it back to ``repace_bad_lines(offset=)``.
+#     an offline replay passes it back to ``repace_bad_lines(offset=)``, and
+#     the ids of the added lines to ``added_lines=`` (read from
+#     ``joint_stats.backing.old_line_ids``, the entries that are null).
 #   - joint_stats.backing: cue-align runs whose sheet has parenthetical groups
 #     and whose transcript judged them. ``groups``, one per group: ``cue``
 #     (the cue's place in the sheet), ``group``, ``kind`` (inline / paren_only),
