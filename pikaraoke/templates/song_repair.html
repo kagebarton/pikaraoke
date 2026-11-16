@@ -299,9 +299,10 @@
         list.empty();
         if (!found.hits.length) list.append(el('div', 'rp-empty', T.noGenius));
         $.each(found.hits, function (i, hit) { list.append(geniusOption(hit)); });
-        // A preselected hit is ticked through its radio's own change handler, so it is picked.
-        if (found.preselect !== null) {
-          list.find('input').filter(function () { return $(this).val() === String(found.preselect); })
+        // The hit to select is ticked through its radio's own change handler, so it is picked.
+        var selected = libraryPages.geniusSelected(found, [CURRENT_GENIUS_ID]);
+        if (selected !== null) {
+          list.find('input').filter(function () { return $(this).val() === String(selected); })
             .prop('checked', true).trigger('change');
         }
       }).fail(function () {

@@ -282,7 +282,9 @@
       $.getJSON(URLS.geniusSearch, params).done(function (found) {
         if (seq !== state.seq || state.open !== song.song) return;
         picker.hits = found.hits;
-        picker.selected = $.grep(found.hits, function (hit) { return hit.id === found.preselect; })[0] || null;
+        // The admin's pick in this run, then the song's recorded one.
+        var id = libraryPages.geniusSelected(found, [song.pick && song.pick.genius_id, song.genius_id]);
+        picker.selected = $.grep(found.hits, function (hit) { return hit.id === id; })[0] || null;
         picker.message = found.hits.length ? null : T.noGenius;
         render();
       }).fail(function () {
