@@ -689,6 +689,7 @@ From the code only, for `backing_vocal_lines` (written into that plan's "Landing
 | 10 | 2026-11-15 | 2b | Sonnet 5.5, CPU on the Linux box, library `~/pikaraoke-songs` read-only, envelopes the copy of the 11-10 record (no decode; the cache held 159 files before and after). `python scripts/onset_loud_start_probe.py --folder ~/pikaraoke-songs --out ~/.pikaraoke/tmp/onset_loud_start_check --check` at `cd42d8e8`, then the gate's cleanup of the ten after-files | Block R10 below |
 | 11 | 2026-11-15 | 2b2 | Sonnet 5.5, same command and inputs at `0e08ee3e`; then a scratch compare of its `rows.json` with the record's | Block R11 below |
 | 12 | 2026-11-15 | 2c, close | Sonnet 5.5. Mutation checks, full suite, pre-commit, `graphify update .` at `a89f8ead` | Block R12 below |
+| 13 | 2026-11-16 | review | Opus 5.5. `/code-review high 4001f57f..a89f8ead`, three finders (one per Self-Review axis), borderline findings checked against this plan; Ken took the three Easy fixes and the refactor. Then 2b's `--check` command at `4b411cbc`, `--out` a scratch folder whose `env` links to `~/.pikaraoke/tmp/onset_loud_start_check/env`; mutation check, full suite, `graphify update .` | Block R13 below |
 
 **R1** (the probe's stdout, verbatim)
 
@@ -1055,3 +1056,31 @@ and keys): 4 rows differ, in `agreed` only, true to false:
   `abs(start - t) <= HEARD_AGREE_S` once for `_heard_near` and `_heard_earlier`.
 - Commits landing on `dev` (Phase 4), in order after `b054f918`, `ad8b51af`: `196de7fd`
   (2a), `cd42d8e8` (2b), `0e08ee3e` (2b2), `a89f8ead` (2c).
+
+**R13** (the review of Phase 2 and its fixes)
+
+- Findings kept, with what was done:
+  - Easy, fixed: the probe left a schema-12 bundle out with no reason (`4b411cbc`, named
+    and skipped before decoding; test `TestMain`); the stage and probe restated
+    joint_match's `"transcribe"` tag (`0d740fc7`, `SOURCE_TRANSCRIBE`); the module
+    docstring's "an on-time line is never made worse" (`fb9bdf9f`).
+  - Worthwhile, done: `snap_line_onsets` at 162 lines (`3ac2d781`: `_heard_exit`,
+    `_loud_at_start`, one copy of the move for both paths; 139 lines).
+  - Worthwhile, not fixed: the 2b2 guard holds a line only when the transcriber heard
+    both copies; with only the second heard, the line still moves to a sliver before
+    word 2. On the record the two lines of that shape are among the four held (R8), so
+    none of the 589 is one. Now said in `snap_line_onsets`'s docstring. For
+    `plans/open-issues.md` at landing.
+- Dropped: the float edge at 0.25 s (ruled in 2a); a heard copy just before the claimed
+  start holding the line (R8: the same four lines from 0.25 s before it); the probe's
+  `rise_start` duplicating `_search_new_start` (the check's own copy); the search cost on
+  on-time lines (short windows).
+- `--check` at `4b411cbc`: Table E 133 compared, 133 equal, 589 moved, 589 agreed, 4 held,
+  none differing, after-files 0, 30 with no envelope. `rows.json` byte-equal to the 2b2
+  run's (`~/.pikaraoke/tmp/onset_loud_start_check/rows.json`); against the record it
+  differs only in `agreed` on the four held lines. The same command at `3ac2d781` gave a
+  byte-equal `report.md`, so the probe's change leaves an all-schema-11 report as it was.
+- Mutation: the schema skip made `if False:` -> `TestMain` fails; file restored.
+- Full suite at `4b411cbc`: 3644 passed (3643 + `TestMain`).
+- Commits landing on `dev` (Phase 4), after `a89f8ead`: `fb9bdf9f`, `3ac2d781`,
+  `0d740fc7`, `4b411cbc`.
