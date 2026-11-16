@@ -31,6 +31,9 @@ from pikaraoke.lib.get_platform import get_temp_directory
 
 logger = logging.getLogger(__name__)
 
+# Hits Genius returns per query. A caller that must not lose any of them passes it as ``limit``.
+HITS_PER_QUERY = 20
+
 # ---------------------------------------------------------------------------
 # Exception
 # ---------------------------------------------------------------------------
@@ -69,6 +72,19 @@ class GeniusSong:
 # ---------------------------------------------------------------------------
 
 
+def _hit_from(result: dict, artist_name: str) -> GeniusHit:
+    """One Genius search result as a hit; a page's year or views Genius does not give read as
+    ``None`` and 0."""
+    return GeniusHit(
+        id=result["id"],
+        title=result["title"],
+        artist=artist_name,
+        primary_artist=(result.get("primary_artist") or {}).get("name") or "",
+        year=(result.get("release_date_components") or {}).get("year"),
+        views=(result.get("stats") or {}).get("pageviews") or 0,
+    )
+
+
 class GeniusClient:
     """Thread-safe wrapper around ``lyricsgenius.Genius``.
 
@@ -104,13 +120,15 @@ class GeniusClient:
         Filters: type == "song"; drops Genius's own accounts (translations in
         every language) unless the query names Genius, then only translation
         accounts. Genius Romanizations always passes, for mixed-language songs.
+        Also drops "Deleted Artist" pages (some queries return nothing else) and
+        pages flagged instrumental.
         """
         if not self._token or self._genius is None:
             return []
 
         with self._lock:
             try:
-                data = self._genius.search(query, per_page=20, type_="song")
+                data = self._genius.search(query, per_page=HITS_PER_QUERY, type_="song")
             except Exception as e:
                 logger.warning("Genius search failed: %s", e)
                 return []
@@ -133,13 +151,9 @@ class GeniusClient:
                 artist_lower = artist_name.lower()
                 if blocked_term in artist_lower and "romaniz" not in artist_lower:
                     continue
-                hits.append(
-                    GeniusHit(
-                        id=result["id"],
-                        title=result["title"],
-                        artist=artist_name,
-                    )
-                )
+                if "deleted artist" in artist_lower or result.get("instrumental"):
+                    continue
+                hits.append(_hit_from(result, artist_name))
                 if len(hits) >= limit:
                     break
         except (KeyError, AttributeError, TypeError) as e:
