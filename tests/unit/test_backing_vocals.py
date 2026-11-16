@@ -181,10 +181,9 @@ class TestPlacement:
 
 
 class TestOrigins:
-    def test_the_origins_are_caption_and_lrclib_and_not_movie(self):
-        assert ORIGINS == {"srt", LRC_ORIGIN}
+    def test_the_origins_are_caption_and_both_lrclib_kinds_and_not_movie(self):
+        assert ORIGINS == {"srt", LRC_ORIGIN, LRC_AUTO_ORIGIN}
         assert MOVIE_ORIGIN not in ORIGINS
-        assert LRC_AUTO_ORIGIN not in ORIGINS
 
 
 def _line(line_id: int, *words: str, start: float = 1.0) -> dict:
