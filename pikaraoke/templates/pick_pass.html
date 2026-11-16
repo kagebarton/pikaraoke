@@ -269,12 +269,11 @@
       if (state.open === song.song && picker.hits === null) searchGenius(song);
     }
 
-    // The box as it started is the song's own search, so the server reads the file title and runs
-    // its whole ladder; text the admin edited goes as typed.
+    // The song carries its box's start ({file_title, query}), so it is the search's start too.
     function searchGenius(song) {
       var query = $.trim(picker.query);
       if (!query) return;
-      var params = query === $.trim(song.query) ? { title: song.file_title } : { q: query };
+      var params = libraryPages.geniusParams(query, song);
       var seq = ++state.seq;
       picker.hits = null;
       picker.selected = null;
