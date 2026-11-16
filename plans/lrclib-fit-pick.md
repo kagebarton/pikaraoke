@@ -758,8 +758,9 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
     job is not (`test_add_songs.py`, `test_regen_alignment_bundles.py`).
   Commit: `feat(pipeline): downloads and add_songs arm the LRCLIB timing check`.
 
-- [ ] **4f. Parity check, read-only, where the library and the fresh `<out>` are** (the
-  VM; `<out>` is `~/.pikaraoke/tmp/lrclib_shift_check_holdout`). A scratch script outside
+- [ ] **4f. Parity check, read-only, where the library and the fresh `<out>` are** (`<out>`
+  is `~/probes/lrclib-shift-check-handoff/lrclib_shift_check_holdout`, the handoff copy of
+  the probe's `~/.pikaraoke/tmp/lrclib_shift_check_holdout`). A scratch script outside
   the repo: for each of the fifty fresh songs, call `lrc_auto_timing.check` with
   `search_query` replaced by that song's `<out>/cache/<youtube_id>.json` records, the
   bundle's `transcribe_words` and its `media_duration_s`. The picked id must equal
@@ -771,8 +772,13 @@ GPU-free, no library write. Tests mock the network and the workers; made-up line
   Added 2026-11-16: `songs.tsv` was written by this branch's code on `dev` `37d8d93`, so
   the fifty equal picks are also the check that `dev`'s edits to `clean_cue_texts` and
   `srt_slice_fit` since then moved no pick. The check sees cleaned lines with or without
-  4d2, so 4d2 does not change this step. On the computer this amendment was written on,
-  `~/pikaraoke-songs` is there and `~/.pikaraoke/tmp/lrclib_shift_check_holdout` is not.
+  4d2, so 4d2 does not change this step. Checked 2026-11-16 on this computer: the library
+  is `~/pikaraoke-songs`, with all fifty videos and their bundles (none modified after the
+  11-12 probe run; the twenty Set E bundles carry `lyrics.genius`). `<out>` was not at
+  `~/.pikaraoke/tmp/`; it was copied from the USB drive
+  (`/media/ken/Data/probes/lrclib-shift-check-handoff/`) to the path above, `diff -rq`
+  clean: `songs.tsv` has 50 rows (31 picks, 19 none) and `cache/` has 50 files whose
+  `query` equals `songs.tsv`'s. The USB drive is not needed for 4f.
 
 - [ ] **4g.** Full suite, pre-commit on the changed files, self-review on the three axes,
   `graphify update .` where the graph exists. Results log row. **STOP:** review due on the
