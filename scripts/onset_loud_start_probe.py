@@ -20,7 +20,8 @@ song goes through the snap's own heard-word exit (``snap_line_edges`` with the b
 heard words) and the result is compared with this probe's copy of the rule (``with_rule``)
 and with the song's ``.onsetfix.ass``, in Table E. A cue-route bundle with no envelope in
 ``<out>/env`` is not replayed. The probe measures schema-11 bundles, made before that exit
-shipped; ``--listen`` rewrites the after-files ``--check`` reads, so the two are exclusive.
+shipped; a later bundle is named and not replayed. ``--listen`` rewrites the after-files
+``--check`` reads, so the two are exclusive.
 
 ``--out`` holds the envelope cache, ``rows.json`` (one row per line) and the sheet, all
 with lyric text, so it is never committed. The tables printed to stdout carry counts and
@@ -72,6 +73,9 @@ AGREE_S = 0.25
 AT_PREVIOUS_END_S = 0.05
 # Replayed and recorded line times are equal within this (bundles round to the ms).
 REPLAY_TOLERANCE_S = 0.011
+# Bundles from this schema on were made with the snap's heard-word exit, which the replay
+# leaves out (it passes no heard words), so they cannot reproduce.
+HEARD_EXIT_SCHEMA = 12
 
 # The sheet: this many songs, two lines each.
 SHEET_SONGS = 10
@@ -389,7 +393,7 @@ def _moves_line(name: str, moved: list[dict]) -> str:
     )
 
 
-def report(rows: list[dict], n_songs: int, left_out: list[str]) -> str:
+def report(rows: list[dict], n_songs: int, left_out: list[str], too_new: list[str]) -> str:
     """The tables, as markdown."""
     heard = [r for r in rows if r["heard"] is not None]
     early = [r for r in heard if r["heard"] - r["after"] > EARLY_S]
@@ -399,6 +403,15 @@ def report(rows: list[dict], n_songs: int, left_out: list[str]) -> str:
     out = [
         f"Songs replayed exactly: {n_songs}. Left out: {len(left_out)}.",
         *(f"- left out: {name}" for name in left_out),
+        *(
+            [
+                f"Made with the heard-word exit (schema {HEARD_EXIT_SCHEMA} on), "
+                f"not replayed: {len(too_new)}."
+            ]
+            if too_new
+            else []
+        ),
+        *(f"- not replayed: {name}" for name in too_new),
         "",
         f"Worded lines {len(rows)}; with a heard first word {len(heard)}; "
         f"early (start more than {EARLY_S} s before it) {len(early)}; late {len(late)}.",
@@ -587,6 +600,7 @@ def main() -> int:
 
     rows: list[dict] = []
     left_out: list[str] = []
+    too_new: list[str] = []
     no_env: list[str] = []
     checks: dict[str, dict] = {}
     fixed_ass: dict[str, str] = {}
@@ -595,6 +609,9 @@ def main() -> int:
     for path in sorted((args.folder / "alignment_debug").glob("*.json")):
         bundle = json.loads(path.read_text(encoding="utf-8"))
         if (bundle.get("pipeline_decisions") or {}).get("method_used") != "cue_align":
+            continue
+        if bundle.get("schema_version", 0) >= HEARD_EXIT_SCHEMA:
+            too_new.append(path.stem)
             continue
         env = load_env(args.folder, path.stem, bundle, args.out / "env", decode=not args.check)
         if env is None and args.check:
@@ -622,7 +639,7 @@ def main() -> int:
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "rows.json").write_text(json.dumps(rows), encoding="utf-8")
-    sys.stdout.write(report(rows, n_songs, left_out))
+    sys.stdout.write(report(rows, n_songs, left_out, too_new))
     if args.listen:
         sys.stdout.write(write_listen_files(args.folder, args.out, rows, fixed_ass))
     if args.check:

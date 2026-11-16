@@ -3,6 +3,9 @@
 No library and no audio: envelopes and lines are built by hand.
 """
 
+import json
+import sys
+
 import numpy as np
 import pytest
 
@@ -235,6 +238,34 @@ class TestLoadEnv:
         np.save(cache / "abcdefghijk.npy", np.array([1.0, 2.0]))
         env = probe.load_env(tmp_path, "A---abcdefghijk", {}, cache, decode=False)
         assert env.tolist() == [1.0, 2.0]
+
+
+class TestMain:
+    def test_a_bundle_made_with_the_heard_exit_is_named_not_left_out(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        debug = tmp_path / "alignment_debug"
+        debug.mkdir()
+        cue = {"pipeline_decisions": {"method_used": "cue_align"}}
+        (debug / "New---abcdefghijk.json").write_text(
+            json.dumps({**cue, "schema_version": probe.HEARD_EXIT_SCHEMA}), encoding="utf-8"
+        )
+        (debug / "Old---bcdefghijkl.json").write_text(
+            json.dumps({**cue, "schema_version": probe.HEARD_EXIT_SCHEMA - 1}), encoding="utf-8"
+        )
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["probe", "--folder", str(tmp_path), "--out", str(tmp_path / "out"), "--check"],
+        )
+
+        assert probe.main() == 0
+
+        text = capsys.readouterr().out
+        assert "Left out: 0.\n" in text
+        assert "not replayed: 1.\n- not replayed: New---abcdefghijk\n" in text
+        # The older bundle reaches the replay and stops there for want of an envelope.
+        assert "not replayed: 1\n  - Old---bcdefghijkl\n" in text
 
 
 def _song_case(*heard: tuple[float]) -> tuple[dict, np.ndarray, list[dict], list[dict]]:
