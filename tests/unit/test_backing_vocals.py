@@ -8,7 +8,7 @@ from pikaraoke.lib.backing_vocals import (
     show_parens,
     with_backing,
 )
-from pikaraoke.lib.library_regen import LRC_ORIGIN, MOVIE_ORIGIN
+from pikaraoke.lib.library_regen import LRC_AUTO_ORIGIN, LRC_ORIGIN, MOVIE_ORIGIN
 from pikaraoke.lib.srt_cues import ParenCue, ParenGroup
 
 
@@ -184,6 +184,7 @@ class TestOrigins:
     def test_the_origins_are_caption_and_lrclib_and_not_movie(self):
         assert ORIGINS == {"srt", LRC_ORIGIN}
         assert MOVIE_ORIGIN not in ORIGINS
+        assert LRC_AUTO_ORIGIN not in ORIGINS
 
 
 def _line(line_id: int, *words: str, start: float = 1.0) -> dict:

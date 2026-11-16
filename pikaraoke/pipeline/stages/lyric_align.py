@@ -25,6 +25,11 @@ worker swaps to the de-reverb roformer and re-transcribes on the dry stem,
 which is then adopted for the single align pass. Any retry failure keeps the
 wet-stem result — the retry can only improve a song, never fail it.
 
+A first-time download timed from a Genius pick (an armed stage) checks LRCLIB
+once, on the gate's words, before choosing its route: a record that passes the
+bar of :mod:`lrc_auto_pick` becomes the song's sheet and the cue route times it;
+every other outcome leaves the song on the joint route as it was.
+
 ASS/SRT are written to ctx.tmp_dir first and moved to the final output
 directory only after both writes succeed — preventing orphan files on
 cancellation.
@@ -38,12 +43,13 @@ import os
 import shutil
 import wave
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import srt
 from tqdm import tqdm
 
-from pikaraoke.lib import alignment_capture, lrclib, lrclib_fill, ytasr
+from pikaraoke.lib import alignment_capture, lrc_auto_timing, lrclib, lrclib_fill, ytasr
 from pikaraoke.lib.backing_vocals import ORIGINS, show_parens
 from pikaraoke.lib.cue_align import SOURCE_REALIGN, align_song
 from pikaraoke.lib.evidence_veto import veto_uncorroborated_lines
@@ -53,6 +59,7 @@ from pikaraoke.lib.joint_match import (
     SOURCE_TRANSCRIBE,
     match_words_to_lines_joint_with_stats,
 )
+from pikaraoke.lib.lrc_auto_pick import Entry
 from pikaraoke.lib.onset_snap import decode_env_db, snap_line_edges
 from pikaraoke.lib.srt_cues import ParenCue, cue_spans_from_srt, sheet_parens
 from pikaraoke.lib.srt_provenance import is_generated, mark_generated
@@ -75,6 +82,15 @@ from pikaraoke.pipeline.workers.whisper_worker import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class _Gate(NamedTuple):
+    """The de-reverb gate's result, which both routes take in place of the vocal stem: the
+    stem alignment runs on, the words heard on it, and the retry's stats (None: no retry)."""
+
+    stem: Path
+    words: list[dict]
+    dereverb: dict | None
 
 
 class _PtyWriter:
@@ -119,11 +135,14 @@ class LyricAlignStage(BaseStage):
         whisper_worker: WhisperWorker,
         config: PipelineConfig,
         stem_worker: StemWorker | None = None,
+        auto_lrc_timing: bool = False,
     ) -> None:
         self._worker = whisper_worker
         self._config = config
         # Used only by the joint route's de-reverb retry; None disables it.
         self._stem_worker = stem_worker
+        # Set for a first-time download: only then may an LRCLIB record time the song.
+        self._auto_lrc_timing = auto_lrc_timing
 
     def run(self, ctx: StageContext) -> None:
         lyrics_path = ctx.artifacts.get("lyrics_path")
@@ -140,11 +159,26 @@ class LyricAlignStage(BaseStage):
         capture_cue_inputs: dict | None = None
         capture_transcribe_words: list | None = None
         capture_method_used: str | None = None
+        capture_lrclib_auto: dict | None = None
+        auto_entry: Entry | None = None
 
         if lyrics_path is not None:
             # --- Alignment mode ---
             lyrics_lines, align_lines, cue_spans = self._load_lyrics(lyrics_path)
             logger.info(f"[{self.name}] Aligning lyrics to vocal stem: {Path(vocal_wav).name}")
+
+            gate = self._dereverb_gate(ctx, vocal_wav)
+            auto = None if cue_spans else self._check_lrclib(ctx, gate.words)
+            if auto is not None:
+                capture_lrclib_auto = auto.record()
+                auto_entry = auto.entry
+            if auto_entry is not None:
+                # A record passed the bar: its own lines are the sheet from here on, kept in
+                # tmp_dir until the outputs are promoted.
+                lyrics_path = ctx.tmp_dir / lrc_auto_timing.sheet_path(ctx.song_path).name
+                lyrics_path.write_text(auto_entry.fit.srt, encoding="utf-8")
+                lyrics_lines, align_lines, cue_spans = self._load_lyrics(lyrics_path)
+                ctx.artifacts["lyrics_origin"] = lrc_auto_timing.ORIGIN
 
             if cue_spans:
                 # SRT: cue-anchored windowed align driven by the uploader cues.
@@ -159,7 +193,7 @@ class LyricAlignStage(BaseStage):
                     (lyrics_lines, align_lines),
                 ) = self._run_cue_align(
                     ctx,
-                    vocal_wav,
+                    gate,
                     lyrics_lines,
                     align_lines,
                     cue_spans,
@@ -175,7 +209,7 @@ class LyricAlignStage(BaseStage):
                     capture_joint_stats,
                 ) = self._run_joint(
                     ctx,
-                    vocal_wav,
+                    gate,
                     "\n".join(align_lines),
                     lyrics_lines,
                     align_lines,
@@ -345,6 +379,9 @@ class LyricAlignStage(BaseStage):
             ctx.artifacts["srt_file"] = final_srt
             logger.info(f"[{self.name}] SRT written: {final_srt}")
 
+        if auto_entry is not None:
+            lyrics_path = self._promote_auto_sheet(ctx, lyrics_path, auto_entry.record)
+
         if self._config.capture_alignment_debug and lyrics_path is not None:
             self._write_debug_capture(
                 ctx,
@@ -360,9 +397,49 @@ class LyricAlignStage(BaseStage):
                 line_objects=line_objects,
                 wrote_srt=write_srt,
                 lrclib_ref=capture_lrclib_ref,
+                lrclib_auto=capture_lrclib_auto,
             )
 
     # --- Helpers ---
+
+    def _check_lrclib(
+        self, ctx: StageContext, words: list[dict]
+    ) -> lrc_auto_timing.AutoCheck | None:
+        """The LRCLIB check, or None when this run is not one it applies to: an armed stage
+        (a first-time download), lyrics from a Genius pick, and the fill knob on."""
+        genius = ctx.artifacts.get("genius")
+        if not (
+            self._auto_lrc_timing
+            and ctx.artifacts.get("lyrics_origin") == "genius"
+            and genius
+            and self._config.lrclib_fill
+        ):
+            return None
+        clip_length = ctx.artifacts.get("media_duration_s") or probe_duration(ctx.song_path)
+        if not clip_length:
+            logger.warning("[%s] no video length; skipping the LRCLIB timing check", self.name)
+            return lrc_auto_timing.AutoCheck(lrc_auto_timing.ERROR)
+        auto = lrc_auto_timing.check(genius, words, clip_length)
+        counts = auto.record()
+        logger.info(
+            "[%s] LRCLIB timing check: %s (%d records, %d passing)",
+            self.name,
+            auto.outcome,
+            counts["records"],
+            counts["passing"],
+        )
+        return auto
+
+    @staticmethod
+    def _promote_auto_sheet(ctx: StageContext, sheet: Path, record: dict) -> Path:
+        """Move the picked record's sheet into ``lyrics/`` and write the record as the song's
+        ``.lrc``; the sheet's final path. Called once the song's outputs are in place, so a run
+        that is cancelled or fails leaves ``lyrics/`` as it was."""
+        final = lrc_auto_timing.sheet_path(ctx.song_path)
+        final.parent.mkdir(exist_ok=True)
+        shutil.move(str(sheet), str(final))
+        lrclib.write_lrc(lrclib.lrc_path(ctx.song_path), record)
+        return final
 
     def _write_debug_capture(
         self,
@@ -380,6 +457,7 @@ class LyricAlignStage(BaseStage):
         line_objects: list[dict],
         wrote_srt: bool,
         lrclib_ref: dict | None,
+        lrclib_auto: dict | None,
     ) -> None:
         """Assemble + write the alignment-debug JSON. Errors are logged
         and swallowed — capture failure must never fail the pipeline.
@@ -429,6 +507,9 @@ class LyricAlignStage(BaseStage):
                 "joint_alpha": cfg.joint_alpha if method_used == "joint" else None,
                 "joint_beta": cfg.joint_beta if method_used == "joint" else None,
             }
+            # The download's LRCLIB check, whatever it found; absent when it did not run.
+            if lrclib_auto is not None:
+                pipeline_decisions["lrclib_auto"] = lrclib_auto
             # A real YouTube caption existed iff the stage did NOT generate its
             # own SRT this run (``_should_write_srt`` is True only when no SRT
             # is on disk). Re-probing the filesystem here would re-find a
@@ -544,13 +625,13 @@ class LyricAlignStage(BaseStage):
     def _run_joint(
         self,
         ctx: StageContext,
-        vocal_wav: Path,
+        gate: _Gate,
         lyrics_text: str,
         lyrics_lines: list[str],
         align_lines: list[str],
     ) -> tuple[list[dict], list[dict], list[dict], dict]:
-        """Run the joint matcher route: de-reverb gate (transcribe-first) →
-        align + refine on the gated stem → joint DP matcher.
+        """Run the joint matcher route: align + refine on the gated stem
+        (:meth:`_dereverb_gate`'s result) → joint DP matcher.
 
         YouTube ASR words (when the lyrics-fetch stage adopted a caption) join
         align + transcribe as the third candidate source; absent, the matcher
@@ -561,10 +642,7 @@ class LyricAlignStage(BaseStage):
         capture bundle — both are needed to re-run the joint matcher
         offline at different α values.
         """
-        # Transcribe-first de-reverb gate (shared prefix): transcribe, gate on
-        # yield, adopt a de-reverbed stem if the wet one is reverb-washed. Then
-        # align once on the final stem — one saved align pass when the gate fires.
-        vocal_wav, transcribe_words, dereverb_stats = self._dereverb_gate(ctx, vocal_wav)
+        vocal_wav, transcribe_words, dereverb_stats = gate
 
         align_words = _model_call(
             ctx,
@@ -626,7 +704,7 @@ class LyricAlignStage(BaseStage):
     def _run_cue_align(
         self,
         ctx: StageContext,
-        vocal_wav: Path,
+        gate: _Gate,
         display_lines: list[str],
         align_lines: list[str],
         cue_spans: list[tuple[float, float]],
@@ -634,8 +712,8 @@ class LyricAlignStage(BaseStage):
     ) -> tuple[list[dict], list[dict], dict, np.ndarray | None, dict, tuple[list[str], list[str]]]:
         """Cue-anchored windowed align for SRT songs — uploader cues drive it.
 
-        Shares the transcribe-first de-reverb gate with the joint route, then
-        hands the (possibly de-reverbed) stem's cue windows to
+        Takes the transcribe-first de-reverb gate's result, shared with the joint
+        route, and hands the (possibly de-reverbed) stem's cue windows to
         :func:`cue_align.align_song`, injecting :meth:`_slice_align` as the
         forced aligner. All the sectioning/offset/re-pace logic lives in the
         library; this method only wires I/O and the audio duration.
@@ -654,9 +732,7 @@ class LyricAlignStage(BaseStage):
         (:func:`cue_align.align_song`), and the ``(display_lines, align_lines)`` the line
         objects were timed against: the sheet's, plus any backing vocals kept.
         """
-        # Shared de-reverb gate: adopt the dry stem when the wet one is
-        # reverb-washed.
-        vocal_wav, transcribe_words, dereverb_stats = self._dereverb_gate(ctx, vocal_wav)
+        vocal_wav, transcribe_words, dereverb_stats = gate
         try:
             duration: float | None = _wav_duration(vocal_wav)
         except (wave.Error, OSError, EOFError):
@@ -724,17 +800,16 @@ class LyricAlignStage(BaseStage):
             logger.warning("[%s] YTASR json3 unreadable; running two-source", self.name)
             return None
 
-    def _dereverb_gate(
-        self, ctx: StageContext, vocal_wav: Path
-    ) -> tuple[Path, list[dict], dict | None]:
-        """Transcribe-first de-reverb gate: the shared prefix of the audio routes.
+    def _dereverb_gate(self, ctx: StageContext, vocal_wav: Path) -> _Gate:
+        """Transcribe-first de-reverb gate: the shared prefix of the audio routes, run once
+        per alignment before the route is chosen.
 
         Transcribe (no refine) on the vocal stem; a reverb-washed stem starves
         transcribe (the one corpus case yields 14.4 wpm vs >= 50.5 everywhere
         else), which guts both joint scoring and windowed re-align. Below
         ``dereverb_yield_wpm`` the stem is de-reverbed and re-transcribed, and
-        the dry stem is adopted; any failure keeps the wet stem. Returns
-        ``(stem_to_align, transcribe_words, dereverb_stats | None)``.
+        the dry stem is adopted; any failure keeps the wet stem. The one align
+        pass then runs on the final stem.
         """
         logger.info(
             f"[{self.name}] Transcribing (no refine) for joint match: {Path(vocal_wav).name}"
@@ -771,7 +846,7 @@ class LyricAlignStage(BaseStage):
         # this one, not the wet artifact: its release detector is defeated
         # by the reverb tail a de-reverbed stem removes.
         ctx.artifacts["aligned_stem"] = vocal_wav
-        return vocal_wav, transcribe_words, dereverb_stats
+        return _Gate(vocal_wav, transcribe_words, dereverb_stats)
 
     def _transcribe_yield_wpm(self, transcribe_words: list[dict], vocal_wav: Path) -> float | None:
         """Whole-stem transcribe yield in words per minute.
