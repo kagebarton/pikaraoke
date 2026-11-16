@@ -77,14 +77,25 @@ that queued them is already closed; 7.1f).
 
 ## Library tools: small, unruled
 
-- **The pick box's starting search keeps trailing words of a long YouTube
+- ~~**The pick box's starting search keeps trailing words of a long YouTube
   title** (`library_regen.default_query`). Defying Gravity's search came back
   empty until the box was edited. Fixing it means a new title-cleaning rule.
-  Record: web plan, Phase 7 row.
+  Record: web plan, Phase 7 row.~~ Closed 2026-11-16 by `genius_search_accuracy`
+  (`e1ddf4b6`): the pick pass's and Repair's Genius boxes start from
+  `genius_query.start_query`, which drops a title's junk tail, and an unchanged
+  box runs the title's whole query ladder. Defying Gravity's search was not
+  re-run. `default_query` still starts the Repair page's LRCLIB box.
 - **A service outage reads as "no results."** `/lyrics_search` returns `[]` on
   any Genius failure or a missing token ("No Genius results."), and
   `lrclib.search` returns `[]` on a 503 or timeout. `routes/search.py` is shared
-  with the search page. Record: web plan, 6.1e and the Phase 6 row.
+  with the search page. Record: web plan, 6.1e and the Phase 6 row. Since
+  `genius_search_accuracy` it also costs time: a failed call reads as "found
+  nothing", so the title search asks its next query, and a Genius that times
+  out holds a lookup for up to three 15 s calls on the search page (two on the
+  pick pass, Repair and the prompt), each holding `GeniusClient`'s lock. Fix
+  shape: `search` tells a failure from an empty answer and the ladder stops on
+  a failure. Record: `/code-review` of `eb8d4be0..3743f4f2`, finding 2,
+  logged in `plans/genius-search-spec.md` on that branch, Results row 14.
 - **An empty LRCLIB title makes Search do nothing**; a hint would be new
   wording. Record: web plan, 6.1e.
 - **An open bulk run keeps a renamed or deleted song under its old path**;
@@ -122,10 +133,12 @@ that queued them is already closed; 7.1f).
   reads bytes since `2fa2473`; whether the rest of the run
   reads such a file is not checked. Record: web plan, Phase 5.1 row.
 - **Custom-sheet review leftovers**: `_custom_repair_plan`
-  normalizes the sheet text twice; `routes/song_info._typed` repeats
+  normalizes the sheet text twice; ~~`routes/song_info._typed` repeats
   `library_tools._pick_text` without its length cap, so the POST LRCLIB search
-  sends title and artist uncapped. Record: `plans/custom-lyrics-sheet.md`, Code
-  review rows 7-8.
+  sends title and artist uncapped~~ (no longer applies, seen 2026-11-16: the
+  LRCLIB search has one `q` box since `lrclib_search_box`, `_typed` reads only
+  that, and the GET form reads its `q` uncapped too). Record:
+  `plans/custom-lyrics-sheet.md`, Code review rows 7-8.
 - **`add_songs --folder` defaults to `~\pikaraoke-songs`** (`get_default_dl_dir`)
   instead of `config.ini`'s `download_path`; `regen_alignment_bundles.py` on
   `dev` has the same default. The status report has no title column. Record:
@@ -133,8 +146,9 @@ that queued them is already closed; 7.1f).
 - **CLI paths never run on real data:** `regen --song --reset` and backfill's
   queued path. Record: `library-tools.md`.
 - **Simplicity leftovers:** `_ActiveJob.kind` is set and never read;
-  `prepare_regen_job` accepts plan kinds no caller builds; the int-not-bool
-  Genius id check is written three times; ~~the watch URL is built in more than
+  `prepare_regen_job` accepts plan kinds no caller builds; ~~the int-not-bool
+  Genius id check is written three times~~ (one `library_tools.is_whole_number`,
+  `df2d1159` on `genius_search_accuracy`); ~~the watch URL is built in more than
   one module~~ (one `library_regen.watch_url`, `f4aa97b`). Record: web plan, 3.1i and 8.1f.
 - ~~**`SongStatus` carries two overlapping sheet flags** (`library_status.py`):
   `custom_sheet` is true for either kind of sheet and `movie_sheet` for the
@@ -394,12 +408,14 @@ Record: `plans/queue-hold.md` on branch `queue_hold`, the manual checks row.
   these messages for every case where it drops a held slot. Recommended: own
   small branch off `dev` after `queue_hold` lands (pages listen and toast); not
   ruled.
-- **The direct box ignores its own Add to queue tick.** `downloadSong` in
+- ~~**The direct box ignores its own Add to queue tick.** `downloadSong` in
   `search.html` sends `$("#add-to-queue-search").is(":checked")`, and that box
   exists only when search results are on screen; with none, the download is
   never queued. The two ticks are kept in sync, so reading
   `#add-to-queue-direct` (always on the page) fixes it. Upstream code, also on
-  `master`. A one-line fix was offered on `queue_hold`; not ruled.
+  `master`. A one-line fix was offered on `queue_hold`; not ruled.~~ Fixed
+  2026-11-16 on `genius_search_accuracy` as `62702d65` (Ken took it from that
+  branch's review triage): `downloadSong` reads `#add-to-queue-direct`.
 
 ## Edit words (on `dev`)
 
