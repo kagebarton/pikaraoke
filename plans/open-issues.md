@@ -570,9 +570,9 @@ and compare scripts (`scripts/cue_heard_probe.py`, `scripts/cue_heard_compare.py
 which read the stats of the three cut rules and stay on the tag.
 
 - **Library songs change only when regenerated.** They wait for one full regen
-  from `dev` once this branch, `onset_loud_start` and `backing_vocal_lines` have
-  all landed (`onset_loud_start` makes every bundle stale with its schema bump
-  anyway). Ken, 2026-11-15: no `--song` batch for this branch alone.
+  from `dev` once `onset_loud_start` has landed (this branch and
+  `backing_vocal_lines` have; `onset_loud_start` makes every bundle stale with
+  its schema bump anyway). Ken, 2026-11-15: no `--song` batch for this branch alone.
 - **Reflection line 36 (3:11) is still about 5 s early.** The transcriber
   hears nothing there, and the line's cue-aimed retry timed three of five words
   before its window ended. Lines 35 to 37 are word for word the same in the old
@@ -613,12 +613,13 @@ which read the stats of the three cut rules and stay on the tag.
 
 ## Backing vocal lines (on `dev`)
 
-Branch `backing_vocal_lines`: a parenthetical group in a caption or LRCLIB sheet
-("(oh, oh)") is shown when the transcriber heard it in its cue's window. An
-inline group joins its line, and a cue of only a group becomes a line of its
-own, timed by the rescue's one-line retry. Genius and custom songs show their
-parentheses too. Record: `plans/backing-vocal-lines.md` on branch
-`backing_vocal_lines`.
+Landed 2026-11-16 from branch `backing_vocal_lines`: a parenthetical group in a
+caption or LRCLIB sheet ("(oh, oh)") is shown when the transcriber heard it in
+its cue's window. An inline group joins its line, and a cue of only a group
+becomes a line of its own, timed by the rescue's one-line retry. Genius and
+custom songs show their parentheses too. Record: `plans/backing-vocal-lines.md`
+on tag `archive/backing_vocal_lines` (the Phase 2 run logs and the GATE B
+listening sheets are in its `plans/backing-vocal-lines/probes/`).
 
 - **Edit words drops a song's backing lines on save.** The page opens the
   sheet's cleaned lines, which hold no parenthetical group, and saves them as
