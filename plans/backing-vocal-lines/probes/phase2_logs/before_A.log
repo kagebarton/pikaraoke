@@ -1,0 +1,159 @@
+
+Scanned: /home/ken/probes/backing_vocal_lines_phase2/before
+Selection: selected songs
+Songs to regenerate: 4
+
+song                                                                           bundle    plan
+-----------------------------------------------------------------------------  --------  ------------------------------
+Ed Sheeran - Happier---iWZmdoY1aTE.mp4                                         selected  reuse srt (from video)
+Frozen (2013) - Do You Want to Build a Snowman (Sing-Along)---TeQ_TTyLGMs.mp4  selected  LRCLIB timing
+The Lonely Island - Jose & Mark---68LBPvFhMx0.mp4                              selected  LRCLIB timing
+The Lonely Island - Let's Bash---hj4e709GYf4.mp4                               selected  LRCLIB timing
+
+Backed up subtitles/karaoke/lyrics/alignment_debug for the selected songs to: /home/ken/probes/backing_vocal_lines_phase2/before/regen_backups/20261115T225210Z
+
+17:52:10 INFO pikaraoke.pipeline.workers.stem_worker: Stem worker started (PID 499546)
+17:52:10 INFO pikaraoke.pipeline.workers.whisper_worker: Whisper worker subprocess started (PID 499547)
+[17:52:11] INFO: Whisper worker process started (PID 499547)
+[17:52:11] INFO: Stem worker process started (PID 499546)
+[17:52:12] INFO: Loading whisper model: /home/ken/projects/pikaraoke/.claude/worktrees/bvl_phase2_before/models/large-v3-turbo.pt on cuda
+[17:52:14] WARNING: CUDAExecutionProvider not available in ONNXruntime, so acceleration will NOT be enabled
+[17:52:19] INFO: Audio separator model loaded — ready for jobs
+[17:52:21] INFO: Whisper model loaded in 8.5s (device=cuda)
+17:52:21 INFO pikaraoke.pipeline.workers.whisper_worker: Whisper worker ready (subprocess PID 499547)
+
+[1/4] Ed Sheeran - Happier---iWZmdoY1aTE.mp4 — reuse srt (from video)
+17:52:21 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_ld_81cxa
+17:52:21 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+17:52:21 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Ed Sheeran - Happier---iWZmdoY1aTE---vocal.m4a
+17:52:21 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Ed Sheeran - Happier---iWZmdoY1aTE_vocal.wav
+17:52:21 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+17:52:21 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+17:52:21 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+17:52:21 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+17:52:21 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Ed Sheeran - Happier---iWZmdoY1aTE_vocal.wav
+17:52:21 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Ed Sheeran - Happier---iWZmdoY1aTE_vocal.wav
+Transcribe:   0%|          | 0/215.53 [00:00<?, ?sec/s]Transcribe:  12%|█▏        | 26.62/215.53 [00:02<00:19,  9.48sec/s]Transcribe:  24%|██▍       | 52.66/215.53 [00:04<00:12, 13.20sec/s]Transcribe:  37%|███▋      | 79.82/215.53 [00:05<00:08, 15.26sec/s]Transcribe:  50%|████▉     | 106.88/215.53 [00:07<00:06, 15.63sec/s]Transcribe:  62%|██████▏   | 133.86/215.53 [00:08<00:04, 16.83sec/s]Transcribe:  74%|███████▍  | 159.8/215.53 [00:10<00:03, 16.45sec/s] Transcribe:  87%|████████▋ | 186.48/215.53 [00:11<00:01, 19.28sec/s]Transcribe: 100%|██████████| 215.53/215.53 [00:12<00:00, 20.49sec/s]Transcribe: 100%|██████████| 215.53/215.53 [00:12<00:00, 17.20sec/s]
+[17:52:34] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[17:52:34] INFO: Skipping refine pass (refine=False)
+17:52:35 INFO pikaraoke.lib.cue_align: cue-align: 38 cues -> 17 sections
+17:54:18 INFO phase2: PHASE2 start_bounded {"line_id": 7, "shift": 0.0, "bound": 49.348, "raw_start": 48.68449999999999, "start": 48.68449999999999, "lifted": true}
+17:54:23 INFO phase2: PHASE2 start_bounded {"line_id": 10, "shift": 0.0, "bound": 60.11449999999999, "raw_start": 60.854499999999994, "start": 60.854499999999994, "lifted": false}
+17:54:29 INFO phase2: PHASE2 start_bounded {"line_id": 20, "shift": 0.0, "bound": 108.3715, "raw_start": 109.2415, "start": 109.2415, "lifted": false}
+17:54:35 INFO phase2: PHASE2 start_bounded {"line_id": 34, "shift": 0.0, "bound": 181.36149999999998, "raw_start": 181.43149999999997, "start": 181.43149999999997, "lifted": false}
+17:54:35 INFO phase2: PHASE2 guessed {"words": {"34": 1}, "tokens": {"34": [2]}}
+17:54:35 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.40s, 3 line(s) re-aligned, 0/38 re-paced from cue, 1 word(s) guessed in 1 line(s), 4 crammed line(s) asked for a re-align; 4/4 window(s) widened to the singing, 0 left unmeasured; 33 line(s) heard, 0 kept where heard, 1 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+17:54:35 INFO pikaraoke.lib.onset_snap: onset snap: 15/38 line starts moved forward (max +1.20s)
+17:54:35 INFO pikaraoke.lib.onset_snap: end snap: 25/56 run ends extended (max +3.12s)
+17:54:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Ed Sheeran - Happier---iWZmdoY1aTE.ass
+17:54:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Ed Sheeran - Happier---iWZmdoY1aTE.json
+17:54:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Ed Sheeran - Happier---iWZmdoY1aTE.mp4
+
+[2/4] Frozen (2013) - Do You Want to Build a Snowman (Sing-Along)---TeQ_TTyLGMs.mp4 — LRCLIB timing
+17:54:35 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_xuybm5gf
+17:54:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+17:54:35 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Frozen (2013) - Do You Want to Build a Snowman (Sing-Along)---TeQ_TTyLGMs---vocal.m4a
+17:54:35 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Frozen (2013) - Do You Want to Build a Snowman (Sing-Along)---TeQ_TTyLGMs_vocal.wav
+17:54:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+17:54:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+17:54:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+17:54:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+17:54:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Frozen (2013) - Do You Want to Build a Snowman (Sing-Along)---TeQ_TTyLGMs_vocal.wav
+17:54:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Frozen (2013) - Do You Want to Build a Snowman (Sing-Along)---TeQ_TTyLGMs_vocal.wav
+Transcribe:   0%|          | 0/201.22 [00:00<?, ?sec/s]Transcribe:  15%|█▍        | 30.0/201.22 [00:01<00:08, 20.80sec/s]Transcribe:  30%|██▉       | 60.0/201.22 [00:02<00:06, 21.20sec/s]Transcribe:  45%|████▍     | 90.0/201.22 [00:04<00:05, 19.44sec/s]Transcribe:  60%|█████▉    | 120.0/201.22 [00:04<00:03, 26.98sec/s]Transcribe:  75%|███████▍  | 150.0/201.22 [00:05<00:01, 29.32sec/s]Transcribe:  89%|████████▉ | 180.0/201.22 [00:07<00:00, 23.17sec/s]Transcribe: 100%|██████████| 201.22/201.22 [00:07<00:00, 27.74sec/s]Transcribe: 100%|██████████| 201.22/201.22 [00:07<00:00, 25.16sec/s]
+[17:54:44] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[17:54:44] INFO: Skipping refine pass (refine=False)
+17:54:44 INFO pikaraoke.lib.cue_align: cue-align: 30 cues -> 4 sections
+17:55:18 INFO phase2: PHASE2 start_bounded {"line_id": 0, "shift": 0.0, "bound": 5.210000000000005, "raw_start": 4.960000000000005, "start": null, "lifted": false}
+17:55:23 INFO phase2: PHASE2 start_bounded {"line_id": 13, "shift": 0.0, "bound": 56.32000000000001, "raw_start": 57.15800000000001, "start": 57.15800000000001, "lifted": false}
+17:55:28 INFO phase2: PHASE2 start_bounded {"line_id": 22, "shift": 0.0, "bound": 147.28, "raw_start": 147.35, "start": 147.35, "lifted": false}
+17:55:28 INFO phase2: PHASE2 guessed {"words": {}, "tokens": {}}
+17:55:28 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.10s, 2 line(s) re-aligned, 1/30 re-paced from cue, 0 word(s) guessed in 0 line(s), 2 crammed line(s) asked for a re-align; 0/3 window(s) widened to the singing, 0 left unmeasured; 28 line(s) heard, 0 kept where heard, 0 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+17:55:28 INFO pikaraoke.lib.onset_snap: onset snap: 10/30 line starts moved forward (max +3.38s)
+17:55:28 INFO pikaraoke.lib.onset_snap: end snap: 14/32 run ends extended (max +2.22s)
+17:55:28 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Frozen (2013) - Do You Want to Build a Snowman (Sing-Along)---TeQ_TTyLGMs.ass
+17:55:28 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/Frozen (2013) - Do You Want to Build a Snowman (Sing-Along)---TeQ_TTyLGMs.srt
+17:55:29 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Frozen (2013) - Do You Want to Build a Snowman (Sing-Along)---TeQ_TTyLGMs.json
+17:55:29 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Frozen (2013) - Do You Want to Build a Snowman (Sing-Along)---TeQ_TTyLGMs.mp4
+
+[3/4] The Lonely Island - Jose & Mark---68LBPvFhMx0.mp4 — LRCLIB timing
+17:55:29 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_200a540i
+17:55:29 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+17:55:29 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: The Lonely Island - Jose & Mark---68LBPvFhMx0---vocal.m4a
+17:55:29 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: The Lonely Island - Jose & Mark---68LBPvFhMx0_vocal.wav
+17:55:29 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+17:55:29 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+17:55:29 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+17:55:29 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+17:55:29 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: The Lonely Island - Jose & Mark---68LBPvFhMx0_vocal.wav
+17:55:29 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: The Lonely Island - Jose & Mark---68LBPvFhMx0_vocal.wav
+Transcribe:   0%|          | 0/145.06 [00:00<?, ?sec/s]Transcribe:  20%|██        | 29.52/145.06 [00:02<00:07, 14.46sec/s]Transcribe:  40%|████      | 58.66/145.06 [00:05<00:07, 11.29sec/s]Transcribe:  60%|██████    | 87.14/145.06 [00:07<00:04, 11.99sec/s]Transcribe:  80%|███████▉  | 115.5/145.06 [00:10<00:02, 10.57sec/s]Transcribe: 100%|██████████| 145.06/145.06 [00:11<00:00, 12.86sec/s]Transcribe: 100%|██████████| 145.06/145.06 [00:11<00:00, 12.25sec/s]
+[17:55:41] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[17:55:41] INFO: Skipping refine pass (refine=False)
+17:55:41 INFO pikaraoke.lib.cue_align: cue-align: 54 cues -> 5 sections
+17:56:25 INFO phase2: PHASE2 start_bounded {"line_id": 2, "shift": 0.0, "bound": 5.359999999999999, "raw_start": 4.8300000000000045, "start": 4.8300000000000045, "lifted": true}
+17:56:29 INFO phase2: PHASE2 start_bounded {"line_id": 3, "shift": 0.0, "bound": 7.3, "raw_start": 7.2900000000000045, "start": 7.2900000000000045, "lifted": true}
+17:56:33 INFO phase2: PHASE2 start_bounded {"line_id": 7, "shift": 0.0, "bound": 18.720000000000006, "raw_start": 19.490000000000006, "start": 19.490000000000006, "lifted": false}
+17:56:38 INFO phase2: PHASE2 start_bounded {"line_id": 13, "shift": 0.0, "bound": 34.92, "raw_start": 34.580000000000005, "start": 34.580000000000005, "lifted": true}
+17:56:43 INFO phase2: PHASE2 start_bounded {"line_id": 19, "shift": 0.0, "bound": 50.11, "raw_start": 50.290000000000006, "start": 50.290000000000006, "lifted": false}
+17:56:48 INFO phase2: PHASE2 start_bounded {"line_id": 26, "shift": 0.0, "bound": 72.09, "raw_start": 72.925, "start": 72.925, "lifted": false}
+17:56:52 INFO phase2: PHASE2 start_bounded {"line_id": 27, "shift": 0.0, "bound": 73.68, "raw_start": 74.32000000000001, "start": 74.32000000000001, "lifted": false}
+17:56:55 INFO phase2: PHASE2 start_bounded {"line_id": 28, "shift": 0.0, "bound": 76.81, "raw_start": 77.02, "start": 77.02, "lifted": false}
+17:57:00 INFO phase2: PHASE2 start_bounded {"line_id": 38, "shift": 0.0, "bound": 102.66000000000001, "raw_start": 102.5, "start": 102.5, "lifted": true}
+17:57:04 INFO phase2: PHASE2 start_bounded {"line_id": 43, "shift": 0.0, "bound": 111.4, "raw_start": 111.48, "start": 111.48, "lifted": false}
+17:57:09 INFO phase2: PHASE2 start_bounded {"line_id": 47, "shift": 0.0, "bound": 119.31, "raw_start": 120.212, "start": 120.212, "lifted": false}
+17:57:13 INFO phase2: PHASE2 start_bounded {"line_id": 49, "shift": 0.0, "bound": 125.33, "raw_start": 125.67, "start": 125.67, "lifted": false}
+17:57:13 INFO phase2: PHASE2 guessed {"words": {"2": 1, "3": 1, "19": 1, "27": 1, "28": 1, "38": 1}, "tokens": {"2": [8], "3": [4], "19": [1], "27": [1], "28": [4], "38": [1]}}
+17:57:13 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.13s, 7 line(s) re-aligned, 0/54 re-paced from cue, 6 word(s) guessed in 6 line(s), 8 crammed line(s) asked for a re-align; 0/12 window(s) widened to the singing, 0 left unmeasured; 48 line(s) heard, 0 kept where heard, 1 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+17:57:13 INFO pikaraoke.lib.onset_snap: onset snap: 10/54 line starts moved forward (max +0.75s)
+17:57:13 INFO pikaraoke.lib.onset_snap: end snap: 12/54 run ends extended (max +4.25s)
+17:57:13 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/The Lonely Island - Jose & Mark---68LBPvFhMx0.ass
+17:57:13 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/The Lonely Island - Jose & Mark---68LBPvFhMx0.srt
+17:57:13 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/The Lonely Island - Jose & Mark---68LBPvFhMx0.json
+17:57:13 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: The Lonely Island - Jose & Mark---68LBPvFhMx0.mp4
+
+[4/4] The Lonely Island - Let's Bash---hj4e709GYf4.mp4 — LRCLIB timing
+17:57:13 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline__bobo24z
+17:57:13 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+17:57:13 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: The Lonely Island - Let's Bash---hj4e709GYf4---vocal.m4a
+17:57:13 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: The Lonely Island - Let's Bash---hj4e709GYf4_vocal.wav
+17:57:13 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+17:57:13 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+17:57:13 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+17:57:13 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+17:57:13 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: The Lonely Island - Let's Bash---hj4e709GYf4_vocal.wav
+17:57:13 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: The Lonely Island - Let's Bash---hj4e709GYf4_vocal.wav
+Transcribe:   0%|          | 0/143.75 [00:00<?, ?sec/s]Transcribe:  19%|█▉        | 27.76/143.75 [00:03<00:13,  8.81sec/s]Transcribe:  40%|███▉      | 56.82/143.75 [00:05<00:08, 10.25sec/s]Transcribe:  55%|█████▍    | 78.78/143.75 [00:07<00:06, 10.24sec/s]Transcribe:  74%|███████▍  | 106.78/143.75 [00:11<00:03,  9.39sec/s]Transcribe:  92%|█████████▏| 132.64/143.75 [00:13<00:01,  9.61sec/s]Transcribe: 100%|██████████| 143.75/143.75 [00:14<00:00, 10.43sec/s]Transcribe: 100%|██████████| 143.75/143.75 [00:14<00:00, 10.00sec/s]
+[17:57:28] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[17:57:28] INFO: Skipping refine pass (refine=False)
+17:57:28 INFO pikaraoke.lib.cue_align: cue-align: 69 cues -> 4 sections
+17:58:16 INFO phase2: PHASE2 start_bounded {"line_id": 0, "shift": 0.0, "bound": -0.4350000000000057, "raw_start": 0.0, "start": 0.0, "lifted": false}
+17:58:21 INFO phase2: PHASE2 start_bounded {"line_id": 1, "shift": 0.0, "bound": 2.48, "raw_start": 2.5049999999999946, "start": 2.5049999999999946, "lifted": false}
+17:58:26 INFO phase2: PHASE2 start_bounded {"line_id": 5, "shift": 0.0, "bound": 10.734999999999994, "raw_start": 10.814999999999994, "start": 10.814999999999994, "lifted": false}
+17:58:33 INFO phase2: PHASE2 start_bounded {"line_id": 6, "shift": 0.0, "bound": 11.794999999999995, "raw_start": 12.009999999999994, "start": 12.009999999999994, "lifted": false}
+17:58:37 INFO phase2: PHASE2 start_bounded {"line_id": 18, "shift": 0.0, "bound": 34.8, "raw_start": 34.565, "start": 34.565, "lifted": true}
+17:58:41 INFO phase2: PHASE2 start_bounded {"line_id": 27, "shift": 0.0, "bound": 53.19500000000001, "raw_start": 53.654999999999994, "start": 53.654999999999994, "lifted": false}
+17:58:44 INFO phase2: PHASE2 start_bounded {"line_id": 29, "shift": 0.0, "bound": 55.575, "raw_start": 55.614999999999995, "start": 55.614999999999995, "lifted": false}
+17:58:49 INFO phase2: PHASE2 start_bounded {"line_id": 31, "shift": 0.0, "bound": 59.215, "raw_start": 58.80699999999999, "start": 58.80699999999999, "lifted": true}
+17:58:52 INFO phase2: PHASE2 start_bounded {"line_id": 34, "shift": 0.0, "bound": 65.855, "raw_start": 65.34499999999998, "start": 65.34499999999998, "lifted": true}
+17:58:56 INFO phase2: PHASE2 start_bounded {"line_id": 35, "shift": 0.0, "bound": 69.195, "raw_start": 69.96499999999999, "start": 69.96499999999999, "lifted": false}
+17:59:00 INFO phase2: PHASE2 start_bounded {"line_id": 37, "shift": 0.0, "bound": 73.66499999999999, "raw_start": 73.725, "start": 73.725, "lifted": false}
+17:59:07 INFO phase2: PHASE2 start_bounded {"line_id": 40, "shift": 0.0, "bound": 77.515, "raw_start": 77.723, "start": 77.723, "lifted": false}
+17:59:12 INFO phase2: PHASE2 start_bounded {"line_id": 53, "shift": 0.0, "bound": 103.485, "raw_start": 102.835, "start": 102.895, "lifted": true}
+17:59:17 INFO phase2: PHASE2 start_bounded {"line_id": 54, "shift": 0.0, "bound": 104.765, "raw_start": 104.695, "start": 104.695, "lifted": true}
+17:59:17 INFO phase2: PHASE2 guessed {"words": {"0": 1, "1": 1, "27": 1, "29": 1, "34": 1, "53": 1, "54": 1}, "tokens": {"0": [1], "1": [1], "27": [4], "29": [5], "34": [6], "53": [0], "54": [1]}}
+17:59:17 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.15s, 5 line(s) re-aligned, 2/69 re-paced from cue, 7 word(s) guessed in 7 line(s), 11 crammed line(s) asked for a re-align; 0/14 window(s) widened to the singing, 0 left unmeasured; 67 line(s) heard, 0 kept where heard, 2 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+17:59:17 INFO pikaraoke.lib.onset_snap: onset snap: 2/69 line starts moved forward (max +0.43s)
+17:59:17 INFO pikaraoke.lib.onset_snap: end snap: 9/69 run ends extended (max +1.09s)
+17:59:17 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/The Lonely Island - Let's Bash---hj4e709GYf4.ass
+17:59:17 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/The Lonely Island - Let's Bash---hj4e709GYf4.srt
+17:59:17 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/The Lonely Island - Let's Bash---hj4e709GYf4.json
+17:59:17 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: The Lonely Island - Let's Bash---hj4e709GYf4.mp4
+[17:59:17] INFO: Audio separator model unloaded
+[17:59:17] INFO: Whisper model unloaded
+
+Done. succeeded=4 failed=0 skipped=0

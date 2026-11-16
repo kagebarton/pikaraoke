@@ -1,0 +1,290 @@
+
+Scanned: /home/ken/probes/backing_vocal_lines_phase2/before
+Selection: selected songs
+Songs to regenerate: 8
+
+song                                                                                                                 bundle    plan
+-------------------------------------------------------------------------------------------------------------------  --------  ------------------------------
+Bruno Mars - Grenade (Official Music Video)---SR6iYWJxHqs.mp4                                                        selected  reuse genius+ytasr
+Bruno Mars, Anderson .Paak, Silk Sonic - After Last Night w_ Thundercat & Bootsy [Official Audio]----cy_tDQPXHk.mp4  selected  reuse genius+ytasr
+Ed Sheeran & Rudimental - Bloodstream---Orq_75kFi8I.mp4                                                              selected  custom sheet
+Jay Chou 周杰倫 - 晴天 (Sunny Day)---DYptgVvkVLQ.mp4                                                                      selected  reuse genius
+Justin Timberlake - SexyBack (Official HD Video) ft. Timbaland---3gOHvDP_vCs.mp4                                     selected  reuse genius
+Queen - Don't Stop Me Now (Official Video Remastered 4K)---HgzGwKwLmgM.mp4                                           selected  reuse genius
+The Lonely Island - I'm On A Boat (Explicit Version) ft. T-Pain (Official Video)---avaSdC0QOUM.mp4                   selected  reuse genius
+YOLO (feat. Adam Levine & Kendrick Lamar)---z5Otla5157c.mp4                                                          selected  reuse genius
+
+Backed up subtitles/karaoke/lyrics/alignment_debug for the selected songs to: /home/ken/probes/backing_vocal_lines_phase2/before/regen_backups/20261115T230714Z
+
+Backfilling LRCLIB variants for 7 genius-origin song(s)...
+18:07:14 INFO pikaraoke.pipeline.workers.stem_worker: Stem worker started (PID 511700)
+18:07:14 INFO pikaraoke.pipeline.workers.whisper_worker: Whisper worker subprocess started (PID 511701)
+[18:07:14] INFO: Whisper worker process started (PID 511701)
+[18:07:14] INFO: Stem worker process started (PID 511700)
+[18:07:16] INFO: Loading whisper model: /home/ken/projects/pikaraoke/.claude/worktrees/bvl_phase2_before/models/large-v3-turbo.pt on cuda
+[18:07:17] WARNING: CUDAExecutionProvider not available in ONNXruntime, so acceleration will NOT be enabled
+[18:07:21] INFO: Audio separator model loaded — ready for jobs
+[18:07:24] INFO: Whisper model loaded in 8.1s (device=cuda)
+18:07:24 INFO pikaraoke.pipeline.workers.whisper_worker: Whisper worker ready (subprocess PID 511701)
+
+[1/8] Bruno Mars - Grenade (Official Music Video)---SR6iYWJxHqs.mp4 — reuse genius+ytasr
+18:07:24 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_bpiug8vx
+18:07:24 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+18:07:24 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Bruno Mars - Grenade (Official Music Video)---SR6iYWJxHqs---vocal.m4a
+18:07:24 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Bruno Mars - Grenade (Official Music Video)---SR6iYWJxHqs_vocal.wav
+18:07:24 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+18:07:24 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+18:07:24 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+18:07:24 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+18:07:24 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Bruno Mars - Grenade (Official Music Video)---SR6iYWJxHqs_vocal.wav
+18:07:24 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Bruno Mars - Grenade (Official Music Video)---SR6iYWJxHqs_vocal.wav
+Transcribe:   0%|          | 0/220.71 [00:00<?, ?sec/s]Transcribe:  13%|█▎        | 29.72/220.71 [00:03<00:23,  8.07sec/s]Transcribe:  25%|██▍       | 54.32/220.71 [00:05<00:15, 10.84sec/s]Transcribe:  37%|███▋      | 80.6/220.71 [00:06<00:10, 13.31sec/s] Transcribe:  49%|████▉     | 108.82/220.71 [00:08<00:08, 13.08sec/s]Transcribe:  63%|██████▎   | 138.12/220.71 [00:10<00:05, 14.48sec/s]Transcribe:  73%|███████▎  | 161.24/220.71 [00:12<00:04, 14.35sec/s]Transcribe:  86%|████████▋ | 190.66/220.71 [00:13<00:01, 15.95sec/s]Transcribe: 100%|█████████▉| 220.66/220.71 [00:15<00:00, 16.63sec/s]Transcribe: 100%|██████████| 220.67/220.67 [00:15<00:00, 16.63sec/s]Transcribe: 100%|██████████| 220.67/220.67 [00:15<00:00, 14.36sec/s]
+[18:07:40] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[18:07:40] INFO: Skipping refine pass (refine=False)
+Align:   0%|          | 0/220.71 [00:00<?, ?sec/s]Align:   2%|▏         | 4.44/220.71 [00:00<00:34,  6.23sec/s]Align:  16%|█▌        | 34.38/220.71 [00:01<00:07, 26.30sec/s]Align:  29%|██▉       | 63.7/220.71 [00:02<00:05, 26.42sec/s] Align:  42%|████▏     | 93.62/220.71 [00:03<00:04, 26.08sec/s]Align:  56%|█████▌    | 123.2/220.71 [00:04<00:03, 26.70sec/s]Align:  69%|██████▉   | 153.08/220.71 [00:05<00:02, 27.12sec/s]Align:  73%|███████▎  | 161.26/220.71 [00:06<00:02, 20.48sec/s]Align:  75%|███████▌  | 166.52/220.71 [00:07<00:03, 16.71sec/s]Align:  89%|████████▉ | 196.5/220.71 [00:08<00:01, 22.57sec/s] Align:  99%|█████████▉| 219.12/220.71 [00:09<00:00, 22.46sec/s]Align: 100%|██████████| 220.71/220.71 [00:09<00:00, 23.03sec/s]
+Adjustment:   0%|          | 0/219.12 [00:00<?, ?sec/s]Adjustment: 100%|██████████| 219.12/219.12 [00:00<00:00, 46816.56sec/s]
+Refine:   0%|          | 0/220.71 [00:00<?, ?sec/s]Refine:  16%|█▌        | 34.38/220.71 [00:04<00:26,  6.92sec/s]Refine:  29%|██▉       | 63.7/220.71 [00:09<00:24,  6.36sec/s] Refine:  42%|████▏     | 93.32/220.71 [00:14<00:20,  6.21sec/s]Refine:  56%|█████▌    | 123.2/220.71 [00:18<00:14,  6.83sec/s]Refine:  69%|██████▉   | 153.04/220.71 [00:23<00:10,  6.53sec/s]Refine:  83%|████████▎ | 182.78/220.71 [00:28<00:05,  6.35sec/s]Refine:  96%|█████████▋| 212.54/220.71 [00:33<00:01,  6.25sec/s]Refine:  99%|█████████▉| 218.24/220.71 [00:38<00:00,  4.62sec/s]Refine: 100%|██████████| 220.71/220.71 [00:38<00:00,  5.79sec/s]
+18:08:36 INFO pikaraoke.lib.joint_match: Joint match: 50/50 lines placed (align=16 transcribe=6 ytasr=28 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:08:36 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] windowed re-align: 3/7 spans have suspect lines (18 anchors, 5 suspects)
+18:08:49 INFO pikaraoke.lib.joint_match: Joint match: 14/14 lines placed (align=5 transcribe=5 ytasr=3 interp=1 absent=0) at alpha=2.00 beta=2.00
+18:09:02 INFO pikaraoke.lib.joint_match: Joint match: 12/12 lines placed (align=5 transcribe=3 ytasr=4 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:09:13 INFO pikaraoke.lib.joint_match: Joint match: 6/6 lines placed (align=4 transcribe=2 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:09:14 INFO pikaraoke.lib.onset_snap: onset snap: 5/50 line starts moved forward (max +3.38s)
+18:09:14 INFO pikaraoke.lib.onset_snap: end snap: 14/56 run ends extended (max +1.06s)
+18:09:14 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Bruno Mars - Grenade (Official Music Video)---SR6iYWJxHqs.ass
+18:09:14 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/Bruno Mars - Grenade (Official Music Video)---SR6iYWJxHqs.srt
+18:09:14 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Bruno Mars - Grenade (Official Music Video)---SR6iYWJxHqs.json
+18:09:14 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Bruno Mars - Grenade (Official Music Video)---SR6iYWJxHqs.mp4
+
+[2/8] Bruno Mars, Anderson .Paak, Silk Sonic - After Last Night w_ Thundercat & Bootsy [Official Audio]----cy_tDQPXHk.mp4 — reuse genius+ytasr
+18:09:14 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_mx4lr6bb
+18:09:14 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+18:09:14 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Bruno Mars, Anderson .Paak, Silk Sonic - After Last Night w_ Thundercat & Bootsy [Official Audio]----cy_tDQPXHk---vocal.m4a
+18:09:14 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Bruno Mars, Anderson .Paak, Silk Sonic - After Last Night w_ Thundercat & Bootsy [Official Audio]----cy_tDQPXHk_vocal.wav
+18:09:14 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+18:09:14 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+18:09:14 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+18:09:14 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+18:09:14 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Bruno Mars, Anderson .Paak, Silk Sonic - After Last Night w_ Thundercat & Bootsy [Official Audio]----cy_tDQPXHk_vocal.wav
+18:09:14 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Bruno Mars, Anderson .Paak, Silk Sonic - After Last Night w_ Thundercat & Bootsy [Official Audio]----cy_tDQPXHk_vocal.wav
+Transcribe:   0%|          | 0/249.82 [00:00<?, ?sec/s]Transcribe:  12%|█▏        | 30.0/249.82 [00:01<00:07, 29.41sec/s]Transcribe:  22%|██▏       | 55.32/249.82 [00:03<00:12, 15.58sec/s]Transcribe:  33%|███▎      | 81.26/249.82 [00:04<00:10, 15.70sec/s]Transcribe:  43%|████▎     | 107.82/249.82 [00:07<00:09, 14.23sec/s]Transcribe:  54%|█████▍    | 135.7/249.82 [00:08<00:07, 15.37sec/s] Transcribe:  65%|██████▌   | 162.74/249.82 [00:10<00:05, 14.74sec/s]Transcribe:  77%|███████▋  | 191.48/249.82 [00:12<00:04, 14.30sec/s]Transcribe:  89%|████████▊ | 221.48/249.82 [00:14<00:01, 14.93sec/s]Transcribe: 100%|██████████| 249.82/249.82 [00:16<00:00, 14.80sec/s]Transcribe: 100%|██████████| 249.82/249.82 [00:16<00:00, 15.13sec/s]
+[18:09:31] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[18:09:31] INFO: Skipping refine pass (refine=False)
+Align:   0%|          | 0/249.82 [00:00<?, ?sec/s]Align:  12%|█▏        | 29.98/249.82 [00:00<00:05, 43.01sec/s]Align:  15%|█▍        | 36.26/249.82 [00:01<00:12, 17.26sec/s]Align:  22%|██▏       | 54.26/249.82 [00:02<00:09, 19.68sec/s]Align:  34%|███▎      | 83.72/249.82 [00:03<00:06, 24.34sec/s]Align:  45%|████▍     | 111.48/249.82 [00:04<00:05, 24.60sec/s]Align:  57%|█████▋    | 141.32/249.82 [00:05<00:04, 25.66sec/s]Align:  68%|██████▊   | 170.9/249.82 [00:06<00:03, 26.00sec/s] Align:  80%|████████  | 200.14/249.82 [00:07<00:01, 26.12sec/s]Align:  92%|█████████▏| 229.98/249.82 [00:09<00:00, 26.40sec/s]Align:  97%|█████████▋| 243.28/249.82 [00:10<00:00, 22.46sec/s]Align: 100%|██████████| 249.82/249.82 [00:10<00:00, 24.83sec/s]
+Adjustment:   0%|          | 0/243.28 [00:00<?, ?sec/s]Adjustment: 100%|██████████| 243.28/243.28 [00:00<00:00, 46622.97sec/s]
+Refine:   0%|          | 0/249.82 [00:00<?, ?sec/s]Refine:  12%|█▏        | 29.86/249.82 [00:03<00:27,  8.04sec/s]Refine:  24%|██▍       | 59.78/249.82 [00:07<00:23,  8.12sec/s]Refine:  36%|███▌      | 89.64/249.82 [00:12<00:22,  7.00sec/s]Refine:  48%|████▊     | 119.58/249.82 [00:17<00:19,  6.59sec/s]Refine:  60%|█████▉    | 149.22/249.82 [00:24<00:18,  5.34sec/s]Refine:  72%|███████▏  | 178.64/249.82 [00:30<00:13,  5.13sec/s]Refine:  83%|████████▎ | 208.26/249.82 [00:37<00:08,  5.01sec/s]Refine:  95%|█████████▌| 237.72/249.82 [00:42<00:02,  5.26sec/s]Refine:  97%|█████████▋| 243.28/249.82 [00:45<00:01,  4.41sec/s]Refine: 100%|██████████| 249.82/249.82 [00:45<00:00,  5.46sec/s]
+18:10:34 INFO pikaraoke.lib.joint_match: Joint match: 66/66 lines placed (align=15 transcribe=13 ytasr=28 interp=10 absent=0) at alpha=2.00 beta=2.00
+18:10:34 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] windowed re-align: 10/17 spans have suspect lines (21 anchors, 17 suspects)
+18:10:39 INFO pikaraoke.lib.joint_match: Joint match: 2/2 lines placed (align=2 transcribe=0 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:10:45 INFO pikaraoke.lib.joint_match: Joint match: 5/5 lines placed (align=2 transcribe=2 ytasr=0 interp=1 absent=0) at alpha=2.00 beta=2.00
+18:10:50 INFO pikaraoke.lib.joint_match: Joint match: 4/4 lines placed (align=0 transcribe=0 ytasr=2 interp=2 absent=0) at alpha=2.00 beta=2.00
+18:10:54 INFO pikaraoke.lib.joint_match: Joint match: 3/3 lines placed (align=3 transcribe=0 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:11:01 INFO pikaraoke.lib.joint_match: Joint match: 7/7 lines placed (align=3 transcribe=1 ytasr=2 interp=1 absent=0) at alpha=2.00 beta=2.00
+18:11:07 INFO pikaraoke.lib.joint_match: Joint match: 3/3 lines placed (align=3 transcribe=0 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:11:14 INFO pikaraoke.lib.joint_match: Joint match: 3/3 lines placed (align=3 transcribe=0 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:11:21 INFO pikaraoke.lib.joint_match: Joint match: 8/8 lines placed (align=3 transcribe=2 ytasr=3 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:11:29 INFO pikaraoke.lib.joint_match: Joint match: 6/6 lines placed (align=0 transcribe=3 ytasr=1 interp=2 absent=0) at alpha=2.00 beta=2.00
+18:11:34 INFO pikaraoke.lib.joint_match: Joint match: 7/7 lines placed (align=0 transcribe=5 ytasr=0 interp=2 absent=0) at alpha=2.00 beta=2.00
+18:11:35 INFO pikaraoke.lib.lrclib_fill: LRCLIB fill: 2/4 candidate line(s) filled
+18:11:35 INFO pikaraoke.lib.onset_snap: onset snap: 7/66 line starts moved forward (max +1.37s)
+18:11:35 INFO pikaraoke.lib.onset_snap: end snap: 30/70 run ends extended (max +2.98s)
+18:11:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Bruno Mars, Anderson .Paak, Silk Sonic - After Last Night w_ Thundercat & Bootsy [Official Audio]----cy_tDQPXHk.ass
+18:11:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/Bruno Mars, Anderson .Paak, Silk Sonic - After Last Night w_ Thundercat & Bootsy [Official Audio]----cy_tDQPXHk.srt
+18:11:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Bruno Mars, Anderson .Paak, Silk Sonic - After Last Night w_ Thundercat & Bootsy [Official Audio]----cy_tDQPXHk.json
+18:11:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Bruno Mars, Anderson .Paak, Silk Sonic - After Last Night w_ Thundercat & Bootsy [Official Audio]----cy_tDQPXHk.mp4
+
+[3/8] Ed Sheeran & Rudimental - Bloodstream---Orq_75kFi8I.mp4 — custom sheet
+18:11:35 INFO pikaraoke.lib.ytasr: YTASR: adopted 231 words (56.1 wpm) as the 3rd source
+18:11:35 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_wsgnzqis
+18:11:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+18:11:35 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Ed Sheeran & Rudimental - Bloodstream---Orq_75kFi8I---vocal.m4a
+18:11:35 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Ed Sheeran & Rudimental - Bloodstream---Orq_75kFi8I_vocal.wav
+18:11:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+18:11:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+18:11:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+18:11:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+18:11:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Ed Sheeran & Rudimental - Bloodstream---Orq_75kFi8I_vocal.wav
+18:11:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Ed Sheeran & Rudimental - Bloodstream---Orq_75kFi8I_vocal.wav
+Transcribe:   0%|          | 0/246.9 [00:00<?, ?sec/s]Transcribe:  12%|█▏        | 28.46/246.9 [00:01<00:08, 25.60sec/s]Transcribe:  20%|██        | 50.2/246.9 [00:02<00:10, 19.35sec/s] Transcribe:  32%|███▏      | 80.2/246.9 [00:03<00:07, 21.49sec/s]Transcribe:  43%|████▎     | 107.26/246.9 [00:05<00:06, 20.01sec/s]Transcribe:  55%|█████▌    | 136.76/246.9 [00:06<00:05, 18.72sec/s]Transcribe:  66%|██████▋   | 164.02/246.9 [00:08<00:04, 18.51sec/s]Transcribe:  78%|███████▊  | 193.4/246.9 [00:10<00:03, 16.34sec/s] Transcribe:  90%|████████▉ | 222.1/246.9 [00:12<00:01, 17.32sec/s]Transcribe: 100%|██████████| 246.9/246.9 [00:12<00:00, 20.30sec/s]Transcribe: 100%|██████████| 246.9/246.9 [00:12<00:00, 19.26sec/s]
+[18:11:49] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[18:11:49] INFO: Skipping refine pass (refine=False)
+Align:   0%|          | 0/246.9 [00:00<?, ?sec/s]Align:  12%|█▏        | 29.94/246.9 [00:00<00:05, 43.02sec/s]Align:  24%|██▍       | 59.82/246.9 [00:01<00:05, 31.85sec/s]Align:  36%|███▋      | 89.78/246.9 [00:02<00:05, 29.35sec/s]Align:  39%|███▉      | 97.14/246.9 [00:04<00:07, 19.67sec/s]Align:  51%|█████▏    | 127.02/246.9 [00:04<00:04, 24.94sec/s]Align:  57%|█████▋    | 141.16/246.9 [00:05<00:05, 20.38sec/s]Align:  60%|██████    | 148.8/246.9 [00:06<00:05, 16.92sec/s] Align:  66%|██████▌   | 162.0/246.9 [00:07<00:05, 16.85sec/s]Align:  69%|██████▉   | 171.36/246.9 [00:08<00:05, 15.07sec/s]Align:  75%|███████▌  | 186.28/246.9 [00:09<00:03, 16.02sec/s]Align:  78%|███████▊  | 193.42/246.9 [00:10<00:03, 13.55sec/s]Align: 100%|██████████| 246.9/246.9 [00:10<00:00, 24.18sec/s] 
+Adjustment:   0%|          | 0/193.42 [00:00<?, ?sec/s]Adjustment: 100%|██████████| 193.42/193.42 [00:00<00:00, 69161.32sec/s]
+Refine:   0%|          | 0/246.9 [00:00<?, ?sec/s]Refine:  13%|█▎        | 32.04/246.9 [00:07<00:49,  4.34sec/s]Refine:  25%|██▍       | 61.5/246.9 [00:13<00:40,  4.59sec/s] Refine:  36%|███▋      | 89.68/246.9 [00:20<00:37,  4.22sec/s]Refine:  51%|█████▏    | 127.0/246.9 [00:27<00:24,  4.87sec/s]Refine:  64%|██████▍   | 158.36/246.9 [00:33<00:18,  4.90sec/s]Refine:  77%|███████▋  | 189.38/246.9 [00:34<00:08,  6.69sec/s]Refine:  78%|███████▊  | 193.36/246.9 [00:40<00:12,  4.37sec/s]Refine: 100%|██████████| 246.9/246.9 [00:40<00:00,  6.05sec/s] 
+18:12:46 INFO pikaraoke.lib.joint_match: Joint match: 58/58 lines placed (align=15 transcribe=21 ytasr=17 interp=5 absent=0) at alpha=2.00 beta=2.00
+18:12:46 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] windowed re-align: 3/6 spans have suspect lines (14 anchors, 14 suspects)
+18:12:54 INFO pikaraoke.lib.joint_match: Joint match: 3/3 lines placed (align=2 transcribe=0 ytasr=1 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:13:10 INFO pikaraoke.lib.joint_match: Joint match: 11/11 lines placed (align=4 transcribe=2 ytasr=4 interp=1 absent=0) at alpha=2.00 beta=2.00
+18:13:48 INFO pikaraoke.lib.joint_match: Joint match: 30/30 lines placed (align=14 transcribe=7 ytasr=7 interp=2 absent=0) at alpha=2.00 beta=2.00
+18:13:48 INFO pikaraoke.lib.onset_snap: onset snap: 14/58 line starts moved forward (max +3.52s)
+18:13:48 INFO pikaraoke.lib.onset_snap: end snap: 27/67 run ends extended (max +2.87s)
+18:13:48 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Ed Sheeran & Rudimental - Bloodstream---Orq_75kFi8I.ass
+18:13:48 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/Ed Sheeran & Rudimental - Bloodstream---Orq_75kFi8I.srt
+18:13:48 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Ed Sheeran & Rudimental - Bloodstream---Orq_75kFi8I.json
+18:13:48 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Ed Sheeran & Rudimental - Bloodstream---Orq_75kFi8I.mp4
+
+[4/8] Jay Chou 周杰倫 - 晴天 (Sunny Day)---DYptgVvkVLQ.mp4 — reuse genius
+18:13:48 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_yupj9q_p
+18:13:48 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+18:13:48 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Jay Chou 周杰倫 - 晴天 (Sunny Day)---DYptgVvkVLQ---vocal.m4a
+18:13:49 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Jay Chou 周杰倫 - 晴天 (Sunny Day)---DYptgVvkVLQ_vocal.wav
+18:13:49 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+18:13:49 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+18:13:49 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+18:13:49 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+18:13:49 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Jay Chou 周杰倫 - 晴天 (Sunny Day)---DYptgVvkVLQ_vocal.wav
+18:13:49 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Jay Chou 周杰倫 - 晴天 (Sunny Day)---DYptgVvkVLQ_vocal.wav
+Transcribe:   0%|          | 0/318.3 [00:00<?, ?sec/s]Transcribe:   9%|▉         | 30.0/318.3 [00:00<00:04, 71.13sec/s]Transcribe:  18%|█▊        | 57.0/318.3 [00:01<00:08, 29.10sec/s]Transcribe:  27%|██▋       | 87.0/318.3 [00:06<00:19, 11.66sec/s]Transcribe:  36%|███▌      | 113.0/318.3 [00:10<00:23,  8.68sec/s]Transcribe:  44%|████▍     | 141.0/318.3 [00:12<00:17, 10.36sec/s]Transcribe:  49%|████▉     | 157.5/318.3 [00:13<00:14, 11.13sec/s]Transcribe:  59%|█████▉    | 187.5/318.3 [00:13<00:08, 15.68sec/s]Transcribe:  68%|██████▊   | 217.5/318.3 [00:14<00:05, 19.29sec/s]Transcribe:  78%|███████▊  | 247.5/318.3 [00:15<00:03, 23.52sec/s]Transcribe:  86%|████████▌ | 273.5/318.3 [00:17<00:02, 21.31sec/s]Transcribe:  95%|█████████▌| 303.5/318.3 [00:17<00:00, 25.19sec/s]Transcribe: 100%|██████████| 318.3/318.3 [00:17<00:00, 28.26sec/s]Transcribe: 100%|██████████| 318.3/318.3 [00:17<00:00, 17.68sec/s]
+[18:14:08] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[18:14:08] INFO: Skipping refine pass (refine=False)
+18:14:08 WARNING pikaraoke.pipeline.stages.lyric_align: [lyric_align] transcribe yield 25.1 wpm < 30.0 — vocal stem looks reverb-washed; retrying on a de-reverbed stem
+18:14:08 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] reusing cached de-reverb stem: Jay Chou 周杰倫 - 晴天 (Sunny Day)---DYptgVvkVLQ---dereverb.m4a
+Transcribe:   0%|          | 0/318.3 [00:00<?, ?sec/s]Transcribe:   9%|▉         | 30.0/318.3 [00:00<00:03, 90.96sec/s]Transcribe:  18%|█▊        | 57.0/318.3 [00:01<00:08, 30.03sec/s]Transcribe:  27%|██▋       | 87.0/318.3 [00:04<00:14, 15.48sec/s]Transcribe:  36%|███▌      | 115.0/318.3 [00:06<00:14, 14.41sec/s]Transcribe:  45%|████▍     | 143.18/318.3 [00:08<00:12, 14.50sec/s]Transcribe:  54%|█████▍    | 171.4/318.3 [00:10<00:09, 16.31sec/s] Transcribe:  61%|██████▏   | 195.4/318.3 [00:11<00:07, 15.78sec/s]Transcribe:  71%|███████   | 225.4/318.3 [00:12<00:04, 19.88sec/s]Transcribe:  79%|███████▉  | 252.76/318.3 [00:13<00:02, 22.21sec/s]Transcribe:  88%|████████▊ | 280.76/318.3 [00:15<00:01, 18.80sec/s]Transcribe:  98%|█████████▊| 310.76/318.3 [00:17<00:00, 16.64sec/s]Transcribe: 100%|██████████| 318.3/318.3 [00:17<00:00, 18.01sec/s] Transcribe: 100%|██████████| 318.3/318.3 [00:17<00:00, 17.95sec/s]
+[18:14:26] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[18:14:26] INFO: Skipping refine pass (refine=False)
+Align:   0%|          | 0/318.3 [00:00<?, ?sec/s]Align:   5%|▍         | 14.74/318.3 [00:00<00:14, 21.09sec/s]Align:  23%|██▎       | 73.25/318.3 [00:02<00:06, 37.43sec/s]Align:  26%|██▌       | 82.45/318.3 [00:03<00:09, 23.66sec/s]Align:  29%|██▉       | 92.33/318.3 [00:04<00:11, 19.83sec/s]Align:  38%|███▊      | 119.73/318.3 [00:05<00:10, 18.84sec/s]Align:  46%|████▌     | 146.69/318.3 [00:06<00:08, 20.74sec/s]Align:  49%|████▉     | 155.27/318.3 [00:07<00:09, 16.72sec/s]Align:  51%|█████     | 162.89/318.3 [00:09<00:14, 10.37sec/s]Align:  57%|█████▋    | 180.3/318.3 [00:10<00:11, 12.40sec/s] Align:  60%|█████▉    | 190.9/318.3 [00:11<00:10, 12.42sec/s]Align:  69%|██████▉   | 221.02/318.3 [00:14<00:08, 11.23sec/s]Align:  86%|████████▌ | 274.17/318.3 [00:16<00:02, 18.06sec/s]Align: 100%|██████████| 318.3/318.3 [00:16<00:00, 19.77sec/s] 
+Adjustment:   0%|          | 0/274.172 [00:00<?, ?sec/s]Adjustment: 100%|██████████| 274.172/274.172 [00:00<00:00, 318902.03sec/s]
+Refine:   0%|          | 0/318.3 [00:00<?, ?sec/s]Refine:  22%|██▏       | 70.87/318.3 [00:06<00:21, 11.40sec/s]Refine:  32%|███▏      | 101.15/318.3 [00:13<00:32,  6.78sec/s]Refine:  41%|████      | 129.23/318.3 [00:21<00:35,  5.36sec/s]Refine:  48%|████▊     | 153.83/318.3 [00:28<00:36,  4.54sec/s]Refine:  62%|██████▏   | 196.96/318.3 [00:35<00:24,  5.00sec/s]Refine:  68%|██████▊   | 216.96/318.3 [00:43<00:24,  4.19sec/s]Refine:  85%|████████▍ | 269.46/318.3 [00:50<00:09,  5.12sec/s]Refine:  86%|████████▌ | 273.96/318.3 [00:58<00:12,  3.69sec/s]Refine: 100%|██████████| 318.3/318.3 [00:58<00:00,  5.46sec/s] 
+18:15:42 INFO pikaraoke.lib.joint_match: Joint match: 42/42 lines placed (align=19 transcribe=0 ytasr=0 interp=23 absent=0) at alpha=2.00 beta=2.00
+18:15:42 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] windowed re-align skipped: no trusted anchors
+18:15:42 INFO pikaraoke.lib.evidence_veto: evidence veto: 3/19 zero-evidence align lines demoted over silence
+18:15:42 INFO pikaraoke.lib.onset_snap: onset snap: 3/42 line starts moved forward (max +0.64s)
+18:15:42 INFO pikaraoke.lib.onset_snap: end snap: 7/17 run ends extended (max +5.26s)
+18:15:42 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Jay Chou 周杰倫 - 晴天 (Sunny Day)---DYptgVvkVLQ.ass
+18:15:42 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/Jay Chou 周杰倫 - 晴天 (Sunny Day)---DYptgVvkVLQ.srt
+18:15:42 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Jay Chou 周杰倫 - 晴天 (Sunny Day)---DYptgVvkVLQ.json
+18:15:42 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Jay Chou 周杰倫 - 晴天 (Sunny Day)---DYptgVvkVLQ.mp4
+
+[5/8] Justin Timberlake - SexyBack (Official HD Video) ft. Timbaland---3gOHvDP_vCs.mp4 — reuse genius
+18:15:42 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_15zitlas
+18:15:42 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+18:15:42 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Justin Timberlake - SexyBack (Official HD Video) ft. Timbaland---3gOHvDP_vCs---vocal.m4a
+18:15:43 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Justin Timberlake - SexyBack (Official HD Video) ft. Timbaland---3gOHvDP_vCs_vocal.wav
+18:15:43 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+18:15:43 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+18:15:43 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+18:15:43 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+18:15:43 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Justin Timberlake - SexyBack (Official HD Video) ft. Timbaland---3gOHvDP_vCs_vocal.wav
+18:15:43 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Justin Timberlake - SexyBack (Official HD Video) ft. Timbaland---3gOHvDP_vCs_vocal.wav
+Transcribe:   0%|          | 0/266.43 [00:00<?, ?sec/s]Transcribe:  11%|█▏        | 30.0/266.43 [00:00<00:03, 74.44sec/s]Transcribe:  21%|██▏       | 56.66/266.43 [00:02<00:09, 22.80sec/s]Transcribe:  32%|███▏      | 86.18/266.43 [00:05<00:13, 12.90sec/s]Transcribe:  43%|████▎     | 114.44/266.43 [00:09<00:14, 10.28sec/s]Transcribe:  54%|█████▍    | 143.68/266.43 [00:12<00:12, 10.07sec/s]Transcribe:  65%|██████▌   | 173.52/266.43 [00:16<00:10,  9.12sec/s]Transcribe:  76%|███████▌  | 203.12/266.43 [00:19<00:07,  8.90sec/s]Transcribe:  87%|████████▋ | 233.12/266.43 [00:23<00:03,  8.63sec/s]Transcribe:  99%|█████████▉| 263.12/266.43 [00:24<00:00, 11.08sec/s]Transcribe: 100%|██████████| 266.43/266.43 [00:24<00:00, 10.91sec/s]Transcribe: 100%|██████████| 266.43/266.43 [00:24<00:00, 10.78sec/s]
+[18:16:08] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[18:16:08] INFO: Skipping refine pass (refine=False)
+Align:   0%|          | 0/266.43 [00:00<?, ?sec/s]Align:   6%|▌         | 15.64/266.43 [00:00<00:11, 22.08sec/s]Align:  16%|█▋        | 43.84/266.43 [00:01<00:09, 23.84sec/s]Align:  28%|██▊       | 73.8/266.43 [00:02<00:06, 28.55sec/s] Align:  37%|███▋      | 99.56/266.43 [00:03<00:06, 26.07sec/s]Align:  49%|████▊     | 129.52/266.43 [00:04<00:05, 26.87sec/s]Align:  59%|█████▉    | 157.24/266.43 [00:05<00:04, 26.30sec/s]Align:  70%|███████   | 187.12/266.43 [00:07<00:02, 26.57sec/s]Align:  81%|████████  | 214.72/266.43 [00:08<00:01, 26.10sec/s]Align:  86%|████████▌ | 228.12/266.43 [00:09<00:01, 21.92sec/s]Align: 100%|██████████| 266.43/266.43 [00:09<00:00, 28.78sec/s]
+Adjustment:   0%|          | 0/228.116 [00:00<?, ?sec/s]Adjustment: 100%|██████████| 228.116/228.116 [00:00<00:00, 38535.09sec/s]
+Refine:   0%|          | 0/266.43 [00:00<?, ?sec/s]Refine:   5%|▌         | 13.64/266.43 [00:01<00:22, 11.02sec/s]Refine:  28%|██▊       | 74.36/266.43 [00:06<00:16, 11.98sec/s]Refine:  39%|███▉      | 104.06/266.43 [00:10<00:16,  9.99sec/s]Refine:  50%|█████     | 133.84/266.43 [00:15<00:16,  8.07sec/s]Refine:  62%|██████▏   | 163.92/266.43 [00:18<00:12,  8.02sec/s]Refine:  73%|███████▎  | 193.72/266.43 [00:23<00:10,  7.21sec/s]Refine:  84%|████████▍ | 223.46/266.43 [00:27<00:05,  7.39sec/s]Refine:  86%|████████▌ | 228.12/266.43 [00:32<00:07,  5.11sec/s]Refine: 100%|██████████| 266.43/266.43 [00:32<00:00,  8.19sec/s]
+18:18:47 INFO pikaraoke.lib.joint_match: Joint match: 82/82 lines placed (align=60 transcribe=15 ytasr=0 interp=7 absent=0) at alpha=2.00 beta=2.00
+18:18:47 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] windowed re-align: 4/5 spans have suspect lines (8 anchors, 13 suspects)
+18:18:53 INFO pikaraoke.lib.joint_match: Joint match: 8/8 lines placed (align=6 transcribe=0 ytasr=0 interp=2 absent=0) at alpha=2.00 beta=2.00
+18:19:04 INFO pikaraoke.lib.joint_match: Joint match: 20/20 lines placed (align=15 transcribe=4 ytasr=0 interp=1 absent=0) at alpha=2.00 beta=2.00
+18:19:22 INFO pikaraoke.lib.joint_match: Joint match: 31/31 lines placed (align=19 transcribe=10 ytasr=0 interp=2 absent=0) at alpha=2.00 beta=2.00
+18:19:36 INFO pikaraoke.lib.joint_match: Joint match: 21/21 lines placed (align=17 transcribe=2 ytasr=0 interp=2 absent=0) at alpha=2.00 beta=2.00
+18:19:37 INFO pikaraoke.lib.onset_snap: onset snap: 16/82 line starts moved forward (max +1.18s)
+18:19:37 INFO pikaraoke.lib.onset_snap: end snap: 4/76 run ends extended (max +0.76s)
+18:19:37 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Justin Timberlake - SexyBack (Official HD Video) ft. Timbaland---3gOHvDP_vCs.ass
+18:19:37 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/Justin Timberlake - SexyBack (Official HD Video) ft. Timbaland---3gOHvDP_vCs.srt
+18:19:37 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Justin Timberlake - SexyBack (Official HD Video) ft. Timbaland---3gOHvDP_vCs.json
+18:19:37 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Justin Timberlake - SexyBack (Official HD Video) ft. Timbaland---3gOHvDP_vCs.mp4
+
+[6/8] Queen - Don't Stop Me Now (Official Video Remastered 4K)---HgzGwKwLmgM.mp4 — reuse genius
+18:19:37 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_64qp140c
+18:19:37 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+18:19:37 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Queen - Don't Stop Me Now (Official Video Remastered 4K)---HgzGwKwLmgM---vocal.m4a
+18:19:37 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Queen - Don't Stop Me Now (Official Video Remastered 4K)---HgzGwKwLmgM_vocal.wav
+18:19:37 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+18:19:37 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+18:19:37 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+18:19:37 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+18:19:37 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Queen - Don't Stop Me Now (Official Video Remastered 4K)---HgzGwKwLmgM_vocal.wav
+18:19:37 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Queen - Don't Stop Me Now (Official Video Remastered 4K)---HgzGwKwLmgM_vocal.wav
+Transcribe:   0%|          | 0/214.62 [00:00<?, ?sec/s]Transcribe:  14%|█▍        | 30.0/214.62 [00:01<00:06, 28.07sec/s]Transcribe:  27%|██▋       | 57.16/214.62 [00:03<00:09, 17.18sec/s]Transcribe:  40%|███▉      | 85.82/214.62 [00:05<00:08, 14.36sec/s]Transcribe:  53%|█████▎    | 114.44/214.62 [00:07<00:07, 13.89sec/s]Transcribe:  67%|██████▋   | 144.44/214.62 [00:09<00:05, 13.64sec/s]Transcribe:  81%|████████  | 174.18/214.62 [00:11<00:02, 14.16sec/s]Transcribe:  95%|█████████▌| 204.18/214.62 [00:13<00:00, 15.31sec/s]Transcribe: 100%|██████████| 214.62/214.62 [00:13<00:00, 17.17sec/s]Transcribe: 100%|██████████| 214.62/214.62 [00:13<00:00, 15.68sec/s]
+[18:19:52] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[18:19:52] INFO: Skipping refine pass (refine=False)
+Align:   0%|          | 0/214.62 [00:00<?, ?sec/s]Align:  14%|█▍        | 29.98/214.62 [00:00<00:04, 43.37sec/s]Align:  28%|██▊       | 59.92/214.62 [00:01<00:04, 32.35sec/s]Align:  41%|████      | 88.42/214.62 [00:02<00:04, 29.11sec/s]Align:  55%|█████▍    | 117.92/214.62 [00:03<00:03, 28.24sec/s]Align:  67%|██████▋   | 143.16/214.62 [00:05<00:02, 26.17sec/s]Align:  84%|████████▍ | 181.3/214.62 [00:06<00:01, 28.58sec/s] Align:  98%|█████████▊| 211.1/214.62 [00:07<00:00, 28.25sec/s]Align: 100%|██████████| 214.62/214.62 [00:07<00:00, 29.06sec/s]
+Adjustment:   0%|          | 0/211.1 [00:00<?, ?sec/s]Adjustment: 100%|██████████| 211.1/211.1 [00:00<00:00, 48550.62sec/s]
+Refine:   0%|          | 0/214.62 [00:00<?, ?sec/s]Refine:  15%|█▌        | 33.2/214.62 [00:07<00:39,  4.56sec/s]Refine:  29%|██▉       | 63.22/214.62 [00:13<00:31,  4.73sec/s]Refine:  43%|████▎     | 93.1/214.62 [00:19<00:25,  4.78sec/s] Refine:  56%|█████▋    | 120.88/214.62 [00:25<00:20,  4.68sec/s]Refine:  65%|██████▌   | 140.34/214.62 [00:30<00:16,  4.46sec/s]Refine:  84%|████████▍ | 180.32/214.62 [00:35<00:06,  5.57sec/s]Refine:  98%|█████████▊| 209.56/214.62 [00:41<00:00,  5.28sec/s]Refine:  98%|█████████▊| 210.41/214.62 [00:42<00:00,  4.87sec/s]Refine: 100%|██████████| 214.62/214.62 [00:42<00:00,  5.00sec/s]
+18:20:47 INFO pikaraoke.lib.joint_match: Joint match: 53/53 lines placed (align=41 transcribe=10 ytasr=0 interp=2 absent=0) at alpha=2.00 beta=2.00
+18:20:47 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] windowed re-align: 4/9 spans have suspect lines (23 anchors, 10 suspects)
+18:20:53 INFO pikaraoke.lib.joint_match: Joint match: 5/5 lines placed (align=5 transcribe=0 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:20:58 INFO pikaraoke.lib.joint_match: Joint match: 3/3 lines placed (align=1 transcribe=2 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:21:06 INFO pikaraoke.lib.joint_match: Joint match: 5/5 lines placed (align=3 transcribe=1 ytasr=0 interp=1 absent=0) at alpha=2.00 beta=2.00
+18:21:17 INFO pikaraoke.lib.joint_match: Joint match: 15/15 lines placed (align=9 transcribe=6 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:21:17 INFO pikaraoke.lib.lrclib_fill: LRCLIB fill: 2/2 candidate line(s) filled
+18:21:17 INFO pikaraoke.lib.onset_snap: onset snap: 9/53 line starts moved forward (max +3.16s)
+18:21:17 INFO pikaraoke.lib.onset_snap: end snap: 28/68 run ends extended (max +3.06s)
+18:21:17 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Queen - Don't Stop Me Now (Official Video Remastered 4K)---HgzGwKwLmgM.ass
+18:21:17 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/Queen - Don't Stop Me Now (Official Video Remastered 4K)---HgzGwKwLmgM.srt
+18:21:17 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Queen - Don't Stop Me Now (Official Video Remastered 4K)---HgzGwKwLmgM.json
+18:21:17 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Queen - Don't Stop Me Now (Official Video Remastered 4K)---HgzGwKwLmgM.mp4
+
+[7/8] The Lonely Island - I'm On A Boat (Explicit Version) ft. T-Pain (Official Video)---avaSdC0QOUM.mp4 — reuse genius
+18:21:17 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_b72y0hft
+18:21:17 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+18:21:17 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: The Lonely Island - I'm On A Boat (Explicit Version) ft. T-Pain (Official Video)---avaSdC0QOUM---vocal.m4a
+18:21:18 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: The Lonely Island - I'm On A Boat (Explicit Version) ft. T-Pain (Official Video)---avaSdC0QOUM_vocal.wav
+18:21:18 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+18:21:18 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+18:21:18 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+18:21:18 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+18:21:18 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: The Lonely Island - I'm On A Boat (Explicit Version) ft. T-Pain (Official Video)---avaSdC0QOUM_vocal.wav
+18:21:18 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: The Lonely Island - I'm On A Boat (Explicit Version) ft. T-Pain (Official Video)---avaSdC0QOUM_vocal.wav
+Transcribe:   0%|          | 0/184.16 [00:00<?, ?sec/s]Transcribe:  14%|█▍        | 25.96/184.16 [00:00<00:05, 29.21sec/s]Transcribe:  29%|██▉       | 53.84/184.16 [00:03<00:08, 15.95sec/s]Transcribe:  45%|████▍     | 82.52/184.16 [00:06<00:08, 12.09sec/s]Transcribe:  61%|██████    | 111.6/184.16 [00:08<00:06, 11.63sec/s]Transcribe:  76%|███████▌  | 139.64/184.16 [00:10<00:03, 12.22sec/s]Transcribe:  92%|█████████▏| 169.16/184.16 [00:12<00:01, 13.06sec/s]Transcribe: 100%|██████████| 184.16/184.16 [00:13<00:00, 13.61sec/s]Transcribe: 100%|██████████| 184.16/184.16 [00:13<00:00, 13.36sec/s]
+[18:21:32] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[18:21:32] INFO: Skipping refine pass (refine=False)
+Align:   0%|          | 0/184.16 [00:00<?, ?sec/s]Align:   4%|▍         | 7.1/184.16 [00:00<00:17, 10.20sec/s]Align:  14%|█▎        | 24.980000000000004/184.16 [00:01<00:08, 17.74sec/s]Align:  30%|██▉       | 54.86/184.16 [00:02<00:05, 24.56sec/s]             Align:  46%|████▌     | 84.72/184.16 [00:03<00:03, 25.63sec/s]Align:  62%|██████▏   | 114.62/184.16 [00:04<00:02, 26.08sec/s]Align:  78%|███████▊  | 144.5/184.16 [00:05<00:01, 26.24sec/s] Align:  96%|█████████▌| 175.92/184.16 [00:07<00:00, 22.14sec/s]Align:  97%|█████████▋| 178.84/184.16 [00:08<00:00, 17.89sec/s]Align: 100%|██████████| 184.16/184.16 [00:08<00:00, 21.76sec/s]
+Adjustment:   0%|          | 0/178.84 [00:00<?, ?sec/s]Adjustment: 100%|██████████| 178.84/178.84 [00:00<00:00, 42117.31sec/s]
+Refine:   0%|          | 0/184.16 [00:00<?, ?sec/s]Refine:  31%|███       | 57.54/184.16 [00:05<00:11, 11.50sec/s]Refine:  47%|████▋     | 87.06/184.16 [00:10<00:11,  8.21sec/s]Refine:  64%|██████▎   | 117.26/184.16 [00:14<00:09,  7.24sec/s]Refine:  78%|███████▊  | 144.46/184.16 [00:19<00:06,  6.56sec/s]Refine:  95%|█████████▌| 175.86/184.16 [00:26<00:01,  5.94sec/s]Refine:  97%|█████████▋| 178.46/184.16 [00:30<00:01,  4.23sec/s]Refine: 100%|██████████| 184.16/184.16 [00:30<00:00,  5.95sec/s]
+18:22:16 INFO pikaraoke.lib.joint_match: Joint match: 53/53 lines placed (align=39 transcribe=10 ytasr=0 interp=4 absent=0) at alpha=2.00 beta=2.00
+18:22:16 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] windowed re-align: 7/13 spans have suspect lines (25 anchors, 9 suspects)
+18:22:22 INFO pikaraoke.lib.joint_match: Joint match: 4/4 lines placed (align=4 transcribe=0 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:22:28 INFO pikaraoke.lib.joint_match: Joint match: 7/7 lines placed (align=3 transcribe=2 ytasr=0 interp=2 absent=0) at alpha=2.00 beta=2.00
+18:22:34 INFO pikaraoke.lib.joint_match: Joint match: 3/3 lines placed (align=2 transcribe=0 ytasr=0 interp=1 absent=0) at alpha=2.00 beta=2.00
+18:22:40 INFO pikaraoke.lib.joint_match: Joint match: 3/3 lines placed (align=1 transcribe=1 ytasr=0 interp=1 absent=0) at alpha=2.00 beta=2.00
+18:22:46 INFO pikaraoke.lib.joint_match: Joint match: 3/3 lines placed (align=3 transcribe=0 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:22:53 INFO pikaraoke.lib.joint_match: Joint match: 7/7 lines placed (align=6 transcribe=1 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:23:00 INFO pikaraoke.lib.joint_match: Joint match: 4/4 lines placed (align=4 transcribe=0 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:23:00 INFO pikaraoke.lib.evidence_veto: evidence veto: 1/3 zero-evidence align lines demoted over silence
+18:23:00 INFO pikaraoke.lib.onset_snap: onset snap: 1/53 line starts moved forward (max +2.00s)
+18:23:00 INFO pikaraoke.lib.onset_snap: end snap: 14/56 run ends extended (max +1.63s)
+18:23:00 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/The Lonely Island - I'm On A Boat (Explicit Version) ft. T-Pain (Official Video)---avaSdC0QOUM.ass
+18:23:00 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/The Lonely Island - I'm On A Boat (Explicit Version) ft. T-Pain (Official Video)---avaSdC0QOUM.srt
+18:23:00 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/The Lonely Island - I'm On A Boat (Explicit Version) ft. T-Pain (Official Video)---avaSdC0QOUM.json
+18:23:00 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: The Lonely Island - I'm On A Boat (Explicit Version) ft. T-Pain (Official Video)---avaSdC0QOUM.mp4
+
+[8/8] YOLO (feat. Adam Levine & Kendrick Lamar)---z5Otla5157c.mp4 — reuse genius
+18:23:00 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_tof7nj67
+18:23:00 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+18:23:00 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: YOLO (feat. Adam Levine & Kendrick Lamar)---z5Otla5157c---vocal.m4a
+18:23:01 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: YOLO (feat. Adam Levine & Kendrick Lamar)---z5Otla5157c_vocal.wav
+18:23:01 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+18:23:01 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+18:23:01 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+18:23:01 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+18:23:01 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: YOLO (feat. Adam Levine & Kendrick Lamar)---z5Otla5157c_vocal.wav
+18:23:01 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: YOLO (feat. Adam Levine & Kendrick Lamar)---z5Otla5157c_vocal.wav
+Transcribe:   0%|          | 0/193.89 [00:00<?, ?sec/s]Transcribe:  14%|█▍        | 28.0/193.89 [00:01<00:08, 20.12sec/s]Transcribe:  30%|██▉       | 57.64/193.89 [00:04<00:10, 13.44sec/s]Transcribe:  44%|████▍     | 85.24/193.89 [00:06<00:08, 12.95sec/s]Transcribe:  59%|█████▉    | 114.62/193.89 [00:08<00:06, 12.05sec/s]Transcribe:  73%|███████▎  | 140.98/193.89 [00:11<00:04, 10.89sec/s]Transcribe:  87%|████████▋ | 169.08/193.89 [00:13<00:02, 11.73sec/s]Transcribe: 100%|██████████| 193.89/193.89 [00:15<00:00, 13.39sec/s]Transcribe: 100%|██████████| 193.89/193.89 [00:15<00:00, 12.79sec/s]
+[18:23:16] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[18:23:16] INFO: Skipping refine pass (refine=False)
+Align:   0%|          | 0/193.89 [00:00<?, ?sec/s]Align:  15%|█▌        | 29.98/193.89 [00:00<00:03, 43.16sec/s]Align:  31%|███       | 59.78/193.89 [00:01<00:04, 32.17sec/s]Align:  46%|████▋     | 89.72/193.89 [00:02<00:03, 29.78sec/s]Align:  62%|██████▏   | 119.64/193.89 [00:03<00:02, 28.86sec/s]Align:  77%|███████▋  | 148.96/193.89 [00:05<00:01, 27.90sec/s]Align:  92%|█████████▏| 178.94/193.89 [00:06<00:00, 27.31sec/s]Align:  95%|█████████▍| 183.48/193.89 [00:07<00:00, 21.03sec/s]Align: 100%|██████████| 193.89/193.89 [00:07<00:00, 27.27sec/s]
+Adjustment:   0%|          | 0/183.48 [00:00<?, ?sec/s]Adjustment: 100%|██████████| 183.48/183.48 [00:00<00:00, 34466.63sec/s]
+Refine:   0%|          | 0/193.89 [00:00<?, ?sec/s]Refine:  17%|█▋        | 33.3/193.89 [00:06<00:29,  5.43sec/s]Refine:  33%|███▎      | 63.26/193.89 [00:09<00:19,  6.65sec/s]Refine:  48%|████▊     | 92.78/193.89 [00:14<00:15,  6.33sec/s]Refine:  63%|██████▎   | 122.68/193.89 [00:18<00:10,  6.90sec/s]Refine:  78%|███████▊  | 152.06/193.89 [00:24<00:07,  5.94sec/s]Refine:  93%|█████████▎| 181.02/193.89 [00:29<00:02,  5.92sec/s]Refine:  95%|█████████▍| 183.48/193.89 [00:32<00:02,  4.99sec/s]Refine: 100%|██████████| 193.89/193.89 [00:32<00:00,  6.05sec/s]
+18:24:00 INFO pikaraoke.lib.joint_match: Joint match: 59/59 lines placed (align=56 transcribe=3 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:24:00 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] windowed re-align: 1/8 spans have suspect lines (44 anchors, 1 suspects)
+18:24:06 INFO pikaraoke.lib.joint_match: Joint match: 3/3 lines placed (align=3 transcribe=0 ytasr=0 interp=0 absent=0) at alpha=2.00 beta=2.00
+18:24:07 INFO pikaraoke.lib.onset_snap: onset snap: 8/59 line starts moved forward (max +1.35s)
+18:24:07 INFO pikaraoke.lib.onset_snap: end snap: 7/62 run ends extended (max +0.93s)
+18:24:07 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/YOLO (feat. Adam Levine & Kendrick Lamar)---z5Otla5157c.ass
+18:24:07 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/YOLO (feat. Adam Levine & Kendrick Lamar)---z5Otla5157c.srt
+18:24:07 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/YOLO (feat. Adam Levine & Kendrick Lamar)---z5Otla5157c.json
+18:24:07 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: YOLO (feat. Adam Levine & Kendrick Lamar)---z5Otla5157c.mp4
+[18:24:07] INFO: Audio separator model unloaded
+[18:24:07] INFO: Whisper model unloaded
+
+Done. succeeded=8 failed=0 skipped=0

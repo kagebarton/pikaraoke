@@ -1422,7 +1422,9 @@ call adds).
 - **Next, on Ken's word:** the landing on `dev`, then the single full regen once
   `onset_loud_start` has landed too ("Rulings for Fable's window"). The probe folders
   `~/probes/backing_vocal_lines_phase2` and `~/probes/backing_vocal_lines_gateb_fix` and the
-  worktree `.claude/worktrees/bvl_phase2_before` are still in place.
+  worktree `.claude/worktrees/bvl_phase2_before` are still in place. Their run logs are
+  copied to `plans/backing-vocal-lines/probes/{phase2_logs,gateb_fix_logs}` (11-16, so the
+  archive tag carries them); the audio, per-song `.ass`/`.srt` and bundles stay local only.
 
 ## Phase 0 record
 

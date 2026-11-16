@@ -1,0 +1,114 @@
+
+Scanned: /home/ken/probes/backing_vocal_lines_gateb_fix/after
+Selection: selected songs
+Songs to regenerate: 1
+
+song                                                                                                                   bundle    plan
+---------------------------------------------------------------------------------------------------------------------  --------  ------------------------------
+Justin Timberlake - CAN'T STOP THE FEELING! (from DreamWorks Animation's 'TROLLS') (Official Video)---ru0K8uYEZWw.mp4  selected  reuse srt (from video)
+
+Backed up subtitles/karaoke/lyrics/alignment_debug for the selected songs to: /home/ken/probes/backing_vocal_lines_gateb_fix/after/regen_backups/20261116T141311Z
+
+09:13:11 INFO pikaraoke.pipeline.workers.stem_worker: Stem worker started (PID 727652)
+09:13:11 INFO pikaraoke.pipeline.workers.whisper_worker: Whisper worker subprocess started (PID 727653)
+[09:13:11] INFO: Stem worker process started (PID 727652)
+[09:13:11] INFO: Whisper worker process started (PID 727653)
+[09:13:13] INFO: Loading whisper model: /home/ken/projects/pikaraoke/.claude/worktrees/backing_vocal_lines/models/large-v3-turbo.pt on cuda
+[09:13:14] WARNING: CUDAExecutionProvider not available in ONNXruntime, so acceleration will NOT be enabled
+[09:13:19] INFO: Audio separator model loaded — ready for jobs
+[09:13:21] INFO: Whisper model loaded in 8.5s (device=cuda)
+09:13:21 INFO pikaraoke.pipeline.workers.whisper_worker: Whisper worker ready (subprocess PID 727653)
+
+[1/1] Justin Timberlake - CAN'T STOP THE FEELING! (from DreamWorks Animation's 'TROLLS') (Official Video)---ru0K8uYEZWw.mp4 — reuse srt (from video)
+09:13:21 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_csoiq40f
+09:13:21 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+09:13:21 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Justin Timberlake - CAN'T STOP THE FEELING! (from DreamWorks Animation's 'TROLLS') (Official Video)---ru0K8uYEZWw---vocal.m4a
+09:13:22 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Justin Timberlake - CAN'T STOP THE FEELING! (from DreamWorks Animation's 'TROLLS') (Official Video)---ru0K8uYEZWw_vocal.wav
+09:13:22 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+09:13:22 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+09:13:22 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+09:13:22 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+09:13:22 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Justin Timberlake - CAN'T STOP THE FEELING! (from DreamWorks Animation's 'TROLLS') (Official Video)---ru0K8uYEZWw_vocal.wav
+09:13:22 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Justin Timberlake - CAN'T STOP THE FEELING! (from DreamWorks Animation's 'TROLLS') (Official Video)---ru0K8uYEZWw_vocal.wav
+Transcribe:   0%|          | 0/285.88 [00:00<?, ?sec/s]Transcribe:   9%|▉         | 25.72/285.88 [00:03<00:32,  8.04sec/s]Transcribe:  17%|█▋        | 48.6/285.88 [00:04<00:23, 10.13sec/s] Transcribe:  25%|██▌       | 72.58/285.88 [00:06<00:17, 12.27sec/s]Transcribe:  35%|███▌      | 100.64/285.88 [00:08<00:15, 11.79sec/s]Transcribe:  44%|████▍     | 126.06/285.88 [00:11<00:13, 11.80sec/s]Transcribe:  54%|█████▎    | 153.58/285.88 [00:13<00:10, 12.35sec/s]Transcribe:  64%|██████▍   | 183.14/285.88 [00:15<00:07, 13.04sec/s]Transcribe:  75%|███████▍  | 213.14/285.88 [00:19<00:07, 10.06sec/s]Transcribe:  85%|████████▌ | 243.14/285.88 [00:21<00:03, 11.03sec/s]Transcribe:  93%|█████████▎| 265.32/285.88 [00:22<00:01, 12.33sec/s]Transcribe: 100%|██████████| 285.88/285.88 [00:26<00:00,  9.07sec/s]Transcribe: 100%|██████████| 285.88/285.88 [00:26<00:00, 10.63sec/s]
+[09:13:49] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[09:13:49] INFO: Skipping refine pass (refine=False)
+09:13:50 INFO pikaraoke.lib.cue_align: cue-align: 112 cues -> 9 sections
+09:15:45 INFO phase2: PHASE2 start_bounded {"line_id": 0, "shift": 0.0, "bound": 0.3599999999999981, "raw_start": 0.1099999999999981, "start": null, "lifted": false}
+09:15:51 INFO phase2: PHASE2 start_bounded {"line_id": 6, "shift": 0.0, "bound": 11.877999999999998, "raw_start": 11.807999999999998, "start": 11.877999999999998, "lifted": false}
+09:15:55 INFO phase2: PHASE2 start_bounded {"line_id": 9, "shift": 0.0, "bound": 20.830000000000002, "raw_start": 20.987999999999996, "start": 20.987999999999996, "lifted": false}
+09:16:00 INFO phase2: PHASE2 start_bounded {"line_id": 10, "shift": 0.0, "bound": 24.41, "raw_start": 24.269999999999996, "start": 24.269999999999996, "lifted": true}
+09:16:06 INFO phase2: PHASE2 start_bounded {"line_id": 15, "shift": 0.0, "bound": 36.410000000000004, "raw_start": 35.059, "start": 35.309, "lifted": true}
+09:16:12 INFO phase2: PHASE2 start_bounded {"line_id": 20, "shift": 0.0, "bound": 50.08, "raw_start": 50.15, "start": 50.15, "lifted": false}
+09:16:16 INFO phase2: PHASE2 start_bounded {"line_id": 21, "shift": 0.0, "bound": 54.219, "raw_start": 54.089, "start": 54.219, "lifted": false}
+09:16:21 INFO phase2: PHASE2 start_bounded {"line_id": 22, "shift": 0.0, "bound": 59.22, "raw_start": 59.961999999999996, "start": 59.961999999999996, "lifted": false}
+09:16:26 INFO phase2: PHASE2 start_bounded {"line_id": 25, "shift": 0.0, "bound": 65.8, "raw_start": 65.328, "start": 65.328, "lifted": true}
+09:16:31 INFO phase2: PHASE2 start_bounded {"line_id": 33, "shift": 0.0, "bound": 80.62, "raw_start": 79.61899999999999, "start": 79.65899999999999, "lifted": true}
+09:16:37 INFO phase2: PHASE2 start_bounded {"line_id": 37, "shift": 0.0, "bound": 87.791, "raw_start": 88.832, "start": 88.832, "lifted": false}
+09:16:42 INFO phase2: PHASE2 start_bounded {"line_id": 38, "shift": 0.0, "bound": 92.101, "raw_start": 91.381, "start": null, "lifted": false}
+09:16:48 INFO phase2: PHASE2 start_bounded {"line_id": 39, "shift": 0.0, "bound": 92.519, "raw_start": 92.68900000000001, "start": 92.68900000000001, "lifted": false}
+[09:16:49] ERROR: Whisper align_refine failed
+Traceback (most recent call last):
+  File "/home/ken/projects/pikaraoke/.claude/worktrees/backing_vocal_lines/pikaraoke/pipeline/workers/whisper_worker.py", line 696, in _whisper_worker_main_inner
+    words = _do_align_refine(
+            ^^^^^^^^^^^^^^^^^
+  File "/home/ken/projects/pikaraoke/.claude/worktrees/backing_vocal_lines/pikaraoke/pipeline/workers/whisper_worker.py", line 867, in _do_align_refine
+    aligned = _align_pass(
+              ^^^^^^^^^^^^
+  File "/home/ken/projects/pikaraoke/.claude/worktrees/backing_vocal_lines/pikaraoke/pipeline/workers/whisper_worker.py", line 819, in _align_pass
+    return _run_with_cancel_hook(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ken/projects/pikaraoke/.claude/worktrees/backing_vocal_lines/pikaraoke/pipeline/workers/whisper_worker.py", line 809, in _run_with_cancel_hook
+    return fn()
+           ^^^^
+  File "/home/ken/projects/pikaraoke/.claude/worktrees/backing_vocal_lines/pikaraoke/pipeline/workers/whisper_worker.py", line 824, in <lambda>
+    lambda: model.align(vocal_path, lyrics_text, **align_kwargs),
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ken/miniconda3/envs/pik/lib/python3.11/site-packages/stable_whisper/alignment.py", line 212, in align
+    set_result_language(result, tokenizer, language, supported_languages)
+  File "/home/ken/miniconda3/envs/pik/lib/python3.11/site-packages/stable_whisper/alignment.py", line 386, in set_result_language
+    result.language = \
+    ^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'language'
+09:16:49 WARNING pikaraoke.pipeline.stages.lyric_align: [lyric_align] line 40 slice-align failed, degrading: Whisper worker error: 'NoneType' object has no attribute 'language'
+09:16:54 INFO phase2: PHASE2 start_bounded {"line_id": 41, "shift": 0.0, "bound": 96.88999999999999, "raw_start": 97.25999999999999, "start": 97.25999999999999, "lifted": false}
+09:16:58 INFO phase2: PHASE2 start_bounded {"line_id": 49, "shift": 0.0, "bound": 116.595, "raw_start": 116.55099999999999, "start": 116.55099999999999, "lifted": true}
+09:17:04 INFO phase2: PHASE2 start_bounded {"line_id": 52, "shift": 0.0, "bound": 126.37899999999999, "raw_start": 126.58899999999998, "start": 126.58899999999998, "lifted": false}
+09:17:09 INFO phase2: PHASE2 start_bounded {"line_id": 53, "shift": 0.0, "bound": 130.867, "raw_start": 130.697, "start": 130.867, "lifted": false}
+09:17:12 INFO phase2: PHASE2 start_bounded {"line_id": 54, "shift": 0.0, "bound": 135.689, "raw_start": 136.367, "start": 136.367, "lifted": false}
+09:17:17 INFO phase2: PHASE2 start_bounded {"line_id": 55, "shift": 0.0, "bound": 137.999, "raw_start": 137.79899999999998, "start": 137.79899999999998, "lifted": true}
+09:17:22 INFO phase2: PHASE2 start_bounded {"line_id": 60, "shift": 0.0, "bound": 146.469, "raw_start": 146.319, "start": 146.469, "lifted": false}
+09:17:27 INFO phase2: PHASE2 start_bounded {"line_id": 61, "shift": 0.0, "bound": 149.049, "raw_start": 148.08999999999997, "start": 148.17999999999998, "lifted": true}
+09:17:31 INFO phase2: PHASE2 start_bounded {"line_id": 65, "shift": 0.0, "bound": 157.129, "raw_start": 155.921, "start": 156.171, "lifted": true}
+09:17:36 INFO phase2: PHASE2 start_bounded {"line_id": 69, "shift": 0.0, "bound": 165.269, "raw_start": 164.509, "start": 164.759, "lifted": true}
+09:17:38 INFO phase2: PHASE2 start_bounded {"line_id": 71, "shift": 0.0, "bound": 173.481, "raw_start": 173.231, "start": null, "lifted": false}
+09:17:43 INFO phase2: PHASE2 start_bounded {"line_id": 79, "shift": 0.0, "bound": 191.111, "raw_start": 190.909, "start": null, "lifted": false}
+09:17:45 INFO phase2: PHASE2 start_bounded {"line_id": 80, "shift": 0.0, "bound": 193.131, "raw_start": 192.304, "start": null, "lifted": false}
+09:17:50 INFO phase2: PHASE2 start_bounded {"line_id": 81, "shift": 0.0, "bound": 193.277, "raw_start": 193.40699999999998, "start": 193.40699999999998, "lifted": false}
+09:17:53 INFO phase2: PHASE2 start_bounded {"line_id": 83, "shift": 0.0, "bound": 197.33100000000002, "raw_start": 196.944, "start": 197.33100000000002, "lifted": false}
+09:17:58 INFO phase2: PHASE2 start_bounded {"line_id": 84, "shift": 0.0, "bound": 197.517, "raw_start": 197.299, "start": 197.517, "lifted": false}
+09:18:01 INFO phase2: PHASE2 start_bounded {"line_id": 86, "shift": 0.0, "bound": 201.531, "raw_start": 200.48499999999999, "start": null, "lifted": false}
+09:18:11 INFO phase2: PHASE2 start_bounded {"line_id": 90, "shift": 0.0, "bound": 207.27100000000002, "raw_start": 206.087, "start": null, "lifted": false}
+09:18:15 INFO phase2: PHASE2 start_bounded {"line_id": 91, "shift": 0.0, "bound": 209.284, "raw_start": 209.386, "start": 209.386, "lifted": false}
+09:18:19 INFO phase2: PHASE2 start_bounded {"line_id": 93, "shift": 0.0, "bound": 213.711, "raw_start": 213.572, "start": null, "lifted": false}
+09:18:22 INFO phase2: PHASE2 start_bounded {"line_id": 95, "shift": 0.0, "bound": 217.681, "raw_start": 217.25199999999998, "start": null, "lifted": false}
+09:18:25 INFO phase2: PHASE2 start_bounded {"line_id": 108, "shift": 0.0, "bound": 259.901, "raw_start": 259.651, "start": null, "lifted": false}
+09:18:31 INFO phase2: PHASE2 start_bounded {"line_id": 113, "shift": 0.0, "bound": 270.791, "raw_start": 269.07599999999996, "start": null, "lifted": false}
+09:18:33 INFO phase2: PHASE2 start_bounded {"line_id": 117, "shift": 0.0, "bound": 278.574, "raw_start": 278.404, "start": 278.574, "lifted": false}
+09:18:33 INFO phase2: PHASE2 guessed {"words": {"9": 1, "20": 1, "21": 1, "25": 1, "41": 2, "49": 1, "52": 1, "53": 1, "55": 1, "60": 2, "79": 2, "81": 1, "89": 3, "90": 1, "113": 3, "117": 1}, "tokens": {"9": [3], "20": [4], "21": [3], "25": [4], "41": [4, 6], "49": [5], "52": [4], "53": [3], "55": [3], "60": [6, 7], "79": [3, 4], "81": [2], "89": [4, 5, 6], "90": [0], "113": [1, 2, 3], "117": [1]}}
+09:18:33 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.24s, 17 line(s) re-aligned, 10/119 re-paced from cue, 23 word(s) guessed in 16 line(s), 27 crammed line(s) asked for a re-align; 1/39 window(s) widened to the singing, 1 left unmeasured; 77 line(s) heard, 0 kept where heard, 6 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+09:18:33 INFO pikaraoke.lib.cue_align: cue-align backing vocals: kept 10 (5 consistency, 5 heard), dropped 2 (2 not_heard); 7 line(s) added, 2 section(s) re-aligned
+09:18:33 INFO pikaraoke.lib.onset_snap: onset snap: 19/119 line starts moved forward (max +1.74s)
+09:18:33 INFO pikaraoke.lib.onset_snap: end snap: 32/134 run ends extended (max +1.87s)
+09:18:33 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_gateb_fix/after/karaoke/Justin Timberlake - CAN'T STOP THE FEELING! (from DreamWorks Animation's 'TROLLS') (Official Video)---ru0K8uYEZWw.ass
+09:18:33 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_gateb_fix/after/alignment_debug/Justin Timberlake - CAN'T STOP THE FEELING! (from DreamWorks Animation's 'TROLLS') (Official Video)---ru0K8uYEZWw.json
+09:18:33 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Justin Timberlake - CAN'T STOP THE FEELING! (from DreamWorks Animation's 'TROLLS') (Official Video)---ru0K8uYEZWw.mp4
+[09:18:33] INFO: Audio separator model unloaded
+[09:18:34] INFO: Whisper model unloaded
+
+Done. succeeded=1 failed=0 skipped=0
+
+real	5m24.792s
+user	5m24.862s
+sys	0m15.493s

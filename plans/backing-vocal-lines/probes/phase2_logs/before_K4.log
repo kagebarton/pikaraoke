@@ -1,0 +1,285 @@
+
+Scanned: /home/ken/probes/backing_vocal_lines_phase2/before
+Selection: selected songs
+Songs to regenerate: 6
+
+song                                                          bundle    plan
+------------------------------------------------------------  --------  ------------------------------
+BTS 방탄소년단 - Butter---WMweEpGlu_U.mp4                          selected  reuse srt (from video)
+Britney Spears - Toxic (Official HD Video)---LOZuxwVk7TU.mp4  selected  reuse srt (from video)
+Ed Sheeran - Shape of You---JGwWNGJdvx8.mp4                   selected  reuse srt (from video)
+Justin Timberlake - Rock Your Body---TSVHoHyErBQ.mp4          selected  reuse srt (from video)
+KPop Demon Hunters (2025) - Golden---yebNIHKAC4A.mp4          selected  LRCLIB timing
+NSYNC - Pop---TWZKw_MgUPI.mp4                                 selected  reuse srt (from video)
+
+Backed up subtitles/karaoke/lyrics/alignment_debug for the selected songs to: /home/ken/probes/backing_vocal_lines_phase2/before/regen_backups/20261116T013436Z
+
+20:34:36 INFO pikaraoke.pipeline.workers.stem_worker: Stem worker started (PID 613780)
+20:34:36 INFO pikaraoke.pipeline.workers.whisper_worker: Whisper worker subprocess started (PID 613781)
+[20:34:37] INFO: Stem worker process started (PID 613780)
+[20:34:37] INFO: Whisper worker process started (PID 613781)
+[20:34:38] INFO: Loading whisper model: /home/ken/projects/pikaraoke/.claude/worktrees/bvl_phase2_before/models/large-v3-turbo.pt on cuda
+[20:34:39] WARNING: CUDAExecutionProvider not available in ONNXruntime, so acceleration will NOT be enabled
+[20:34:43] INFO: Audio separator model loaded — ready for jobs
+[20:34:46] INFO: Whisper model loaded in 7.9s (device=cuda)
+20:34:46 INFO pikaraoke.pipeline.workers.whisper_worker: Whisper worker ready (subprocess PID 613781)
+
+[1/6] BTS 방탄소년단 - Butter---WMweEpGlu_U.mp4 — reuse srt (from video)
+20:34:46 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_p6np_0z2
+20:34:46 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+20:34:46 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: BTS 방탄소년단 - Butter---WMweEpGlu_U---vocal.m4a
+20:34:47 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: BTS 방탄소년단 - Butter---WMweEpGlu_U_vocal.wav
+20:34:47 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+20:34:47 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+20:34:47 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+20:34:47 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+20:34:47 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: BTS 방탄소년단 - Butter---WMweEpGlu_U_vocal.wav
+20:34:47 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: BTS 방탄소년단 - Butter---WMweEpGlu_U_vocal.wav
+Transcribe:   0%|          | 0/182.67 [00:00<?, ?sec/s]Transcribe:  15%|█▌        | 28.24/182.67 [00:03<00:18,  8.26sec/s]Transcribe:  18%|█▊        | 32.2/182.67 [00:07<00:43,  3.45sec/s] Transcribe:  33%|███▎      | 60.08/182.67 [00:09<00:18,  6.73sec/s]Transcribe:  48%|████▊     | 87.98/182.67 [00:12<00:11,  8.43sec/s]Transcribe:  64%|██████▍   | 117.52/182.67 [00:13<00:06, 10.73sec/s]Transcribe:  81%|████████  | 147.5/182.67 [00:16<00:03, 10.84sec/s] Transcribe:  97%|█████████▋| 177.5/182.67 [00:18<00:00, 12.08sec/s]Transcribe: 100%|██████████| 182.67/182.67 [00:18<00:00,  9.85sec/s]
+[20:35:06] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[20:35:06] INFO: Skipping refine pass (refine=False)
+20:35:06 INFO pikaraoke.lib.cue_align: cue-align: 69 cues -> 4 sections
+20:35:56 INFO phase2: PHASE2 start_bounded {"line_id": 0, "shift": 0.0, "bound": 9.826000000000002, "raw_start": 10.590000000000002, "start": 10.590000000000002, "lifted": false}
+20:36:00 INFO phase2: PHASE2 start_bounded {"line_id": 5, "shift": 0.0, "bound": 20.694, "raw_start": 20.169000000000004, "start": 20.169000000000004, "lifted": true}
+20:36:05 INFO phase2: PHASE2 start_bounded {"line_id": 14, "shift": 0.0, "bound": 40.18, "raw_start": 40.986, "start": 40.986, "lifted": false}
+20:36:08 INFO phase2: PHASE2 start_bounded {"line_id": 15, "shift": 0.0, "bound": 44.588, "raw_start": 45.202, "start": 45.202, "lifted": false}
+20:36:13 INFO phase2: PHASE2 start_bounded {"line_id": 16, "shift": 0.0, "bound": 46.778, "raw_start": 46.35, "start": 46.45, "lifted": true}
+20:36:18 INFO phase2: PHASE2 start_bounded {"line_id": 17, "shift": 0.0, "bound": 49.18, "raw_start": 48.919000000000004, "start": 48.999, "lifted": true}
+20:36:21 INFO phase2: PHASE2 start_bounded {"line_id": 18, "shift": 0.0, "bound": 52.269000000000005, "raw_start": 52.159, "start": 52.159, "lifted": true}
+20:36:26 INFO phase2: PHASE2 start_bounded {"line_id": 19, "shift": 0.0, "bound": 53.703, "raw_start": 54.169000000000004, "start": 54.169000000000004, "lifted": false}
+20:36:32 INFO phase2: PHASE2 start_bounded {"line_id": 25, "shift": 0.0, "bound": 66.537, "raw_start": 66.51900000000002, "start": 66.51900000000002, "lifted": true}
+20:36:35 INFO phase2: PHASE2 start_bounded {"line_id": 26, "shift": 0.0, "bound": 68.799, "raw_start": 69.02099999999999, "start": 69.02099999999999, "lifted": false}
+20:36:40 INFO phase2: PHASE2 start_bounded {"line_id": 37, "shift": 0.0, "bound": 95.89699999999999, "raw_start": 95.381, "start": 95.451, "lifted": true}
+20:36:44 INFO phase2: PHASE2 start_bounded {"line_id": 38, "shift": 0.0, "bound": 103.94800000000001, "raw_start": 103.998, "start": 103.998, "lifted": false}
+20:36:49 INFO phase2: PHASE2 start_bounded {"line_id": 39, "shift": 0.0, "bound": 112.81800000000001, "raw_start": 113.278, "start": 113.278, "lifted": false}
+20:36:52 INFO phase2: PHASE2 start_bounded {"line_id": 40, "shift": 0.0, "bound": 115.01800000000001, "raw_start": 114.69300000000001, "start": null, "lifted": false}
+20:36:57 INFO phase2: PHASE2 start_bounded {"line_id": 43, "shift": 0.0, "bound": 119.666, "raw_start": 119.961, "start": 119.961, "lifted": false}
+20:36:59 INFO phase2: PHASE2 start_bounded {"line_id": 45, "shift": 0.0, "bound": 122.806, "raw_start": 122.308, "start": 122.806, "lifted": false}
+20:37:03 INFO phase2: PHASE2 start_bounded {"line_id": 46, "shift": 0.0, "bound": 124.706, "raw_start": 124.02300000000001, "start": 124.02300000000001, "lifted": true}
+20:37:06 INFO phase2: PHASE2 start_bounded {"line_id": 47, "shift": 0.0, "bound": 126.14300000000001, "raw_start": 126.072, "start": 126.072, "lifted": true}
+20:37:11 INFO phase2: PHASE2 start_bounded {"line_id": 55, "shift": 0.0, "bound": 148.20600000000002, "raw_start": 148.154, "start": 148.154, "lifted": true}
+20:37:14 INFO phase2: PHASE2 start_bounded {"line_id": 62, "shift": 0.0, "bound": 158.306, "raw_start": 158.46200000000002, "start": 158.46200000000002, "lifted": false}
+20:37:18 INFO phase2: PHASE2 start_bounded {"line_id": 63, "shift": 0.0, "bound": 160.40300000000002, "raw_start": 160.62300000000002, "start": 160.62300000000002, "lifted": false}
+20:37:22 INFO phase2: PHASE2 start_bounded {"line_id": 68, "shift": 0.0, "bound": 165.526, "raw_start": 165.30100000000002, "start": 165.371, "lifted": true}
+20:37:22 INFO phase2: PHASE2 guessed {"words": {"26": 1, "38": 1, "39": 1, "40": 1, "43": 1, "45": 1, "47": 1, "55": 1, "62": 1, "63": 1}, "tokens": {"26": [1], "38": [2], "39": [2], "40": [1], "43": [1], "45": [3], "47": [6], "55": [2], "62": [2], "63": [2]}}
+20:37:22 INFO pikaraoke.lib.cue_align: cue rescue: offset=+0.00s, 13 line(s) re-aligned, 0/69 re-paced from cue, 10 word(s) guessed in 10 line(s), 17 crammed line(s) asked for a re-align; 3/22 window(s) widened to the singing, 0 left unmeasured; 59 line(s) heard, 0 kept where heard, 8 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+20:37:22 INFO pikaraoke.lib.onset_snap: onset snap: 11/69 line starts moved forward (max +0.75s)
+20:37:22 INFO pikaraoke.lib.onset_snap: end snap: 15/71 run ends extended (max +0.84s)
+20:37:22 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/BTS 방탄소년단 - Butter---WMweEpGlu_U.ass
+20:37:22 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/BTS 방탄소년단 - Butter---WMweEpGlu_U.json
+20:37:22 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: BTS 방탄소년단 - Butter---WMweEpGlu_U.mp4
+
+[2/6] Britney Spears - Toxic (Official HD Video)---LOZuxwVk7TU.mp4 — reuse srt (from video)
+20:37:22 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_2js0rc8_
+20:37:22 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+20:37:22 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Britney Spears - Toxic (Official HD Video)---LOZuxwVk7TU---vocal.m4a
+20:37:23 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Britney Spears - Toxic (Official HD Video)---LOZuxwVk7TU_vocal.wav
+20:37:23 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+20:37:23 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+20:37:23 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+20:37:23 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+20:37:23 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Britney Spears - Toxic (Official HD Video)---LOZuxwVk7TU_vocal.wav
+20:37:23 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Britney Spears - Toxic (Official HD Video)---LOZuxwVk7TU_vocal.wav
+Transcribe:   0%|          | 0/211.7 [00:00<?, ?sec/s]Transcribe:  11%|█         | 23.72/211.7 [00:00<00:05, 36.49sec/s]Transcribe:  24%|██▍       | 51.1/211.7 [00:02<00:07, 20.97sec/s] Transcribe:  38%|███▊      | 81.1/211.7 [00:03<00:06, 19.18sec/s]Transcribe:  52%|█████▏    | 111.1/211.7 [00:05<00:05, 18.95sec/s]Transcribe:  64%|██████▍   | 135.1/211.7 [00:07<00:04, 16.74sec/s]Transcribe:  67%|██████▋   | 141.2/211.7 [00:11<00:08,  7.97sec/s]Transcribe:  80%|███████▉  | 169.34/211.7 [00:12<00:03, 11.43sec/s]Transcribe:  93%|█████████▎| 197.04/211.7 [00:14<00:01, 11.55sec/s]Transcribe: 100%|██████████| 211.7/211.7 [00:15<00:00, 12.56sec/s] Transcribe: 100%|██████████| 211.7/211.7 [00:15<00:00, 13.52sec/s]
+[20:37:39] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[20:37:39] INFO: Skipping refine pass (refine=False)
+20:37:39 INFO pikaraoke.lib.cue_align: cue-align: 46 cues -> 7 sections
+20:38:38 INFO phase2: PHASE2 start_bounded {"line_id": 6, "shift": 0.0, "bound": 40.0655, "raw_start": 41.0955, "start": 41.0955, "lifted": false}
+20:38:42 INFO phase2: PHASE2 start_bounded {"line_id": 7, "shift": 0.0, "bound": 43.6445, "raw_start": 44.2905, "start": 44.2905, "lifted": false}
+20:38:47 INFO phase2: PHASE2 start_bounded {"line_id": 9, "shift": 0.0, "bound": 56.5025, "raw_start": 56.924499999999995, "start": 56.924499999999995, "lifted": false}
+20:38:53 INFO phase2: PHASE2 start_bounded {"line_id": 11, "shift": 0.0, "bound": 63.949999999999996, "raw_start": 63.0785, "start": null, "lifted": false}
+20:38:57 INFO phase2: PHASE2 start_bounded {"line_id": 22, "shift": 0.0, "bound": 113.4515, "raw_start": 113.9695, "start": 113.9695, "lifted": false}
+20:39:02 INFO phase2: PHASE2 start_bounded {"line_id": 24, "shift": 0.0, "bound": 121.09899999999999, "raw_start": 120.1525, "start": 120.3705, "lifted": true}
+20:39:06 INFO phase2: PHASE2 start_bounded {"line_id": 30, "shift": 0.0, "bound": 157.4565, "raw_start": 158.4265, "start": 158.4265, "lifted": false}
+20:39:10 INFO phase2: PHASE2 start_bounded {"line_id": 32, "shift": 0.0, "bound": 164.684, "raw_start": 163.8535, "start": null, "lifted": false}
+20:39:15 INFO phase2: PHASE2 start_bounded {"line_id": 35, "shift": 0.0, "bound": 171.22400000000002, "raw_start": 171.5125, "start": 171.5125, "lifted": false}
+20:39:21 INFO phase2: PHASE2 start_bounded {"line_id": 40, "shift": 0.0, "bound": 185.114, "raw_start": 185.1915, "start": 185.1915, "lifted": false}
+20:39:25 INFO phase2: PHASE2 start_bounded {"line_id": 41, "shift": 0.0, "bound": 188.45149999999998, "raw_start": 188.43949999999998, "start": 188.43949999999998, "lifted": true}
+20:39:31 INFO phase2: PHASE2 start_bounded {"line_id": 42, "shift": 0.0, "bound": 191.6595, "raw_start": 191.8825, "start": 191.8825, "lifted": false}
+20:39:38 INFO phase2: PHASE2 start_bounded {"line_id": 45, "shift": 0.0, "bound": 201.807, "raw_start": 201.2025, "start": 201.2025, "lifted": true}
+20:39:38 INFO phase2: PHASE2 guessed {"words": {"7": 1, "11": 1, "32": 1, "35": 1, "40": 1, "42": 1, "45": 1}, "tokens": {"7": [4], "11": [2], "32": [1], "35": [1], "40": [3], "42": [3], "45": [1]}}
+20:39:38 INFO pikaraoke.lib.cue_align: cue rescue: offset=+0.06s, 8 line(s) re-aligned, 0/46 re-paced from cue, 7 word(s) guessed in 7 line(s), 13 crammed line(s) asked for a re-align; 2/13 window(s) widened to the singing, 0 left unmeasured; 45 line(s) heard, 0 kept where heard, 2 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+20:39:38 INFO pikaraoke.lib.onset_snap: onset snap: 4/46 line starts moved forward (max +0.80s)
+20:39:38 INFO pikaraoke.lib.onset_snap: end snap: 18/54 run ends extended (max +4.89s)
+20:39:38 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Britney Spears - Toxic (Official HD Video)---LOZuxwVk7TU.ass
+20:39:38 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Britney Spears - Toxic (Official HD Video)---LOZuxwVk7TU.json
+20:39:38 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Britney Spears - Toxic (Official HD Video)---LOZuxwVk7TU.mp4
+
+[3/6] Ed Sheeran - Shape of You---JGwWNGJdvx8.mp4 — reuse srt (from video)
+20:39:38 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_uuppv_pe
+20:39:38 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+20:39:38 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Ed Sheeran - Shape of You---JGwWNGJdvx8---vocal.m4a
+20:39:38 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Ed Sheeran - Shape of You---JGwWNGJdvx8_vocal.wav
+20:39:38 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+20:39:38 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+20:39:38 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+20:39:38 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+20:39:38 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Ed Sheeran - Shape of You---JGwWNGJdvx8_vocal.wav
+20:39:38 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Ed Sheeran - Shape of You---JGwWNGJdvx8_vocal.wav
+Transcribe:   0%|          | 0/263.27 [00:00<?, ?sec/s]Transcribe:   9%|▉         | 24.88/263.27 [00:00<00:08, 27.55sec/s]Transcribe:  20%|██        | 53.22/263.27 [00:03<00:14, 14.03sec/s]Transcribe:  31%|███       | 81.08/263.27 [00:05<00:13, 13.43sec/s]Transcribe:  42%|████▏     | 109.86/263.27 [00:08<00:12, 11.92sec/s]Transcribe:  53%|█████▎    | 138.8/263.27 [00:11<00:10, 11.49sec/s] Transcribe:  63%|██████▎   | 166.08/263.27 [00:13<00:07, 12.20sec/s]Transcribe:  74%|███████▍  | 196.06/263.27 [00:15<00:05, 11.65sec/s]Transcribe:  86%|████████▌ | 225.62/263.27 [00:18<00:03, 11.68sec/s]Transcribe:  97%|█████████▋| 255.62/263.27 [00:20<00:00, 13.22sec/s]Transcribe: 100%|██████████| 263.27/263.27 [00:20<00:00, 14.41sec/s]Transcribe: 100%|██████████| 263.27/263.27 [00:20<00:00, 13.02sec/s]
+[20:39:59] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[20:39:59] INFO: Skipping refine pass (refine=False)
+20:40:00 INFO pikaraoke.lib.cue_align: cue-align: 82 cues -> 10 sections
+20:41:18 INFO phase2: PHASE2 start_bounded {"line_id": 0, "shift": 0.0, "bound": 14.983999999999996, "raw_start": 15.373999999999997, "start": 15.373999999999997, "lifted": false}
+20:41:23 INFO phase2: PHASE2 start_bounded {"line_id": 8, "shift": 0.0, "bound": 35.976, "raw_start": 35.74699999999999, "start": 35.74699999999999, "lifted": true}
+20:41:28 INFO phase2: PHASE2 start_bounded {"line_id": 10, "shift": 0.0, "bound": 41.356, "raw_start": 41.315999999999995, "start": 41.315999999999995, "lifted": true}
+20:41:31 INFO phase2: PHASE2 start_bounded {"line_id": 14, "shift": 0.0, "bound": 51.336, "raw_start": 51.12499999999999, "start": 51.12499999999999, "lifted": true}
+20:41:34 INFO phase2: PHASE2 start_bounded {"line_id": 15, "shift": 0.0, "bound": 53.135999999999996, "raw_start": 53.235, "start": 53.235, "lifted": false}
+20:41:39 INFO phase2: PHASE2 start_bounded {"line_id": 35, "shift": 0.0, "bound": 109.912, "raw_start": 110.482, "start": 110.482, "lifted": false}
+20:41:44 INFO phase2: PHASE2 start_bounded {"line_id": 37, "shift": 0.0, "bound": 115.974, "raw_start": 115.786, "start": 115.786, "lifted": true}
+20:41:48 INFO phase2: PHASE2 start_bounded {"line_id": 38, "shift": 0.0, "bound": 118.25399999999999, "raw_start": 117.54499999999999, "start": null, "lifted": false}
+20:41:52 INFO phase2: PHASE2 start_bounded {"line_id": 39, "shift": 0.0, "bound": 121.354, "raw_start": 121.271, "start": 121.271, "lifted": true}
+20:41:56 INFO phase2: PHASE2 start_bounded {"line_id": 58, "shift": 0.0, "bound": 176.27100000000002, "raw_start": 175.93099999999998, "start": 175.93099999999998, "lifted": true}
+20:42:02 INFO phase2: PHASE2 start_bounded {"line_id": 59, "shift": 0.0, "bound": 178.57099999999997, "raw_start": 178.295, "start": 178.295, "lifted": true}
+20:42:07 INFO phase2: PHASE2 start_bounded {"line_id": 60, "shift": 0.0, "bound": 181.091, "raw_start": 180.619, "start": null, "lifted": false}
+20:42:13 INFO phase2: PHASE2 start_bounded {"line_id": 61, "shift": 0.0, "bound": 183.57100000000003, "raw_start": 183.242, "start": 183.242, "lifted": true}
+20:42:19 INFO phase2: PHASE2 start_bounded {"line_id": 62, "shift": 0.0, "bound": 186.07100000000003, "raw_start": 185.748, "start": 185.748, "lifted": true}
+20:42:24 INFO phase2: PHASE2 start_bounded {"line_id": 63, "shift": 0.0, "bound": 188.55100000000002, "raw_start": 188.28699999999998, "start": 188.28699999999998, "lifted": true}
+20:42:30 INFO phase2: PHASE2 start_bounded {"line_id": 64, "shift": 0.0, "bound": 191.05100000000002, "raw_start": 190.769, "start": 190.769, "lifted": true}
+20:42:35 INFO phase2: PHASE2 start_bounded {"line_id": 65, "shift": 0.0, "bound": 193.55100000000002, "raw_start": 193.31199999999998, "start": 193.31199999999998, "lifted": true}
+20:42:39 INFO phase2: PHASE2 start_bounded {"line_id": 74, "shift": 0.0, "bound": 217.17700000000002, "raw_start": 217.26399999999998, "start": 217.26399999999998, "lifted": false}
+20:42:44 INFO phase2: PHASE2 start_bounded {"line_id": 76, "shift": 0.0, "bound": 221.857, "raw_start": 222.119, "start": 222.119, "lifted": false}
+20:42:50 INFO phase2: PHASE2 start_bounded {"line_id": 77, "shift": 0.0, "bound": 224.707, "raw_start": 224.326, "start": null, "lifted": false}
+20:42:56 INFO phase2: PHASE2 start_bounded {"line_id": 78, "shift": 0.0, "bound": 226.862, "raw_start": 227.232, "start": 227.232, "lifted": false}
+20:43:00 INFO phase2: PHASE2 start_bounded {"line_id": 79, "shift": 0.0, "bound": 229.32299999999998, "raw_start": 229.45299999999997, "start": 229.45299999999997, "lifted": false}
+20:43:06 INFO phase2: PHASE2 start_bounded {"line_id": 80, "shift": 0.0, "bound": 231.951, "raw_start": 231.701, "start": 231.951, "lifted": false}
+20:43:12 INFO phase2: PHASE2 start_bounded {"line_id": 81, "shift": 0.0, "bound": 234.86999999999998, "raw_start": 234.765, "start": 234.86999999999998, "lifted": false}
+20:43:12 INFO phase2: PHASE2 guessed {"words": {"8": 1, "10": 1, "14": 1, "15": 1, "35": 2, "37": 1, "38": 1, "39": 1, "58": 1, "59": 1, "60": 1, "61": 1, "62": 1, "63": 1, "64": 1, "65": 1, "74": 1, "76": 1, "79": 1}, "tokens": {"8": [1], "10": [3], "14": [3], "15": [1], "35": [7, 8], "37": [1], "38": [0], "39": [3], "58": [2], "59": [2], "60": [2], "61": [2], "62": [2], "63": [2], "64": [2], "65": [2], "74": [2], "76": [2], "79": [3]}}
+20:43:12 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.28s, 7 line(s) re-aligned, 2/82 re-paced from cue, 20 word(s) guessed in 19 line(s), 18 crammed line(s) asked for a re-align; 24/24 window(s) widened to the singing, 0 left unmeasured; 81 line(s) heard, 0 kept where heard, 1 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+20:43:12 INFO pikaraoke.lib.onset_snap: onset snap: 39/82 line starts moved forward (max +1.00s)
+20:43:12 INFO pikaraoke.lib.onset_snap: end snap: 14/87 run ends extended (max +2.54s)
+20:43:12 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Ed Sheeran - Shape of You---JGwWNGJdvx8.ass
+20:43:12 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Ed Sheeran - Shape of You---JGwWNGJdvx8.json
+20:43:12 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Ed Sheeran - Shape of You---JGwWNGJdvx8.mp4
+
+[4/6] Justin Timberlake - Rock Your Body---TSVHoHyErBQ.mp4 — reuse srt (from video)
+20:43:12 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_9ax8u8ju
+20:43:12 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+20:43:12 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Justin Timberlake - Rock Your Body---TSVHoHyErBQ---vocal.m4a
+20:43:13 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Justin Timberlake - Rock Your Body---TSVHoHyErBQ_vocal.wav
+20:43:13 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+20:43:13 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+20:43:13 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+20:43:13 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+20:43:13 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Justin Timberlake - Rock Your Body---TSVHoHyErBQ_vocal.wav
+20:43:13 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Justin Timberlake - Rock Your Body---TSVHoHyErBQ_vocal.wav
+Transcribe:   0%|          | 0/297.77 [00:00<?, ?sec/s]Transcribe:  10%|▉         | 28.5/297.77 [00:01<00:10, 25.46sec/s]Transcribe:  20%|█▉        | 58.5/297.77 [00:04<00:18, 13.08sec/s]Transcribe:  29%|██▊       | 85.6/297.77 [00:06<00:16, 12.89sec/s]Transcribe:  39%|███▊      | 115.36/297.77 [00:09<00:15, 11.85sec/s]Transcribe:  49%|████▉     | 145.24/297.77 [00:11<00:12, 12.03sec/s]Transcribe:  59%|█████▉    | 175.24/297.77 [00:12<00:08, 14.54sec/s]Transcribe:  69%|██████▉   | 205.24/297.77 [00:17<00:08, 10.69sec/s]Transcribe:  79%|███████▉  | 234.88/297.77 [00:19<00:05, 10.58sec/s]Transcribe:  89%|████████▊ | 264.2/297.77 [00:21<00:02, 12.86sec/s] Transcribe:  97%|█████████▋| 287.64/297.77 [00:22<00:00, 13.15sec/s]Transcribe: 100%|██████████| 297.77/297.77 [00:23<00:00, 13.81sec/s]Transcribe: 100%|██████████| 297.77/297.77 [00:23<00:00, 12.78sec/s]
+[20:43:37] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[20:43:37] INFO: Skipping refine pass (refine=False)
+20:43:37 INFO pikaraoke.lib.cue_align: cue-align: 103 cues -> 7 sections
+20:44:55 INFO phase2: PHASE2 start_bounded {"line_id": 9, "shift": 0.0, "bound": 26.496999999999993, "raw_start": 26.278999999999993, "start": 26.496999999999993, "lifted": false}
+20:45:02 INFO phase2: PHASE2 start_bounded {"line_id": 14, "shift": 0.0, "bound": 37.84299999999999, "raw_start": 37.97299999999999, "start": 37.97299999999999, "lifted": false}
+20:45:06 INFO phase2: PHASE2 start_bounded {"line_id": 18, "shift": 0.0, "bound": 47.246, "raw_start": 46.57499999999999, "start": 46.66499999999999, "lifted": true}
+20:45:11 INFO phase2: PHASE2 start_bounded {"line_id": 36, "shift": 0.0, "bound": 80.712, "raw_start": 80.691, "start": 80.691, "lifted": true}
+20:45:16 INFO phase2: PHASE2 start_bounded {"line_id": 38, "shift": 0.0, "bound": 85.392, "raw_start": 85.61099999999999, "start": 85.61099999999999, "lifted": false}
+20:45:20 INFO phase2: PHASE2 start_bounded {"line_id": 58, "shift": 0.0, "bound": 123.38799999999999, "raw_start": 122.562, "start": 123.38799999999999, "lifted": false}
+20:45:24 INFO phase2: PHASE2 start_bounded {"line_id": 65, "shift": 0.0, "bound": 139.919, "raw_start": 139.642, "start": 139.642, "lifted": true}
+20:45:28 INFO phase2: PHASE2 start_bounded {"line_id": 67, "shift": 0.0, "bound": 145.279, "raw_start": 144.28099999999998, "start": 144.53099999999998, "lifted": true}
+20:45:34 INFO phase2: PHASE2 start_bounded {"line_id": 68, "shift": 0.0, "bound": 147.019, "raw_start": 145.96699999999998, "start": null, "lifted": false}
+20:45:39 INFO phase2: PHASE2 start_bounded {"line_id": 69, "shift": 0.0, "bound": 149.839, "raw_start": 149.013, "start": 149.263, "lifted": true}
+20:45:45 INFO phase2: PHASE2 start_bounded {"line_id": 88, "shift": 0.0, "bound": 220.427, "raw_start": 220.61599999999999, "start": 220.61599999999999, "lifted": false}
+20:45:49 INFO phase2: PHASE2 start_bounded {"line_id": 92, "shift": 0.0, "bound": 230.207, "raw_start": 230.988, "start": 230.988, "lifted": false}
+20:45:55 INFO phase2: PHASE2 start_bounded {"line_id": 98, "shift": 0.0, "bound": 270.13599999999997, "raw_start": 270.14599999999996, "start": 270.14599999999996, "lifted": false}
+20:46:00 INFO phase2: PHASE2 start_bounded {"line_id": 99, "shift": 0.0, "bound": 278.75300000000004, "raw_start": 278.75300000000004, "start": 278.75300000000004, "lifted": false}
+20:46:00 INFO phase2: PHASE2 guessed {"words": {"9": 1, "38": 1, "65": 1, "67": 1, "68": 4, "92": 1}, "tokens": {"9": [2], "38": [1], "65": [2], "67": [5], "68": [0, 1, 2, 10], "92": [5]}}
+20:46:00 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.35s, 9 line(s) re-aligned, 0/103 re-paced from cue, 9 word(s) guessed in 6 line(s), 14 crammed line(s) asked for a re-align; 0/14 window(s) widened to the singing, 1 left unmeasured; 92 line(s) heard, 0 kept where heard, 3 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+20:46:00 INFO pikaraoke.lib.onset_snap: onset snap: 33/103 line starts moved forward (max +2.57s)
+20:46:00 INFO pikaraoke.lib.onset_snap: end snap: 15/122 run ends extended (max +0.81s)
+20:46:00 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Justin Timberlake - Rock Your Body---TSVHoHyErBQ.ass
+20:46:00 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Justin Timberlake - Rock Your Body---TSVHoHyErBQ.json
+20:46:00 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Justin Timberlake - Rock Your Body---TSVHoHyErBQ.mp4
+
+[5/6] KPop Demon Hunters (2025) - Golden---yebNIHKAC4A.mp4 — LRCLIB timing
+20:46:00 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_qydm947o
+20:46:00 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+20:46:00 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: KPop Demon Hunters (2025) - Golden---yebNIHKAC4A---vocal.m4a
+20:46:00 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: KPop Demon Hunters (2025) - Golden---yebNIHKAC4A_vocal.wav
+20:46:00 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+20:46:00 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+20:46:00 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+20:46:00 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+20:46:00 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: KPop Demon Hunters (2025) - Golden---yebNIHKAC4A_vocal.wav
+20:46:00 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: KPop Demon Hunters (2025) - Golden---yebNIHKAC4A_vocal.wav
+Transcribe:   0%|          | 0/198.83 [00:00<?, ?sec/s]Transcribe:  15%|█▌        | 30.0/198.83 [00:00<00:02, 79.07sec/s]Transcribe:  29%|██▊       | 57.04/198.83 [00:02<00:06, 20.64sec/s]Transcribe:  43%|████▎     | 85.06/198.83 [00:04<00:07, 16.00sec/s]Transcribe:  57%|█████▋    | 113.74/198.83 [00:06<00:05, 16.01sec/s]Transcribe:  72%|███████▏  | 143.48/198.83 [00:08<00:03, 15.24sec/s]Transcribe:  86%|████████▋ | 171.84/198.83 [00:10<00:01, 14.02sec/s]Transcribe: 100%|██████████| 198.83/198.83 [00:11<00:00, 16.69sec/s]Transcribe: 100%|██████████| 198.83/198.83 [00:11<00:00, 16.78sec/s]
+[20:46:13] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[20:46:13] INFO: Skipping refine pass (refine=False)
+20:46:13 INFO pikaraoke.lib.cue_align: cue-align: 46 cues -> 4 sections
+20:46:58 INFO phase2: PHASE2 start_bounded {"line_id": 0, "shift": 0.0, "bound": 18.579999999999995, "raw_start": 19.129999999999995, "start": 19.129999999999995, "lifted": false}
+20:47:04 INFO phase2: PHASE2 start_bounded {"line_id": 10, "shift": 0.0, "bound": 57.04, "raw_start": 57.87, "start": 57.87, "lifted": false}
+20:47:09 INFO phase2: PHASE2 start_bounded {"line_id": 20, "shift": 0.0, "bound": 87.78, "raw_start": 87.932, "start": 87.932, "lifted": false}
+20:47:14 INFO phase2: PHASE2 start_bounded {"line_id": 21, "shift": 0.0, "bound": 92.71000000000001, "raw_start": 91.61999999999999, "start": 92.71000000000001, "lifted": false}
+20:47:19 INFO phase2: PHASE2 start_bounded {"line_id": 22, "shift": 0.0, "bound": 98.13, "raw_start": 98.07199999999999, "start": 98.13, "lifted": false}
+20:47:25 INFO phase2: PHASE2 start_bounded {"line_id": 29, "shift": 0.0, "bound": 126.7, "raw_start": 125.69999999999999, "start": 126.7, "lifted": false}
+20:47:29 INFO phase2: PHASE2 start_bounded {"line_id": 30, "shift": 0.0, "bound": 129.51999999999998, "raw_start": 130.23, "start": 130.23, "lifted": false}
+20:47:33 INFO phase2: PHASE2 start_bounded {"line_id": 31, "shift": 0.0, "bound": 133.60000000000002, "raw_start": 134.29000000000002, "start": 134.29000000000002, "lifted": false}
+20:47:36 INFO phase2: PHASE2 start_bounded {"line_id": 32, "shift": 0.0, "bound": 135.48000000000002, "raw_start": 136.28600000000003, "start": 136.28600000000003, "lifted": false}
+20:47:41 INFO phase2: PHASE2 start_bounded {"line_id": 33, "shift": 0.0, "bound": 137.516, "raw_start": 137.85799999999998, "start": 137.85799999999998, "lifted": false}
+20:47:44 INFO phase2: PHASE2 start_bounded {"line_id": 34, "shift": 0.0, "bound": 141.46999999999997, "raw_start": 141.49999999999997, "start": 141.49999999999997, "lifted": false}
+20:47:48 INFO phase2: PHASE2 start_bounded {"line_id": 35, "shift": 0.0, "bound": 143.45, "raw_start": 144.08599999999998, "start": 144.08599999999998, "lifted": false}
+20:47:53 INFO phase2: PHASE2 start_bounded {"line_id": 36, "shift": 0.0, "bound": 145.29999999999998, "raw_start": 145.64000000000001, "start": 145.64000000000001, "lifted": false}
+20:47:58 INFO phase2: PHASE2 start_bounded {"line_id": 45, "shift": 0.0, "bound": 173.79999999999998, "raw_start": 173.08999999999997, "start": 173.79999999999998, "lifted": false}
+20:47:58 INFO phase2: PHASE2 guessed {"words": {"0": 1, "10": 2, "20": 1, "30": 2, "32": 1, "33": 3, "35": 1, "36": 1}, "tokens": {"0": [4], "10": [0, 3], "20": [1], "30": [2, 4], "32": [0], "33": [1, 3, 4], "35": [2], "36": [4]}}
+20:47:58 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.23s, 12 line(s) re-aligned, 0/46 re-paced from cue, 12 word(s) guessed in 8 line(s), 7 crammed line(s) asked for a re-align; 1/14 window(s) widened to the singing, 0 left unmeasured; 39 line(s) heard, 0 kept where heard, 0 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+20:47:58 INFO pikaraoke.lib.onset_snap: onset snap: 12/46 line starts moved forward (max +1.07s)
+20:47:58 INFO pikaraoke.lib.onset_snap: end snap: 24/56 run ends extended (max +1.48s)
+20:47:58 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/KPop Demon Hunters (2025) - Golden---yebNIHKAC4A.ass
+20:47:58 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/KPop Demon Hunters (2025) - Golden---yebNIHKAC4A.srt
+20:47:58 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/KPop Demon Hunters (2025) - Golden---yebNIHKAC4A.json
+20:47:58 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: KPop Demon Hunters (2025) - Golden---yebNIHKAC4A.mp4
+
+[6/6] NSYNC - Pop---TWZKw_MgUPI.mp4 — reuse srt (from video)
+20:47:58 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline__l94fhtk
+20:47:58 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+20:47:58 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: NSYNC - Pop---TWZKw_MgUPI---vocal.m4a
+20:47:58 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: NSYNC - Pop---TWZKw_MgUPI_vocal.wav
+20:47:58 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+20:47:58 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+20:47:58 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+20:47:58 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+20:47:58 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: NSYNC - Pop---TWZKw_MgUPI_vocal.wav
+20:47:58 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: NSYNC - Pop---TWZKw_MgUPI_vocal.wav
+Transcribe:   0%|          | 0/238.84 [00:00<?, ?sec/s]Transcribe:  12%|█▏        | 28.6/238.84 [00:02<00:16, 12.76sec/s]Transcribe:  24%|██▍       | 57.22/238.84 [00:05<00:17, 10.42sec/s]Transcribe:  30%|███       | 72.2/238.84 [00:06<00:16, 10.32sec/s] Transcribe:  42%|████▏     | 100.6/238.84 [00:09<00:12, 10.97sec/s]Transcribe:  54%|█████▎    | 128.22/238.84 [00:12<00:10, 10.18sec/s]Transcribe:  66%|██████▌   | 156.7/238.84 [00:13<00:06, 12.91sec/s] Transcribe:  78%|███████▊  | 186.28/238.84 [00:15<00:03, 13.43sec/s]Transcribe:  91%|█████████ | 216.28/238.84 [00:17<00:01, 14.82sec/s]Transcribe: 100%|██████████| 238.84/238.84 [00:17<00:00, 17.26sec/s]Transcribe: 100%|██████████| 238.84/238.84 [00:17<00:00, 13.44sec/s]
+[20:48:17] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[20:48:17] INFO: Skipping refine pass (refine=False)
+20:48:17 INFO pikaraoke.lib.cue_align: cue-align: 84 cues -> 7 sections
+20:49:25 INFO phase2: PHASE2 start_bounded {"line_id": 0, "shift": 0.0, "bound": 0.8830000000000051, "raw_start": 1.1770000000000052, "start": 1.1770000000000052, "lifted": false}
+20:49:29 INFO phase2: PHASE2 start_bounded {"line_id": 1, "shift": 0.0, "bound": 2.6170000000000053, "raw_start": 2.8230000000000053, "start": 2.8230000000000053, "lifted": false}
+20:49:34 INFO phase2: PHASE2 start_bounded {"line_id": 2, "shift": 0.0, "bound": 4.983000000000005, "raw_start": 5.045000000000005, "start": 5.045000000000005, "lifted": false}
+20:49:39 INFO phase2: PHASE2 start_bounded {"line_id": 3, "shift": 0.0, "bound": 6.525000000000005, "raw_start": 6.145000000000005, "start": 6.145000000000005, "lifted": true}
+20:49:43 INFO phase2: PHASE2 start_bounded {"line_id": 5, "shift": 0.0, "bound": 9.068, "raw_start": 8.655000000000005, "start": 8.655000000000005, "lifted": true}
+20:49:47 INFO phase2: PHASE2 start_bounded {"line_id": 10, "shift": 0.0, "bound": 24.776000000000003, "raw_start": 24.586000000000002, "start": 24.776000000000003, "lifted": false}
+20:49:50 INFO phase2: PHASE2 start_bounded {"line_id": 13, "shift": 0.0, "bound": 30.980999999999998, "raw_start": 31.043000000000006, "start": 31.043000000000006, "lifted": false}
+20:49:55 INFO phase2: PHASE2 start_bounded {"line_id": 14, "shift": 0.0, "bound": 32.743, "raw_start": 32.449000000000005, "start": 32.589000000000006, "lifted": true}
+20:50:02 INFO phase2: PHASE2 start_bounded {"line_id": 19, "shift": 0.0, "bound": 41.120999999999995, "raw_start": 40.37500000000001, "start": null, "lifted": false}
+20:50:06 INFO phase2: PHASE2 start_bounded {"line_id": 30, "shift": 0.0, "bound": 57.181, "raw_start": 56.412000000000006, "start": null, "lifted": false}
+20:50:11 INFO phase2: PHASE2 start_bounded {"line_id": 32, "shift": 0.0, "bound": 61.041, "raw_start": 60.269, "start": 60.359, "lifted": true}
+20:50:13 INFO phase2: PHASE2 start_bounded {"line_id": 34, "shift": 0.0, "bound": 66.595, "raw_start": 66.765, "start": 66.765, "lifted": false}
+20:50:18 INFO phase2: PHASE2 start_bounded {"line_id": 46, "shift": 0.0, "bound": 96.384, "raw_start": 95.738, "start": 96.384, "lifted": false}
+20:50:22 INFO phase2: PHASE2 start_bounded {"line_id": 49, "shift": 0.0, "bound": 101.704, "raw_start": 101.628, "start": 101.628, "lifted": true}
+20:50:27 INFO phase2: PHASE2 start_bounded {"line_id": 50, "shift": 0.0, "bound": 105.208, "raw_start": 103.97500000000001, "start": null, "lifted": false}
+20:50:31 INFO phase2: PHASE2 start_bounded {"line_id": 55, "shift": 0.0, "bound": 110.92399999999999, "raw_start": 110.08800000000001, "start": null, "lifted": false}
+20:50:36 INFO phase2: PHASE2 start_bounded {"line_id": 57, "shift": 0.0, "bound": 113.244, "raw_start": 112.36, "start": 112.61, "lifted": true}
+20:50:39 INFO phase2: PHASE2 start_bounded {"line_id": 61, "shift": 0.0, "bound": 122.48400000000001, "raw_start": 122.754, "start": 122.754, "lifted": false}
+20:50:46 INFO phase2: PHASE2 start_bounded {"line_id": 65, "shift": 0.0, "bound": 140.54000000000002, "raw_start": 140.45300000000003, "start": 140.54000000000002, "lifted": false}
+20:50:52 INFO phase2: PHASE2 start_bounded {"line_id": 68, "shift": 0.0, "bound": 168.04000000000002, "raw_start": 168.35000000000002, "start": 168.35000000000002, "lifted": false}
+20:50:56 INFO phase2: PHASE2 start_bounded {"line_id": 69, "shift": 0.0, "bound": 171.305, "raw_start": 170.52100000000004, "start": null, "lifted": false}
+20:51:01 INFO phase2: PHASE2 start_bounded {"line_id": 75, "shift": 0.0, "bound": 184.205, "raw_start": 183.77499999999998, "start": 184.02499999999998, "lifted": true}
+20:51:04 INFO phase2: PHASE2 start_bounded {"line_id": 76, "shift": 0.0, "bound": 186.58300000000003, "raw_start": 186.52500000000003, "start": 186.58300000000003, "lifted": false}
+20:51:08 INFO phase2: PHASE2 start_bounded {"line_id": 79, "shift": 0.0, "bound": 195.085, "raw_start": 195.25900000000001, "start": 195.25900000000001, "lifted": false}
+20:51:08 INFO phase2: PHASE2 guessed {"words": {"30": 1, "34": 1, "50": 1, "55": 1, "61": 1, "65": 2, "68": 2, "69": 1, "79": 1}, "tokens": {"30": [1], "34": [1], "50": [0], "55": [4], "61": [1], "65": [1, 2], "68": [1, 2], "69": [1], "79": [1]}}
+20:51:08 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.11s, 14 line(s) re-aligned, 1/84 re-paced from cue, 11 word(s) guessed in 9 line(s), 22 crammed line(s) asked for a re-align; 3/24 window(s) widened to the singing, 1 left unmeasured; 63 line(s) heard, 0 kept where heard, 7 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+20:51:08 INFO pikaraoke.lib.onset_snap: onset snap: 12/84 line starts moved forward (max +1.25s)
+20:51:08 INFO pikaraoke.lib.onset_snap: end snap: 12/90 run ends extended (max +1.02s)
+20:51:08 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/NSYNC - Pop---TWZKw_MgUPI.ass
+20:51:08 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/NSYNC - Pop---TWZKw_MgUPI.json
+20:51:08 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: NSYNC - Pop---TWZKw_MgUPI.mp4
+[20:51:08] INFO: Audio separator model unloaded
+[20:51:09] INFO: Whisper model unloaded
+
+Done. succeeded=6 failed=0 skipped=0

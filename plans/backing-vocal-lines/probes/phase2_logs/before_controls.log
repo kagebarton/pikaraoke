@@ -1,0 +1,169 @@
+
+Scanned: /home/ken/probes/backing_vocal_lines_phase2/before
+Selection: selected songs
+Songs to regenerate: 5
+
+song                                                                                               bundle    plan
+-------------------------------------------------------------------------------------------------  --------  ------------------------------
+Ariana Grande & John Legend - Beauty and the Beast (Beauty and the Beast, 2017)---axySrE0Kg6k.mp4  selected  reuse srt (from video)
+Ed Sheeran - Bad Habits [Official Video]---orJSJGHjBLI.mp4                                         selected  reuse srt (from video)
+Pocahontas (1995) - Colors of the Wind---9ThO76peOw0.mp4                                           selected  LRCLIB timing
+The Lonely Island - Threw It On The Ground---gAYL5H46QnQ.mp4                                       selected  LRCLIB timing
+ZAYN & Zhavia Ward - A Whole New World (End Title) (Aladdin, 2019)---rg_zwK_sSEY.mp4               selected  reuse srt (from video)
+
+Backed up subtitles/karaoke/lyrics/alignment_debug for the selected songs to: /home/ken/probes/backing_vocal_lines_phase2/before/regen_backups/20261115T223817Z
+
+17:38:17 INFO pikaraoke.pipeline.workers.stem_worker: Stem worker started (PID 488281)
+17:38:17 INFO pikaraoke.pipeline.workers.whisper_worker: Whisper worker subprocess started (PID 488282)
+[17:38:17] INFO: Stem worker process started (PID 488281)
+[17:38:17] INFO: Whisper worker process started (PID 488282)
+[17:38:19] INFO: Loading whisper model: /home/ken/projects/pikaraoke/.claude/worktrees/bvl_phase2_before/models/large-v3-turbo.pt on cuda
+[17:38:22] WARNING: CUDAExecutionProvider not available in ONNXruntime, so acceleration will NOT be enabled
+[17:38:27] INFO: Audio separator model loaded — ready for jobs
+[17:38:28] INFO: Whisper model loaded in 8.9s (device=cuda)
+17:38:28 INFO pikaraoke.pipeline.workers.whisper_worker: Whisper worker ready (subprocess PID 488282)
+
+[1/5] Ariana Grande & John Legend - Beauty and the Beast (Beauty and the Beast, 2017)---axySrE0Kg6k.mp4 — reuse srt (from video)
+17:38:28 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_tyekp2q4
+17:38:28 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+17:38:28 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Ariana Grande & John Legend - Beauty and the Beast (Beauty and the Beast, 2017)---axySrE0Kg6k---vocal.m4a
+17:38:29 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Ariana Grande & John Legend - Beauty and the Beast (Beauty and the Beast, 2017)---axySrE0Kg6k_vocal.wav
+17:38:29 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+17:38:29 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+17:38:29 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+17:38:29 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+17:38:29 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Ariana Grande & John Legend - Beauty and the Beast (Beauty and the Beast, 2017)---axySrE0Kg6k_vocal.wav
+17:38:29 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Ariana Grande & John Legend - Beauty and the Beast (Beauty and the Beast, 2017)---axySrE0Kg6k_vocal.wav
+Transcribe:   0%|          | 0/240.49 [00:00<?, ?sec/s]Transcribe:  12%|█▏        | 30.0/240.49 [00:02<00:17, 11.80sec/s]Transcribe:  24%|██▍       | 58.8/240.49 [00:03<00:11, 15.54sec/s]Transcribe:  35%|███▌      | 85.12/240.49 [00:05<00:08, 17.59sec/s]Transcribe:  37%|███▋      | 89.92/240.49 [00:06<00:10, 14.60sec/s]Transcribe:  50%|████▉     | 119.92/240.49 [00:07<00:06, 17.60sec/s]Transcribe:  61%|██████    | 145.68/240.49 [00:08<00:05, 18.14sec/s]Transcribe:  73%|███████▎  | 175.12/240.49 [00:10<00:03, 19.36sec/s]Transcribe:  85%|████████▌ | 205.12/240.49 [00:11<00:01, 20.92sec/s]Transcribe:  98%|█████████▊| 235.12/240.49 [00:11<00:00, 26.98sec/s]Transcribe: 100%|██████████| 240.49/240.49 [00:11<00:00, 20.34sec/s]
+[17:38:41] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[17:38:41] INFO: Skipping refine pass (refine=False)
+17:38:42 INFO pikaraoke.lib.cue_align: cue-align: 56 cues -> 11 sections
+[17:40:11] ERROR: Whisper align_refine failed
+Traceback (most recent call last):
+  File "/home/ken/projects/pikaraoke/.claude/worktrees/bvl_phase2_before/pikaraoke/pipeline/workers/whisper_worker.py", line 696, in _whisper_worker_main_inner
+    words = _do_align_refine(
+            ^^^^^^^^^^^^^^^^^
+  File "/home/ken/projects/pikaraoke/.claude/worktrees/bvl_phase2_before/pikaraoke/pipeline/workers/whisper_worker.py", line 867, in _do_align_refine
+    aligned = _align_pass(
+              ^^^^^^^^^^^^
+  File "/home/ken/projects/pikaraoke/.claude/worktrees/bvl_phase2_before/pikaraoke/pipeline/workers/whisper_worker.py", line 819, in _align_pass
+    return _run_with_cancel_hook(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ken/projects/pikaraoke/.claude/worktrees/bvl_phase2_before/pikaraoke/pipeline/workers/whisper_worker.py", line 809, in _run_with_cancel_hook
+    return fn()
+           ^^^^
+  File "/home/ken/projects/pikaraoke/.claude/worktrees/bvl_phase2_before/pikaraoke/pipeline/workers/whisper_worker.py", line 824, in <lambda>
+    lambda: model.align(vocal_path, lyrics_text, **align_kwargs),
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ken/miniconda3/envs/pik/lib/python3.11/site-packages/stable_whisper/alignment.py", line 212, in align
+    set_result_language(result, tokenizer, language, supported_languages)
+  File "/home/ken/miniconda3/envs/pik/lib/python3.11/site-packages/stable_whisper/alignment.py", line 386, in set_result_language
+    result.language = \
+    ^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'language'
+17:40:11 WARNING pikaraoke.pipeline.stages.lyric_align: [lyric_align] line 27 slice-align failed, degrading: Whisper worker error: 'NoneType' object has no attribute 'language'
+17:40:27 INFO pikaraoke.lib.cue_align: cue rescue: offset=+0.09s, 3 line(s) re-aligned, 4/56 re-paced from cue, 0 word(s) guessed in 0 line(s), 2 crammed line(s) asked for a re-align; 6/7 window(s) widened to the singing, 1 left unmeasured; 28 line(s) heard, 0 kept where heard, 0 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+17:40:28 INFO pikaraoke.lib.onset_snap: onset snap: 12/56 line starts moved forward (max +1.23s)
+17:40:28 INFO pikaraoke.lib.onset_snap: end snap: 35/65 run ends extended (max +5.10s)
+17:40:28 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Ariana Grande & John Legend - Beauty and the Beast (Beauty and the Beast, 2017)---axySrE0Kg6k.ass
+17:40:28 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Ariana Grande & John Legend - Beauty and the Beast (Beauty and the Beast, 2017)---axySrE0Kg6k.json
+17:40:28 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Ariana Grande & John Legend - Beauty and the Beast (Beauty and the Beast, 2017)---axySrE0Kg6k.mp4
+
+[2/5] Ed Sheeran - Bad Habits [Official Video]---orJSJGHjBLI.mp4 — reuse srt (from video)
+17:40:28 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_tj3_pl8n
+17:40:28 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+17:40:28 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Ed Sheeran - Bad Habits [Official Video]---orJSJGHjBLI---vocal.m4a
+17:40:28 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Ed Sheeran - Bad Habits [Official Video]---orJSJGHjBLI_vocal.wav
+17:40:28 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+17:40:28 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+17:40:28 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+17:40:28 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+17:40:28 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Ed Sheeran - Bad Habits [Official Video]---orJSJGHjBLI_vocal.wav
+17:40:28 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Ed Sheeran - Bad Habits [Official Video]---orJSJGHjBLI_vocal.wav
+Transcribe:   0%|          | 0/241.0 [00:00<?, ?sec/s]Transcribe:  12%|█▏        | 30.0/241.0 [00:03<00:26,  7.82sec/s]Transcribe:  24%|██▎       | 57.16/241.0 [00:05<00:15, 11.81sec/s]Transcribe:  36%|███▌      | 87.16/241.0 [00:07<00:12, 12.64sec/s]Transcribe:  46%|████▌     | 111.36/241.0 [00:08<00:09, 14.36sec/s]Transcribe:  58%|█████▊    | 139.22/241.0 [00:10<00:06, 15.05sec/s]Transcribe:  70%|██████▉   | 168.0/241.0 [00:12<00:04, 14.68sec/s] Transcribe:  81%|████████▏ | 196.24/241.0 [00:13<00:02, 16.48sec/s]Transcribe:  94%|█████████▍| 226.24/241.0 [00:16<00:00, 14.83sec/s]Transcribe: 100%|██████████| 241.0/241.0 [00:16<00:00, 15.70sec/s] Transcribe: 100%|██████████| 241.0/241.0 [00:16<00:00, 14.31sec/s]
+[17:40:45] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[17:40:45] INFO: Skipping refine pass (refine=False)
+17:40:46 INFO pikaraoke.lib.cue_align: cue-align: 53 cues -> 16 sections
+17:43:28 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.25s, 4 line(s) re-aligned, 0/53 re-paced from cue, 9 word(s) guessed in 9 line(s), 11 crammed line(s) asked for a re-align; 10/11 window(s) widened to the singing, 1 left unmeasured; 43 line(s) heard, 0 kept where heard, 0 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+17:43:28 INFO pikaraoke.lib.onset_snap: onset snap: 21/53 line starts moved forward (max +1.08s)
+17:43:28 INFO pikaraoke.lib.onset_snap: end snap: 21/67 run ends extended (max +1.41s)
+17:43:28 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Ed Sheeran - Bad Habits [Official Video]---orJSJGHjBLI.ass
+17:43:28 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Ed Sheeran - Bad Habits [Official Video]---orJSJGHjBLI.json
+17:43:28 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Ed Sheeran - Bad Habits [Official Video]---orJSJGHjBLI.mp4
+
+[3/5] Pocahontas (1995) - Colors of the Wind---9ThO76peOw0.mp4 — LRCLIB timing
+17:43:28 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_29if28ga
+17:43:28 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+17:43:28 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: Pocahontas (1995) - Colors of the Wind---9ThO76peOw0---vocal.m4a
+17:43:28 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: Pocahontas (1995) - Colors of the Wind---9ThO76peOw0_vocal.wav
+17:43:28 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+17:43:28 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+17:43:28 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+17:43:28 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+17:43:28 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: Pocahontas (1995) - Colors of the Wind---9ThO76peOw0_vocal.wav
+17:43:28 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: Pocahontas (1995) - Colors of the Wind---9ThO76peOw0_vocal.wav
+Transcribe:   0%|          | 0/202.73 [00:00<?, ?sec/s]Transcribe:   7%|▋         | 14.2/202.73 [00:01<00:13, 13.94sec/s]Transcribe:  15%|█▌        | 31.2/202.73 [00:01<00:10, 17.01sec/s]Transcribe:  30%|██▉       | 60.3/202.73 [00:03<00:08, 17.50sec/s]Transcribe:  44%|████▎     | 88.44/202.73 [00:05<00:07, 15.88sec/s]Transcribe:  57%|█████▋    | 114.8/202.73 [00:06<00:05, 16.87sec/s]Transcribe:  70%|██████▉   | 141.72/202.73 [00:08<00:03, 16.63sec/s]Transcribe:  83%|████████▎ | 167.78/202.73 [00:10<00:02, 16.42sec/s]Transcribe:  98%|█████████▊| 197.78/202.73 [00:11<00:00, 19.39sec/s]Transcribe: 100%|██████████| 202.73/202.73 [00:11<00:00, 17.97sec/s]
+[17:43:40] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[17:43:40] INFO: Skipping refine pass (refine=False)
+17:43:40 INFO pikaraoke.lib.cue_align: cue-align: 37 cues -> 4 sections
+17:45:33 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.15s, 10 line(s) re-aligned, 0/37 re-paced from cue, 0 word(s) guessed in 0 line(s), 6 crammed line(s) asked for a re-align; 2/10 window(s) widened to the singing, 0 left unmeasured; 37 line(s) heard, 0 kept where heard, 2 start(s) freed of the previous line, 1 line(s) looked for where heard, 1 kept there
+17:45:33 INFO pikaraoke.lib.onset_snap: onset snap: 16/37 line starts moved forward (max +2.54s)
+17:45:33 INFO pikaraoke.lib.onset_snap: end snap: 23/44 run ends extended (max +5.44s)
+17:45:33 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/Pocahontas (1995) - Colors of the Wind---9ThO76peOw0.ass
+17:45:33 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/Pocahontas (1995) - Colors of the Wind---9ThO76peOw0.srt
+17:45:33 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/Pocahontas (1995) - Colors of the Wind---9ThO76peOw0.json
+17:45:33 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: Pocahontas (1995) - Colors of the Wind---9ThO76peOw0.mp4
+
+[4/5] The Lonely Island - Threw It On The Ground---gAYL5H46QnQ.mp4 — LRCLIB timing
+17:45:33 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_sec_ubai
+17:45:33 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+17:45:33 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: The Lonely Island - Threw It On The Ground---gAYL5H46QnQ---vocal.m4a
+17:45:33 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: The Lonely Island - Threw It On The Ground---gAYL5H46QnQ_vocal.wav
+17:45:33 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+17:45:33 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+17:45:33 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+17:45:33 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+17:45:33 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: The Lonely Island - Threw It On The Ground---gAYL5H46QnQ_vocal.wav
+17:45:33 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: The Lonely Island - Threw It On The Ground---gAYL5H46QnQ_vocal.wav
+Transcribe:   0%|          | 0/167.74 [00:00<?, ?sec/s]Transcribe:  17%|█▋        | 28.42/167.74 [00:01<00:07, 18.97sec/s]Transcribe:  34%|███▍      | 56.92/167.74 [00:03<00:06, 16.15sec/s]Transcribe:  52%|█████▏    | 86.72/167.74 [00:05<00:04, 16.69sec/s]Transcribe:  69%|██████▉   | 115.42/167.74 [00:07<00:03, 15.77sec/s]Transcribe:  84%|████████▍ | 141.5/167.74 [00:08<00:01, 15.74sec/s] Transcribe: 100%|██████████| 167.74/167.74 [00:10<00:00, 16.44sec/s]Transcribe: 100%|██████████| 167.74/167.74 [00:10<00:00, 16.36sec/s]
+[17:45:44] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[17:45:44] INFO: Skipping refine pass (refine=False)
+17:45:44 INFO pikaraoke.lib.cue_align: cue-align: 47 cues -> 4 sections
+17:47:35 INFO pikaraoke.lib.cue_align: cue rescue: offset=-0.05s, 6 line(s) re-aligned, 0/47 re-paced from cue, 5 word(s) guessed in 5 line(s), 10 crammed line(s) asked for a re-align; 0/10 window(s) widened to the singing, 0 left unmeasured; 43 line(s) heard, 0 kept where heard, 1 start(s) freed of the previous line, 2 line(s) looked for where heard, 0 kept there
+17:47:35 INFO pikaraoke.lib.onset_snap: onset snap: 14/47 line starts moved forward (max +1.77s)
+17:47:35 INFO pikaraoke.lib.onset_snap: end snap: 21/56 run ends extended (max +1.38s)
+17:47:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/The Lonely Island - Threw It On The Ground---gAYL5H46QnQ.ass
+17:47:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] SRT written: /home/ken/probes/backing_vocal_lines_phase2/before/subtitles/The Lonely Island - Threw It On The Ground---gAYL5H46QnQ.srt
+17:47:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/The Lonely Island - Threw It On The Ground---gAYL5H46QnQ.json
+17:47:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: The Lonely Island - Threw It On The Ground---gAYL5H46QnQ.mp4
+
+[5/5] ZAYN & Zhavia Ward - A Whole New World (End Title) (Aladdin, 2019)---rg_zwK_sSEY.mp4 — reuse srt (from video)
+17:47:35 INFO pikaraoke.pipeline.orchestrator: Temp dir: /home/ken/.pikaraoke/tmp/pipeline_aprw97t2
+17:47:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ load_vocal
+17:47:35 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Decoding cached vocal stem: ZAYN & Zhavia Ward - A Whole New World (End Title) (Aladdin, 2019)---rg_zwK_sSEY---vocal.m4a
+17:47:35 INFO pikaraoke.pipeline.stages.load_vocal: [load_vocal] Vocal WAV ready: ZAYN & Zhavia Ward - A Whole New World (End Title) (Aladdin, 2019)---rg_zwK_sSEY_vocal.wav
+17:47:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ load_vocal
+17:47:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ seed_artifacts
+17:47:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ seed_artifacts
+17:47:35 INFO pikaraoke.pipeline.orchestrator: [pipeline] ▶ lyric_align
+17:47:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Aligning lyrics to vocal stem: ZAYN & Zhavia Ward - A Whole New World (End Title) (Aladdin, 2019)---rg_zwK_sSEY_vocal.wav
+17:47:35 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Transcribing (no refine) for joint match: ZAYN & Zhavia Ward - A Whole New World (End Title) (Aladdin, 2019)---rg_zwK_sSEY_vocal.wav
+Transcribe:   0%|          | 0/242.56 [00:00<?, ?sec/s]Transcribe:  11%|█         | 26.2/242.56 [00:00<00:04, 51.91sec/s]Transcribe:  23%|██▎       | 54.64/242.56 [00:01<00:07, 25.32sec/s]Transcribe:  34%|███▍      | 81.92/242.56 [00:03<00:07, 20.68sec/s]Transcribe:  45%|████▍     | 108.84/242.56 [00:05<00:07, 18.70sec/s]Transcribe:  52%|█████▏    | 126.84/242.56 [00:06<00:07, 15.51sec/s]Transcribe:  65%|██████▍   | 156.84/242.56 [00:07<00:04, 19.09sec/s]Transcribe:  76%|███████▌  | 184.36/242.56 [00:09<00:03, 18.07sec/s]Transcribe:  88%|████████▊ | 213.48/242.56 [00:11<00:01, 17.80sec/s]Transcribe: 100%|██████████| 242.56/242.56 [00:12<00:00, 20.74sec/s]Transcribe: 100%|██████████| 242.56/242.56 [00:12<00:00, 19.80sec/s]
+[17:47:48] INFO: Regrouping transcription segments: cm_sp=.* /,/?/!/。_sg=.3_mg=.2+5
+[17:47:48] INFO: Skipping refine pass (refine=False)
+17:47:49 INFO pikaraoke.lib.cue_align: cue-align: 60 cues -> 6 sections
+17:49:27 INFO pikaraoke.lib.cue_align: cue rescue: offset=+0.53s, 10 line(s) re-aligned, 0/60 re-paced from cue, 3 word(s) guessed in 1 line(s), 7 crammed line(s) asked for a re-align; 9/11 window(s) widened to the singing, 2 left unmeasured; 51 line(s) heard, 1 kept where heard, 2 start(s) freed of the previous line, 0 line(s) looked for where heard, 0 kept there
+17:49:27 INFO pikaraoke.lib.onset_snap: onset snap: 12/60 line starts moved forward (max +1.31s)
+17:49:27 INFO pikaraoke.lib.onset_snap: end snap: 40/82 run ends extended (max +3.00s)
+17:49:27 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] ASS written: /home/ken/probes/backing_vocal_lines_phase2/before/karaoke/ZAYN & Zhavia Ward - A Whole New World (End Title) (Aladdin, 2019)---rg_zwK_sSEY.ass
+17:49:27 INFO pikaraoke.pipeline.stages.lyric_align: [lyric_align] Alignment-debug capture written: /home/ken/probes/backing_vocal_lines_phase2/before/alignment_debug/ZAYN & Zhavia Ward - A Whole New World (End Title) (Aladdin, 2019)---rg_zwK_sSEY.json
+17:49:27 INFO pikaraoke.pipeline.orchestrator: [pipeline] ✓ lyric_align
+  OK: ZAYN & Zhavia Ward - A Whole New World (End Title) (Aladdin, 2019)---rg_zwK_sSEY.mp4
+[17:49:27] INFO: Audio separator model unloaded
+[17:49:27] INFO: Whisper model unloaded
+
+Done. succeeded=5 failed=0 skipped=0
