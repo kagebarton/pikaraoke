@@ -13,9 +13,10 @@ stem's RMS envelope for the first sustained rise that lands near the
 line's own sung level, then shifts the word start forward to it. A
 reverb tail decays monotonically, so it cannot fake a rise — the exact
 failure mode that defeats an absolute silence threshold. Shifts are
-forward-only and bounded by word 2, so an on-time line is never made
-worse. A loud start still counts as on time unless the transcriber heard
-the line's first word at a later rise (see :func:`snap_line_onsets`).
+forward-only and bounded by word 2. A line already loud at its claimed
+start is taken as on time and left alone, unless the transcriber heard
+its first word at a later rise (see :func:`snap_line_onsets`, which also
+names the one on-time line that exit can still move).
 """
 
 import logging
@@ -331,7 +332,8 @@ def snap_line_onsets(
     previous line's held note. It stays put, counted in ``n_heard_earlier``,
     when the transcriber also heard that word from the claimed start up to
     the new start without it agreeing: a line whose second word repeats its
-    first would otherwise move to a sliver before the second. Doubted lines
+    first would otherwise move to a sliver before the second. Where the
+    transcriber heard only the second copy, that line still moves. Doubted lines
     and the fired path never consult this. A line whose ``source`` is in
     ``heard_timed_sources`` took its word times from ``heard_words``, so
     its first word would agree with itself and it never takes this exit.
