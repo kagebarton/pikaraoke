@@ -4,6 +4,9 @@
 answers: per video title, what it parses into and, for each run, the queries asked, the ids of
 the hits in order and the preselect. The tests replay those rows through a fake ``search`` that
 raises on any query the frozen run did not ask, so an extra call fails too. No network is used.
+
+``gate_g.jsonl`` is GATE G's 118 videos in the same form, with one run, ``search_page``, read
+through ``gate_g_answers.json`` (asked of Genius months after ``answers.json``, so not merged).
 """
 
 import json
@@ -32,10 +35,24 @@ def rows(library) -> list[dict]:
     return library + _read_jsonl("unseen.jsonl")
 
 
+def _read_answers(name: str) -> dict[str, list[GeniusHit]]:
+    raw = json.loads((DATA / name).read_text(encoding="utf-8"))
+    return {q: [GeniusHit(**h) for h in hits] for q, hits in raw.items()}
+
+
 @pytest.fixture(scope="module")
 def answers() -> dict[str, list[GeniusHit]]:
-    raw = json.loads((DATA / "answers.json").read_text(encoding="utf-8"))
-    return {q: [GeniusHit(**h) for h in hits] for q, hits in raw.items()}
+    return _read_answers("answers.json")
+
+
+@pytest.fixture(scope="module")
+def gate_g() -> list[dict]:
+    return _read_jsonl("gate_g.jsonl")
+
+
+@pytest.fixture(scope="module")
+def gate_g_answers() -> dict[str, list[GeniusHit]]:
+    return _read_answers("gate_g_answers.json")
 
 
 class FakeSearch:
@@ -51,12 +68,40 @@ class FakeSearch:
 
 
 def _replay(row: dict, run: str, answers) -> tuple[FakeSearch, gq.Found]:
-    """The frozen run again: with the channel it is three calls, without it two."""
-    with_channel = run == "with_channel"
+    """The frozen run again: with the channel it is three calls, without it two. A gate row also
+    carries the search the guest typed."""
+    with_channel = run != "no_channel"
     channel = row["channel"] if with_channel else ""
     calls = gq.SEARCH_PAGE_CALLS if with_channel else gq.LIBRARY_CALLS
     search = FakeSearch(answers)
-    return search, gq.find_song(search, row["yt_title"], channel=channel, max_calls=calls)
+    found = gq.find_song(
+        search, row["yt_title"], channel=channel, typed=row.get("typed", ""), max_calls=calls
+    )
+    return search, found
+
+
+def _replay_mismatches(rows: list[dict], run: str, answers) -> list[str]:
+    """The rows whose frozen ``run`` does not replay to its queries, hit order and preselect."""
+    wrong = []
+    for row in rows:
+        search, found = _replay(row, run, answers)
+        got = (search.asked, [h.id for h in found.hits], found.preselect)
+        want = (row[run]["queries"], row[run]["hits"], row[run]["preselect"])
+        if got != want:
+            wrong.append(f"{row['yt_title']!r}: {got} != {want}")
+    return wrong
+
+
+def _parse_mismatches(rows: list[dict]) -> list[str]:
+    """The rows whose title does not parse into its frozen parts."""
+    wrong = []
+    for row in rows:
+        got = asdict(gq.parse(row["yt_title"], row["channel"]))
+        assert got.pop("raw") == row["yt_title"]
+        got["alts"] = list(got["alts"])
+        if got != row["parsed"]:
+            wrong.append(f"{row['yt_title']!r}: {got} != {row['parsed']}")
+    return wrong
 
 
 def _hit(id_: int, title: str, artist: str, *, views: int = 1000) -> GeniusHit:
@@ -67,13 +112,7 @@ def _hit(id_: int, title: str, artist: str, *, views: int = 1000) -> GeniusHit:
 
 
 def test_every_title_parses_into_its_frozen_parts(rows):
-    wrong = []
-    for row in rows:
-        got = asdict(gq.parse(row["yt_title"], row["channel"]))
-        assert got.pop("raw") == row["yt_title"]
-        got["alts"] = list(got["alts"])
-        if got != row["parsed"]:
-            wrong.append(f"{row['yt_title']!r}: {got} != {row['parsed']}")
+    wrong = _parse_mismatches(rows)
     assert not wrong, "\n".join(wrong[:5])
 
 
@@ -85,15 +124,22 @@ def test_every_channel_reads_as_its_frozen_act(rows):
 
 @pytest.mark.parametrize("run", ["with_channel", "no_channel"])
 def test_every_run_asks_the_frozen_queries_and_gives_the_frozen_order(run, rows, answers):
-    wrong, count = [], 0
-    for row in (r for r in rows if run in r):
-        count += 1
-        search, found = _replay(row, run, answers)
-        got = (search.asked, [h.id for h in found.hits], found.preselect)
-        want = (row[run]["queries"], row[run]["hits"], row[run]["preselect"])
-        if got != want:
-            wrong.append(f"{row['yt_title']!r}: {got} != {want}")
-    assert count == (382 if run == "with_channel" else 206)
+    ran = [r for r in rows if run in r]
+    assert len(ran) == (382 if run == "with_channel" else 206)
+    wrong = _replay_mismatches(ran, run, answers)
+    assert not wrong, "\n".join(wrong[:5])
+
+
+def test_every_gate_title_parses_into_its_frozen_parts(gate_g):
+    assert len(gate_g) == 118
+    wrong = _parse_mismatches(gate_g)
+    assert not wrong, "\n".join(wrong[:5])
+
+
+def test_every_gate_video_asks_the_frozen_queries_and_gives_the_frozen_order(
+    gate_g, gate_g_answers
+):
+    wrong = _replay_mismatches(gate_g, "search_page", gate_g_answers)
     assert not wrong, "\n".join(wrong[:5])
 
 
@@ -126,6 +172,26 @@ KEPT_RIGHT = {
 }
 
 
+# Wrong preselects GATE G found, each an open issue (plans/open-issues.md, "A Genius hit is
+# preselected when it does not account for the whole video title"). Pinned as they are, so a change
+# that moves one is seen, a guard that withholds it included. (video id, the preselected hit's
+# id, what that hit is, where the right pages are, as (hit id, place)).
+GATE_G_WRONG_PRESELECTS = {
+    "mamma_mia_the_winner_takes_it_all": (
+        "ed1RIhS7lDA",
+        3173170,
+        "`Mamma Mia — Meryl Streep`, its only hit: the parse dropped the middle part",
+        (),
+    ),
+    "dear_evan_hansen_you_will_be_found": (
+        "mSfH2AuhXfw",
+        3122072,
+        "the cast's `You Will Be Found (Reprise)`",
+        ((11102040, 2), (2895849, 3)),
+    ),
+}
+
+
 def _library_run(library, answers, video_id: str) -> gq.Found:
     row = next(r for r in library if r["id"] == video_id)
     return _replay(row, "with_channel", answers)[1]
@@ -139,6 +205,16 @@ def test_known_hole_is_pinned_as_it_is(name, library, answers):
     assert found.preselect is None
     if right:
         hit_id, place = right
+        assert found.hits[place - 1].id == hit_id
+
+
+@pytest.mark.parametrize("name", GATE_G_WRONG_PRESELECTS)
+def test_gate_g_wrong_preselect_is_pinned_as_it_is(name, gate_g, gate_g_answers):
+    video_id, preselect, _what, right = GATE_G_WRONG_PRESELECTS[name]
+    row = next(r for r in gate_g if r["id"] == video_id)
+    found = _replay(row, "search_page", gate_g_answers)[1]
+    assert found.preselect == preselect == found.hits[0].id
+    for hit_id, place in right:
         assert found.hits[place - 1].id == hit_id
 
 
