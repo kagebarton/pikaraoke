@@ -132,6 +132,7 @@ scratch disk. Network: at most one LRCLIB lookup (Here I Go).
 | 12 | 2026-11-16 | 7 pair: Kickapoo, library v12 vs B | same | transcribe_words: n 455/460, unmatched 21/26 (434 matched), ≥11 ms 96, ≥0.3 s 6, max 0.740 s (end 0.180 s). words: n 455/455, text differs 0, ≥11 ms 30, ≥0.3 s 20, max 32.132 s (end 30.624 s); the 20 are index 56 `He` (+0.350), 184 `Rock` (-0.555), and index 437-454 `of` to the last three `Rock`: library v12 has them at 195.496 then 201.806-210.416 (index 442-451 within 204.116-204.416), B at 220.480-238.545. pass-1 lines: 44/44, starts moved ≥0.3 s 10 (lines 5, 18, 25, 29, 30, 36, 38, 41, 42, 43), sharing a start with a neighbour 3/0. |
 | 13 | 2026-11-16 | 7 extra pairs, **not in the plan** (added to read rows 10 and 12) | same | Kickapoo library v12 vs A: transcribe_words text differs 0, ≥11 ms 22, ≥0.3 s 0, max 0.140 s; words ≥0.3 s 21, max 32.132 s; pass-1 lines starts moved ≥0.3 s 5 (lines 18, 20, 41, 42, 43), sharing 3/0. Kickapoo library v12 vs Windows v11: transcribe_words text differs 0, ≥11 ms 23, ≥0.3 s 0, max 0.140 s; words ≥0.3 s 38, max 32.132 s; pass-1 starts moved ≥0.3 s 5 (lines 18, 20, 41, 42, 43), sharing 3/0. Kickapoo Windows v11 vs B: transcribe_words n 455/460, unmatched 21/26, ≥11 ms 98, ≥0.3 s 6, max 0.740 s; words ≥0.3 s 23, max 30.685 s; pass-1 starts moved ≥0.3 s 7 (lines 5, 20, 25, 29, 30, 36, 38), sharing 0/0. |
 | 14 | 2026-11-16 | 8 Kickapoo lines 41-43 | same | Pass 1 start-end for lines 41 / 42 / 43. Windows v11: 236.61-237.52 / 237.52-237.86 / 238.38-238.56, interpolated_line_ids []. Library v12: 230.62-230.62 for all three, interpolated_line_ids [41, 42, 43]. A: 236.61-237.52 / 237.52-237.88 / 238.41-238.58, []. B: 236.61-237.50 / 237.50-238.02 / 238.54-238.72, []. Selected source for lines 41-43: align in v11, A and B; interp in library v12. R14's 237.43 / 237.53 / 243.89 are not in pass1_line_timings; v11's `windowed_realign` span words for the three `Rock`s start at 237.426, 243.894, 243.894 (the first one ends at 237.526). The same `Rock` word starts: A 236.598 / 237.718 / 238.772; B 236.590 / 237.678 / 238.262; library v12 236.586 / 238.110 / 238.210. `monotone_discard` lists lines 41, 42, 43 (best_t0 97.16 / 207.316 / 210.416, selected_t0 None) in library v12 only; v11, A and B each list one line near 195 s (among others): line 38 (v11) or line 39 (A, B), with best_t0 195.436 / 195.476 / 195.476 and selected_t0 220.48 / 223.9 / 223.88. Lines whose selected source differs between any two of the four bundles: L17, L18 (library v12 transcribe, others align), L25 (B transcribe, others align), L29, L30 (B align, others transcribe), L31 (A and library v12 transcribe, v11 and B align), L40 (v11 align, others transcribe), L41-43 (library v12 interp, others align). selected_source counts: library v12 align 25 / transcribe 16 / interp 3. |
+| 15 | 2026-11-16 | extra, **not in the plan**: encoding of the two Kickapoo stems | Fable 5.2, this worktree (85d3a1b7). `ffprobe -show_entries stream=codec_name,profile,sample_rate,channels,bit_rate,duration:format_tags=encoder` on `$X/lib/vocal/` and `~/pikaraoke-songs/vocal/`, read-only | Scratch stem (made here): aac LC, 44100 Hz, 2 ch, 263.5 s, bit_rate 179336, encoder `Lavf60.16.100`. Library stem (Windows-made): aac LC, 44100 Hz, 2 ch, 263.5 s, bit_rate 189954, encoder `Lavf62.12.101`. |
 
 Notes on the numbers (rows 8-14):
 
@@ -140,3 +141,94 @@ Notes on the numbers (rows 8-14):
 - Pass-1 line timings are `joint_stats.pass1_line_timings`; final line times were not compared.
 - Library v12 was read in place (`~/pikaraoke-songs/alignment_debug/`, captured_at 2026-11-16T16:41:48Z).
 - Rows 4-6 `armA` and `armB` hold only `alignment_debug/` and `karaoke/`, as the plan says.
+
+## Reading (Claude Fable 5.2, 2026-11-16)
+
+Interpretation of rows 1-15, kept apart from the log. Nothing here was
+listened to, and only Kickapoo was examined; the other three stacked songs
+from R14 are assumed to follow it, not checked.
+
+**What the library v12 Kickapoo stack means**
+
+- The input format is not the cause. Arm B read an AAC stem and did not stack
+  (row 14). The library v12 run heard nearly what the WAV runs heard: no word
+  text differs, largest move 0.14 s (row 13).
+- The aligner loses its place near 195 s in every bundle. All four list a line
+  near 195 s in `monotone_discard` (row 14); in arm A index 419-436 sit at
+  195.456-195.496 before it recovers at 220.48 (row 11).
+- In library v12 it does not recover. Index 437-454 land about 30 s early
+  (row 12), lines 41-43 are discarded as out of order, and all three are
+  interpolated to 230.62-230.62 (row 14). That is the stack.
+- Near-identical input tips it either way. Windows v11 and arm A heard the same
+  words within 0.02 s, yet their aligned `words` differ by up to 30.685 s
+  (row 11). The Windows-made stem is the input that tipped it, not a bad stem.
+- Ruled out for Kickapoo: the v12 code (A and B ran on it, neither stacks), the
+  Linux box (row 8 repeats exactly; row 11 heard words within 0.02 s), and AAC
+  as such (B).
+
+Two defects follow: the aligner collapsing at the tail, and the joint match
+giving several interpolated lines one zero-length timestamp.
+
+**WAV or AAC for whisper**
+
+- Not ranked. The experiment measured difference, not accuracy.
+- The AAC made on this box moves what whisper hears: Kickapoo 21 of 455 heard
+  words unmatched and 7 of 44 pass-1 lines moved 0.3 s or more (row 10); Here I
+  Go 2 of 438 and no lines (row 9).
+- The Windows-made AAC barely moves it (row 13). The two encodes differ: a
+  newer ffmpeg and about 6% more bitrate on Windows (row 15). Whether that
+  explains the gap is untested.
+
+**Regen reading WAV: recommended no**
+
+- It would not fix the stack; the WAV arm shows the same collapse at 195 s.
+- Nothing shows WAV timings are better, only different.
+- Regen has no WAV; it would need a re-separation per song or lossless stems
+  kept on disk.
+- If a fresh add and a regen should agree, the cheaper route is the reverse:
+  a fresh add reads the decoded saved stem too.
+
+**A higher stem bitrate: not worth testing yet**
+
+It can only show AAC-heard words moving closer to WAV-heard ones, it would not
+touch the stack, and it helps future songs only. A listen comes first: A/B arms
+A and B on Kickapoo lines 5, 20, 25, 29, 30, 36, 38 (row 10). If A is clearly
+tighter, the bitrate test has a target; if not, the question is closed.
+
+## Ideas for the two defects
+
+From the bundles only; none is checked against `joint_match.py`. Not a plan.
+
+When the aligner loses its place:
+
+1. Treat a pile-up (many words within a fraction of a second) as a trigger for
+   the existing windowed re-align of that stretch.
+2. Fence aligned words with the heard words: reject an aligned word far from
+   where the same word was heard.
+
+When lines are rejected:
+
+3. Use the other evidence before interpolating. Library v12 holds the three
+   `Rock` words at 236.586 / 238.110 / 238.210 (row 14) and still interpolated
+   lines 41-43. Find out why first; it may be a small fix.
+4. When a line's best candidate is out of order, take its next candidate that
+   is in order instead of discarding the line.
+5. Never give interpolated lines one shared timestamp; spread them across the
+   gap they belong in.
+
+Around the aligner:
+
+6. A regen guard: compare the new bundle with the one it replaces, and keep the
+   old one and flag the song when lines newly stack or newly interpolate.
+
+Suggested order: 6 and 3, then 5. Ideas 1, 2 and 4 sit close to the matcher
+filters rejected in July for collateral (hardening 4.5a) and need a probe
+across the library before any code.
+
+## Open, Ken's call
+
+- Log the two defects in `plans/open-issues.md`.
+- Whether a fresh add and a regen should read the same input.
+- The Kickapoo A/B listen above.
+- Kickapoo's library bundle is still stacked; a regen from the same stem and
+  code would likely repeat it.
