@@ -27,6 +27,7 @@ from pikaraoke.lib.processing_manager import (
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import CancelToken, PipelineCancelled, StageContext
+from pikaraoke.pipeline.stages.lyric_align import LyricAlignStage
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -146,6 +147,34 @@ class TestStart:
         mgr.start()
         try:
             assert mgr._on_song_deleted in events._handlers["song_deleted"]
+        finally:
+            mgr.stop()
+
+
+class TestDownloadLaneStages:
+    @patch("pikaraoke.lib.processing_manager.is_windows", return_value=True)
+    @patch("pikaraoke.lib.processing_manager.get_temp_directory", return_value="/tmp/pk")
+    @patch("pikaraoke.lib.processing_manager.ProcessTerminal")
+    @patch("pikaraoke.lib.processing_manager.WhisperWorker")
+    @patch("pikaraoke.lib.processing_manager.StemWorker")
+    @patch("pikaraoke.lib.processing_manager.PipelineOrchestrator")
+    def test_the_download_lanes_align_stage_is_armed_for_the_lrclib_check(
+        self,
+        mock_orch_cls,
+        mock_sw_cls,
+        mock_ww_cls,
+        mock_pt_cls,
+        mock_gtd,
+        mock_iw,
+        events,
+        preferences,
+    ):
+        mgr = ProcessingManager(events=events, preferences=preferences)
+        mgr.start()
+        try:
+            stages = mock_orch_cls.call_args.args[0]
+            [align] = [s for s in stages if isinstance(s, LyricAlignStage)]
+            assert align._auto_lrc_timing is True
         finally:
             mgr.stop()
 
@@ -979,6 +1008,20 @@ class TestProcessRegen:
         assert lyrics_path == tmp_path / "lyrics.txt"
         assert isinstance(stages[0], PreparePtyStage)
         assert stages[1:] == ["lyric-align"]
+
+    def test_a_regen_never_arms_the_lrclib_check(
+        self, events, preferences, mock_orchestrator, tmp_path, prepared
+    ):
+        regen = _regen_job(tmp_path)
+        ctx = MagicMock(spec=StageContext)
+        ctx.artifacts = {}
+        mock_orchestrator.join.return_value = ctx
+        prepared.return_value = (tmp_path / "lyrics.txt", "lyric-stage")
+
+        self._run(events, preferences, mock_orchestrator, tmp_path, regen)
+
+        assert "auto_lrc_timing" not in pm.build_stages.call_args.kwargs
+        assert pm.build_stages.call_args.args[0] == regen.song.song_path
 
     def test_the_run_keeps_the_dereverb_stem_without_changing_the_shared_config(
         self, events, preferences, mock_orchestrator, tmp_path, prepared

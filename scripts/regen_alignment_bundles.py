@@ -214,7 +214,14 @@ def run_jobs(
                 # Inside the try: one song whose files can't be read fails alone.
                 files_before = snapshot_lyric_files(song)
                 lyrics_path, lyric_stage = prepare_lyrics(job, genius, lyrics_dir, config)
-                stages = build_stages(song, lyric_stage, whisper_worker, config, stem_worker)
+                stages = build_stages(
+                    song,
+                    lyric_stage,
+                    whisper_worker,
+                    config,
+                    stem_worker,
+                    auto_lrc_timing=job.first_download,
+                )
                 orch = PipelineOrchestrator(stages, stem_worker, whisper_worker, config)
                 ctx = orch.run_one(song, lyrics_path)
                 finish_regen_job(song, ctx.artifacts.get("lyric_method"))
