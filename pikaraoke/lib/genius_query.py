@@ -17,12 +17,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
-from pikaraoke.lib.genius import GeniusHit
+from pikaraoke.lib.genius import HITS_LISTED, GeniusHit
 from pikaraoke.lib.metadata_parser import EMOJI_PATTERN
 
 SEARCH_PAGE_CALLS = 3
 LIBRARY_CALLS = 2
-MAX_HITS = 8
 
 # --- Word lists ---------------------------------------------------------------------------------
 
@@ -101,7 +100,7 @@ class Parsed:
 
 @dataclass(frozen=True)
 class Found:
-    hits: list[GeniusHit]  # at most MAX_HITS, in the order to list them
+    hits: list[GeniusHit]  # at most HITS_LISTED, in the order to list them
     preselect: int | None  # hits[0].id when it is safe to preselect, else None
     query: str  # what a search box shows: the first query asked
 
@@ -555,6 +554,6 @@ def find_song(
         if typed_words and len(asked) < max_calls and not repeats:
             ask(typed.strip())
     ordered = sorted(merged.values(), key=lambda h: _order_key(h, parsed), reverse=True)
-    hits = ordered[:MAX_HITS]
+    hits = ordered[:HITS_LISTED]
     preselect = hits[0].id if hits and _confident(hits[0], parsed) else None
     return Found(hits=hits, preselect=preselect, query=asked[0] if asked else text)
