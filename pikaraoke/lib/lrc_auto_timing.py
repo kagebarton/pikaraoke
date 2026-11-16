@@ -2,8 +2,8 @@
 
 One search, every synced record fitted to the words the transcriber heard, the pick of
 :mod:`lrc_auto_pick`. Network, no file writes: the stage that calls it decides what lands in
-the library. It imports no pipeline or library module, because ``library_regen`` imports the
-align stage, so what both need about the automatic sheet lives here.
+the library. It imports no pipeline module and not ``library_regen``, which imports the align
+stage, so what both need about the automatic sheet lives here.
 """
 
 import logging
