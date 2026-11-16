@@ -22,6 +22,14 @@ window.libraryPages = {
     return hit.year ? hit.artist + ' (' + hit.year + ')' : hit.artist;
   },
 
+  // /lyrics_search's parameters for a Genius box that started on a song's own search
+  // (start: {file_title, query}). The box as it started asks the server to read the file
+  // title and run its whole ladder; text the admin edited goes as typed.
+  geniusParams: function (text, start) {
+    var query = $.trim(text);
+    return query === $.trim(start.query) ? { title: start.file_title } : { q: query };
+  },
+
   // The server's error message from a failed request, or the fallback.
   errorOf: function (xhr, fallback) {
     try { return JSON.parse(xhr.responseText).error || fallback; } catch (err) { return fallback; }

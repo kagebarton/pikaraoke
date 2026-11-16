@@ -284,12 +284,10 @@
       chooseSource($(this).closest('.rp-src').data('source'));
     });
 
-    // The box as it started is the song's own search, so the server reads the file title and runs
-    // its whole ladder; text the admin edited goes as typed.
     function searchGenius() {
       var query = $.trim($('#genius-q').val());
       if (!query) return;
-      var params = query === $.trim(GENIUS_START.query) ? { title: GENIUS_START.file_title } : { q: query };
+      var params = libraryPages.geniusParams(query, GENIUS_START);
       var seq = ++state.geniusSeq;
       var list = $('#genius-results').empty().removeClass('is-hidden');
       list.append(el('div', 'rp-empty', T.searching));
