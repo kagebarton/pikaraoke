@@ -267,6 +267,25 @@ def _moved_line(obj: dict, new_start: float, bound: float) -> dict:
     return new_obj
 
 
+def _loud_at_start(env: np.ndarray, words: list[dict], ref: float) -> bool:
+    """Whether word 1 is near sung level at its claimed start and across its claimed span.
+
+    Such a line is taken as on time and not searched, or an on-time word followed by an
+    intra-line pause would snap to the NEXT word's onset (back-to-back lines leave no quiet
+    before word 1 for the rise detector). The span check keeps a loud reverb tail at the
+    start from passing as on time: a tail collapses over the span, sustained singing holds.
+    """
+    w1s, w1e = words[0]["start"], words[0]["end"]
+    # Clamp into the envelope like _detect_rise: a first word at/after the stem's end
+    # (the envelope omits the final window) would slice empty and warn.
+    a = min(max(int(w1s / HOP_S), 0), max(len(env) - EDGE_FRAMES, 0))
+    span1 = env[a : max(int(w1e / HOP_S), a + 1)]
+    return bool(
+        env[a : a + EDGE_FRAMES].mean() >= ref - NEAR_SUNG_DB
+        and float(np.median(span1)) >= ref - SUSTAIN_NEAR_DB
+    )
+
+
 def _agrees(start: float, t: float) -> bool:
     return abs(start - t) <= HEARD_AGREE_S
 
@@ -294,6 +313,24 @@ def _heard_earlier(heard: list[tuple[float, str]], first_word: str, w1s: float, 
         heard_token == token and w1s <= start < t and not _agrees(start, t)
         for start, heard_token in heard
     )
+
+
+def _heard_exit(
+    env: np.ndarray, words: list[dict], ref: float, bound: float, heard: list[tuple[float, str]]
+) -> tuple[str, float | None]:
+    """Where an on-time line's first word moves on the heard words, and the exit taken.
+
+    ``("moved", new_start)`` when a heard copy of the first word agrees with the searched
+    start; ``("held", None)`` when another copy starts earlier in the line without agreeing
+    (:func:`_heard_earlier`); otherwise ``("kept", None)``.
+    """
+    _, new_start = _search_new_start(env, words, ref, bound)
+    first_word = words[0]["word"]
+    if new_start is None or not _heard_near(heard, first_word, new_start):
+        return "kept", None
+    if _heard_earlier(heard, first_word, words[0]["start"], new_start):
+        return "held", None
+    return "moved", new_start
 
 
 def snap_line_onsets(
@@ -363,7 +400,7 @@ def snap_line_onsets(
             continue
         if len(words) == 1:
             n_single_word += 1
-        w1s, w1e = words[0]["start"], words[0]["end"]
+        w1s = words[0]["start"]
         bound = words[1]["start"] if len(words) >= 2 else words[0]["end"]
         if bound - w1s < MIN_WORD_DUR_S:
             out.append(obj)
@@ -378,59 +415,35 @@ def snap_line_onsets(
             out.append(obj)
             continue
 
-        # An on-time word 1 is near sung level at its claimed start AND
-        # across its claimed span; skip those, or an on-time word followed
-        # by an intra-line pause would get snapped to the NEXT word's
-        # onset (back-to-back lines leave no quiet before word 1 for the
-        # rise detector). The span check keeps a loud reverb tail at the
-        # start from passing as on time — a tail collapses over the span,
-        # sustained singing holds.
-        # Clamp into the envelope like _detect_rise: a first word at/after
-        # the stem's end (the envelope omits the final window) would slice
-        # empty and warn.
-        a = min(max(int(w1s / HOP_S), 0), max(len(env) - EDGE_FRAMES, 0))
-        span1 = env[a : max(int(w1e / HOP_S), a + 1)]
-        if (
-            obj.get("source") not in doubted_sources
-            and env[a : a + EDGE_FRAMES].mean() >= ref - NEAR_SUNG_DB
-            and float(np.median(span1)) >= ref - SUSTAIN_NEAR_DB
-        ):
+        if obj.get("source") not in doubted_sources and _loud_at_start(env, words, ref):
             # On time unless the transcriber heard this line's first word at
             # a later rise. Never counted among the fired lines.
-            new_start = None
-            if heard and obj.get("source") not in heard_timed_sources:
-                _, new_start = _search_new_start(env, words, ref, bound)
-            first_word = words[0]["word"]
-            if new_start is None or not _heard_near(heard, first_word, new_start):
+            if not heard or obj.get("source") in heard_timed_sources:
                 out.append(obj)
-            elif _heard_earlier(heard, first_word, w1s, new_start):
+                continue
+            exit_name, new_start = _heard_exit(env, words, ref, bound, heard)
+            if exit_name == "held":
                 n_heard_earlier += 1
-                out.append(obj)
-            else:
-                out.append(_moved_line(obj, new_start, bound))
-                heard_snaps.append(
-                    {"line_id": obj.get("line_id"), "shift_s": round(new_start - w1s, 3)}
-                )
-            continue
-
-        n_fired += 1
-        lo = min(int(w1s / HOP_S), len(env) - 1)
-        hi = min(max(int(bound / HOP_S), lo + 1), len(env))
-        p20 = float(np.percentile(env[lo:hi], 20))
-        if ref - p20 < STEP_DB:
-            n_undetectable += 1
-
-        exit_name, new_start = _search_new_start(env, words, ref, bound)
-        if new_start is None:
+            moves = heard_snaps
+        else:
+            n_fired += 1
+            lo = min(int(w1s / HOP_S), len(env) - 1)
+            hi = min(max(int(bound / HOP_S), lo + 1), len(env))
+            p20 = float(np.percentile(env[lo:hi], 20))
+            if ref - p20 < STEP_DB:
+                n_undetectable += 1
+            exit_name, new_start = _search_new_start(env, words, ref, bound)
             if exit_name == "no_rise":
                 n_no_rise += 1
-            else:
+            elif exit_name == "below_min_shift":
                 n_below_min_shift += 1
+            moves = snaps
+
+        if new_start is None:
             out.append(obj)
             continue
-
         out.append(_moved_line(obj, new_start, bound))
-        snaps.append({"line_id": obj.get("line_id"), "shift_s": round(new_start - w1s, 3)})
+        moves.append({"line_id": obj.get("line_id"), "shift_s": round(new_start - w1s, 3)})
 
     # Invariant: n_fired == n_snapped + n_no_rise + n_below_min_shift.
     # Invariant: n_heard_snapped == len(heard_snaps); those lines are not among n_fired.
