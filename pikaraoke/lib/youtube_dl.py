@@ -246,7 +246,7 @@ def get_search_results(query: str, count: int) -> list[SearchResult]:
         subprocess.CalledProcessError: yt-dlp failed.
     """
     logging.info(f"Searching YouTube for: {query}")
-    yt_search = f'ytsearch{count}:"{query}"'
+    yt_search = f"ytsearch{count}:{query}"
     cmd = yt_dlp_cmd + ["-j", "--no-playlist", "--flat-playlist"] + _impersonate_args()
     cmd += [yt_search]
     logging.debug(f"yt-dlp search command: {' '.join(cmd)}")

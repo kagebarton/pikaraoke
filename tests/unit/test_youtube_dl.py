@@ -472,7 +472,7 @@ class TestGetSearchResults:
         with patch("subprocess.check_output", return_value=b"") as mock_check:
             get_search_results("rick astley", 30)
 
-        assert mock_check.call_args[0][0][-1] == 'ytsearch30:"rick astley"'
+        assert mock_check.call_args[0][0][-1] == "ytsearch30:rick astley"
 
     def test_returns_the_parsed_rows_in_order(self):
         with patch("subprocess.check_output", return_value=self._stdout("aaa", "bbb")):
