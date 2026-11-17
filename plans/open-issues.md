@@ -333,6 +333,10 @@ Found in the `search_official_first` review and its live checks, 2026-11-08. Ken
 review's other findings for now. Record: `plans/search-official-first.md` on tag
 `archive/search_official_first`, "Review follow-ups" and the Results log.
 
+The ranking was rewritten on branch `search_official_captions` (2026-11-17, `37ba443`..`d02bce5`
+there, not on `dev` yet), and the entries below that say "the rewrite" describe it. Rules,
+"Not doing" and the measurements: `plans/search-official-captions.md` on that branch.
+
 - **A restored search page can show a stuck card.** After Show more, the page saves the cards
   so coming back to Search restores them. The copy can catch a card's loading state or the
   preview modal's last contents, and the restored card then keeps a stuck loading button.
@@ -340,23 +344,60 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
 - **A "Song - Artist" title is read the wrong way round** when the query also names the
   artist: for "queen bohemian rhapsody", "Bohemian Rhapsody - Queen" credits the song name as
   the artist. Official uploads are nearly always "Artist - Song". Left by Ken 2026-11-08.
-- **The ranking repeats work.** Each row re-normalises the query, and the lift walks the list
-  three times. Thirty rows, so nothing visible. Left by Ken 2026-11-08.
-- **A verified re-upload can be lifted as the music video.** "old town road" lifts the
+- **The ranking repeats work.** Each row re-normalises the query, and the lift is worked out
+  for every row twice (whether the page lifts a video, then the order) and a third time for
+  the art tracks (the record's own words), after the vote's own pass. Thirty rows a page, so
+  nothing visible. Left by Ken 2026-11-08; the rewrite did not change it.
+- ~~**A verified re-upload can be lifted as the music video.** "old town road" lifts the
   verified channel Wicked Sounds' "Lil Nas X - Old Town Road (Music Video)". A verified
   channel whose title says "music video" counts as a label upload without any check that the
-  channel is the artist's or a label's. Not ruled.
+  channel is the artist's or a label's. Not ruled.~~ Closed 2026-11-17 by
+  `search_official_captions` (`ed3d12b`, rule 7): only a channel's name makes it a label's
+  (VEVO, Records, Recordings, Label), never a title that says "official". The fixture row for
+  7clouds' "Suit & Tie (Official Video)" pins it; "old town road" itself was not re-run. A
+  re-upload on a channel that is a label by name would still lift.
 - **A band whose channel spells its name another way gets no lift.** "celebration kool and the
-  gang": the channel is "KoolandthegangShow", so the band's full name gets no channel credit
-  and ties with its split-up parts; nothing is lifted and the page keeps YouTube's order. Not
-  ruled.
+  gang": the rewrite's vote now finds the band, a tie naming its full name and its split-up
+  parts. But the channel is "KoolandthegangShow", and "Show" is not a word the own-channel
+  test strips, so the band's own video is still not recognised as the band's and the page
+  keeps YouTube's order (a "Kool & The Gang - Topic" art track would still lift as audio).
+  Pinned as a known miss in `test_a_band_whose_channel_adds_a_word_to_its_name_is_not_found`;
+  built from synthetic rows, not a capture. Not ruled.
 - **YouTube sometimes drops the channel fields.** About 1 in 12 live searches came back with
-  no channel, uploader, verified flag or description on any row; nothing is lifted and the
-  channel line is missing, as before the branch. YouTube-side; recorded, not chased.
+  no channel, uploader, verified flag or description on any row (3 of 40 captures on
+  2026-11-16: `toxic`, `what is this feeling wicked`, `周杰倫 晴天`, all fine on a second fetch
+  the same day). No row is trusted then, so such a page gets no badges and no lifts, and the
+  channel line is missing, as before the rewrite. YouTube-side; recorded, not chased.
+- **The ranking misses a few searches and leaves YouTube's order.** Found on the 44 fixtures
+  and 40 held-out searches (2026-11-16): "for good wicked" and "popular wicked" (the vote
+  picks the song's name, or nothing), "colors of the wind" (the vote picks the film's name
+  from karaoke channels), "soda pop kpop demon hunters", and "toxic" (the vote picks
+  BoyWithUke, whose song of that name fills the page). Each costs only YouTube's order. Not
+  ruled; the rewrite's "Not doing" lists them as left alone.
+- **The ranking lifts two kinds of wrong video it cannot tell apart.** A foreign-language cast
+  that shares a credited singer with the original lifts as the original's (DisneyMusicAsiaVEVO's
+  Thai "Into the Unknown" credits AURORA). A duet re-recording on the other singer's channel
+  lifts ("Calum Scott, Whitney Houston - I Wanna Dance With Somebody", uncaptioned); barring it
+  also bars Reba McEntire's and Lindsey Stirling's duets, both captioned. Left as they are
+  (the plan's "Not doing"). Not ruled further.
+- **A label channel's other cast can be a different song of the same name.** The rewrite
+  lifts another act's video from a label channel (a film song's second cast), and four rows
+  in the 84 searches are wrong: Spinnin' Records' "Martin Solveig & Dragonette - Hello" for
+  "hello", DisneyMusicVEVO's `Stronger (From "Under the Sea: A Descendants Short Story"/Official
+  Video)` for "stronger", and two concert or signed versions titled as from the film
+  (`(From "Encanto at the Hollywood Bowl")`, `(From "The Little Mermaid"/British Sign Language
+  Version)`). Requiring the channel to carry the original too would remove the first two and
+  also the badge from four right rows, so it was not taken. Not ruled further.
+- **Real official videos the ranking gives up.** Only a channel's name makes it the act's or a
+  label's (decision 6), so Ed Sheeran's "Perfect Symphony" on "Ed Sheeran and Andrea Bocelli",
+  RHINO's Vitamin C video and Netflix Philippines' "Golden" are not lifted. None has captions,
+  so the miss costs nothing on those searches. Accepted, with the plan's decision 6.
 - **Unify the channel cleaners once `search_official_captions` lands.**
   `official_rank.py` and `genius_query.py` each work out what act a channel's name
   stands for, with their own noise words, kept apart while that branch rewrites
-  `official_rank`'s. Once it lands: one function for the name, each module keeping
+  `official_rank`'s. `official_rank` now has two (`_channel_artist` for the credit and
+  `_channel_name`, which also strips a trailing VEVO or Music, for the own-channel test).
+  Once it lands: one function for the name, each module keeping
   its own list of names that stand for no act (the ranking's short, the Genius
   module's wide). Not ruled. Record: `plans/genius-search-spec.md` on tag
   `archive/genius_search_accuracy`, Calls item 3 and "Channel names".
