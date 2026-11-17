@@ -1,5 +1,6 @@
 // Helpers the library pages share: Processing, Song Info, Repair lyrics, the run preview,
-// the pick pass and Add playlist. Each page loads this before its own script; the SPA
+// the pick pass and Add playlist. The Search page's download dialog loads it too, for its (i)
+// notes and the Genius hit's byline. Each page loads this before its own script; the SPA
 // loads it once.
 window.libraryPages = {
   // A translated template's {name} slots filled from vars; an unknown name stays as it is.

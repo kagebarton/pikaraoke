@@ -1,4 +1,5 @@
-/* What the library pages share: the (i) note and the back link above a page title. */
+/* What the library pages share: the (i) note and the back link above a page title. The Search
+   page's download dialog loads this file too, for its (i) notes. */
 
 /* The note is placed against the window (library-pages.js), so no card can clip it. */
 .info-tip { display: inline-flex; vertical-align: middle; }

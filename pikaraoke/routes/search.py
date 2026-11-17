@@ -256,8 +256,8 @@ def lyrics_select():
     """POST ``{ yt_id, genius_id?, mode?, yt_title? }`` → 204.
 
     Validates *yt_id* is the 11-char YouTube ID.  One of
-    ``{genius_id, mode}`` must be present.  Writes the sidecar; does
-    not fetch lyrics yet.
+    ``{genius_id, mode}`` must be present, and ``mode`` can only be ``srt``
+    (the video's own caption).  Writes the sidecar; does not fetch lyrics yet.
 
     Replaces the prototype's ``/lyrics_download`` route — the prototype
     fetched and saved lyrics text immediately; we only record the choice.
@@ -287,8 +287,8 @@ def lyrics_select():
         payload = {"yt_id": yt_id, "genius_id": genius_id, "yt_title": yt_title}
     elif mode is not None:
         mode_str = str(mode).strip()
-        if mode_str not in ("raw", "srt"):
-            return jsonify({"error": "mode must be 'raw' or 'srt'"}), 400
+        if mode_str != "srt":
+            return jsonify({"error": "mode must be 'srt'"}), 400
         payload = {"yt_id": yt_id, "mode": mode_str}
     else:
         return jsonify({"error": "One of genius_id or mode is required"}), 400

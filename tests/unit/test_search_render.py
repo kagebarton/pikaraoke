@@ -339,6 +339,39 @@ def test_the_dialog_is_on_every_page_and_outside_the_results_a_visit_saves(mock_
     assert body.count('id="modal-js-example"') == 1
 
 
+@patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_dialog_takes_its_info_notes_from_the_library_pages_files(mock_get, _site, client):
+    """The dialog's (i) is the library pages' own: their stylesheet and script, and the
+    info_tip macro, with one line per reason the list can give."""
+    body = _search_body(client, mock_get, _RESULTS, _karaoke_with_library([]))
+
+    assert 'href="/static/library-pages.css"' in body
+    assert 'src="/static/library-pages.js"' in body
+    notes = set(re.findall(r'class="info-tip-line" data-note="([a-z-]+)"', body))
+    assert notes == {
+        "passed",
+        "sparse",
+        "failed",
+        "none",
+        "title-hits",
+        "title-none",
+        "typed-hits",
+        "empty",
+    }
+    assert body.count('class="info-tip"') == 2  # the captions view's and the list view's
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_dialog_offers_lyrics_only_and_no_raw_transcription(mock_get, client):
+    body = _search_body(client, mock_get, _RESULTS, _karaoke_with_library([]))
+
+    for gone in ("__raw__", "Raw Transcription", "Other Options", "__custom__"):
+        assert gone not in body
+    # The page-wide Enter handler exempts the typed-search input by this id.
+    assert body.count('id="lyrics-custom-input"') == 1
+
+
 @patch("pikaraoke.routes.search.get_karaoke_instance")
 def test_the_artists_official_video_and_audio_come_first_with_a_badge(mock_get, client):
     lyrics = _result("Rick Astley - Never Gonna Give You Up (Lyrics)", "lyricsaaaaa")
