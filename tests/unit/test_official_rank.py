@@ -367,6 +367,11 @@ def test_the_vote_reads_the_act_out_of_a_title(titles, originals):
         pytest.param('Some Song (From "Some Film")', {"gamma"}, id="film-quote-credits-no-one"),
         pytest.param("Don't Stop Me Now", {"gamma"}, id="apostrophe-is-no-quote"),
         pytest.param("'Some Song' Official MV", {"gamma"}, id="nothing-before-the-quote"),
+        pytest.param("Don't Stop 'Til The End", {"gamma"}, id="a-quote-that-never-closes"),
+        pytest.param("Zoé's Song, Zoé's Way", {"gamma"}, id="apostrophe-after-an-accent"),
+        pytest.param("Alpha「Some Song」MUSIC VIDEO", {"alpha"}, id="corner-bracket-after-a-letter"),
+        pytest.param('Some Song (From "Some Film"', {"gamma"}, id="unclosed-round-bracket"),
+        pytest.param('Some Song [From "Some Film"', {"gamma"}, id="unclosed-square-bracket"),
     ],
 )
 def test_a_title_with_a_quoted_song_credits_the_text_before_the_quote(title, credited):
@@ -511,10 +516,9 @@ def test_a_cover_art_track_is_its_channels_alone_whoever_its_title_credits():
     assert official_kind(cover, "some song", acts) is None
 
 
-def test_a_band_whose_channel_adds_a_word_to_its_name_is_not_found():
-    """Known miss (open issues, "celebration kool and the gang"): the channel
-    "KoolandthegangShow" is not the band's name, so the vote now finds the band, split and whole,
-    but the video is still not recognised as the band's own."""
+def test_a_band_channel_that_adds_show_to_its_name_is_the_bands_own():
+    """ "celebration kool and the gang": the vote finds the band split and whole, and the channel
+    "KoolandthegangShow" is the band's."""
     query = "celebration kool and the gang"
     video = _row("Kool & The Gang - Celebration (Official Video)", channel="KoolandthegangShow")
     page = [_unrelated(), video, video]
@@ -522,7 +526,17 @@ def test_a_band_whose_channel_adds_a_word_to_its_name_is_not_found():
     acts = read_first_page(page, query)
 
     assert acts.originals == {"kool", "thegang", "koolandthegang"}
-    assert official_first(page, query, acts) == [(r, None) for r in page]
+    assert [kind for _, kind in official_first(page, query, acts)] == ["video", "video", None]
+
+
+def test_a_channel_whose_name_reads_as_nothing_is_no_ones_own():
+    """ "Official Music" strips to nothing, and so does the act "The" once its "the" is dropped."""
+    rows = [_row("The 'Some Song' (Official Video)", channel="Official Music")] * 2
+
+    acts = read_first_page(rows, "some song")
+
+    assert acts.originals == {"the"}
+    assert official_first(rows, "some song", acts) == [(r, None) for r in rows]
 
 
 # Does it say what it is (rules 5, 8, 9)
@@ -556,7 +570,24 @@ def test_a_bare_title_needs_no_explanation():
 
 
 @pytest.mark.parametrize(
-    "bracket", ["(Behind-the-Scenes)", "(The Making-Of)", "(Demo)", "(Performance)"]
+    "query, title, kind",
+    [
+        pytest.param("some song", "Alpha ft. Beta - Some Song", "video", id="a-guest-is-explained"),
+        pytest.param(
+            "some song", "Alpha ft. Beta - Some Song @ The Tonight Show", None, id="guest-first"
+        ),
+        pytest.param(
+            "dance with me", "Alpha - Dance With Me - O2 Arena London 2019", None, id="with-in-song"
+        ),
+    ],
+)
+def test_a_guest_or_film_is_dropped_only_to_the_end_of_its_segment(query, title, kind):
+    assert _kind(_row(title, channel="Alpha"), query) == kind
+
+
+@pytest.mark.parametrize(
+    "bracket",
+    ["(Behind-the-Scenes)", "(The Making-Of)", "(Demo)", "(Performance)", "(MTV Unplugged)"],
 )
 def test_marks_hide_hyphens_and_the_new_words_exclude_a_row(bracket):
     row = _row(f"Alpha - Some Song {bracket} (Official Video)", channel="Alpha")
@@ -743,6 +774,22 @@ def test_a_second_page_with_audio_and_no_video_keeps_its_order_when_page_one_lif
     assert _titles(lifted) == ["Some Song (Second)", "Unrelated upload"]
 
 
+def test_a_second_page_with_its_own_video_puts_it_before_its_audio():
+    """Page one lifted no video, but these rows hold the original's: the audio keeps its place."""
+    after_none = read_first_page([_art("Some Song"), _art("Some Song")], "some song")
+    rows = _page_with_audio_and_a_video()
+
+    ranked = official_first(rows, "some song", after_none)
+
+    assert not after_none.has_video
+    assert _titles(ranked) == [
+        "Alpha - Some Song (Official Video)",
+        "Unrelated upload",
+        "Some Song",
+        "Some Song (Second)",
+    ]
+
+
 @pytest.mark.parametrize("query", ["夜に駆ける", "yoasobi 夜に駆ける"])
 def test_a_query_the_song_check_cannot_read_lifts_nothing(query):
     rows = [
@@ -753,7 +800,7 @@ def test_a_query_the_song_check_cannot_read_lifts_nothing(query):
 
     acts = read_first_page(rows, query)
 
-    assert not acts.has_video
+    assert acts == Acts()
     assert official_first(rows, query, acts) == [(r, None) for r in rows]
 
 
