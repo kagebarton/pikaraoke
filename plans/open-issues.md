@@ -1071,3 +1071,19 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   A1 and B); Quit Playing Games 0:52 and 2:32 and Reflection 3:11 are not. The
   flag itself is still unbuilt. Not ruled; ask the CLAUDE.md design questions
   before any plan.
+- **Repair's LRCLIB list in the bar's order.** The list marks its `best` by the old
+  text rule (`lrclib.select_candidate`, used in `LibraryTools.lrclib_candidates`), which
+  Ken says lands on compilation records. `lrc_auto_pick.evaluate` already gives the
+  order the download uses and each record's refusal, so the list could show the same
+  first pick. Also: Repair's own check still uses the length gap the bar dropped
+  (`LRC_MAX_GAP_S`), so a record the download picked can show there as needing an
+  override. Not in the build (Decision 33). Raised 2026-11-12. Record:
+  `plans/lrclib-fit-pick.md` on branch `lrclib_fit_pick`, "How the open points were
+  settled".
+- **Prefer the record with fewer shifted lines in the pick order.** Raised by
+  I'm A Slave 4 U at GATE Q of `plans/lrclib-shift-check.md`. Sized 2026-11-12 on the
+  saved tables of both shift-check runs: it swaps 23 of 133 picks, and judged by the
+  uploader captions it helps about as often as it hurts (of the 23: 5 better, 7 the
+  same, 4 worse, 7 with no caption). The replacement records were not heard. Not
+  done: Ken kept the measured order (Decision 32). Record: `plans/lrclib-fit-pick.md`
+  on branch `lrclib_fit_pick`, "Sizing for Decision 32".
