@@ -99,11 +99,12 @@ module (`_words`, `_compact`, `_share_found`, `_has_letters_without_ascii`, `_is
 1. **Who a title credits.** As today for "Artist - Song". New: a title with no separator but a
    quoted song credits the text before the opening quote, and each round-bracket alias in it.
    `BTS (방탄소년단) 'Butter' Official MV` credits `bts`; `정국 (Jung Kook) 'Seven (feat. Latto)'
-   Official MV` credits `jungkook`. An opening quote is one of `' " ‘ “ 「 『` not preceded by a
-   letter or digit, so the apostrophe in "Don't" is not one, and outside every bracket (a
-   bracket the title never closes runs to its end): in `Under the Sea (From "The Little
-   Mermaid")` the quote names the film, not the song, and the title credits no one. Square
-   and `【】` brackets before the quote are dropped. A title with neither a separator nor such
+   Official MV` credits `jungkook`. An opening quote is one of `' " ‘ “` not preceded by a
+   letter (accented too) or digit, so the apostrophe in "Don't" is not one, or `「 『`, which
+   never are. It must close ("Don't Stop 'Til You Get Enough" quotes nothing) and sit outside
+   every bracket (a round, square or `【` bracket the title never closes runs to its end): in
+   `Under the Sea (From "The Little Mermaid")` the quote names the film, not the song, and the
+   title credits no one. Square and `【】` brackets before the quote are dropped. A title with neither a separator nor such
    a quote credits its channel, as today.
 2. **The originals.** Count credits over the trusted rows of the first page, as today. The
    originals are every name tied for the most credits, when that count is at least 2. A tie is
@@ -114,14 +115,16 @@ module (`_words`, `_compact`, `_share_found`, `_has_letters_without_ascii`, `_is
    alone, because a cover's art track is titled "Song - Film" or "Original Artist - Song".
 4. **Tier.** "Original" when the row's names include an original; otherwise "other" (commit 3).
 5. **Not the record.** Today's exclude list, counted per mark beyond the query's, plus: demo,
-   rehearsal, making of, footnotes, perform(s), performance. Hyphens read as spaces, in the
-   title and the query alike, so "Behind-the-Scenes" carries the mark "behind the".
+   rehearsal, making of, footnotes, perform(s), performance, unplugged. Hyphens read as
+   spaces, in the title and the query alike, so "Behind-the-Scenes" carries the mark "behind
+   the".
 6. **Is the song.** More than half the song words appear anywhere in the title, and at least
    one appears outside brackets. (Today the whole check ignores brackets, so "speechless
    aladdin" misses "Naomi Scott - Speechless (from Aladdin)".) And the query may say more
    than the title ("let it go frozen" for the art track "Let It Go"), or the title more than
    the query, but not both: a title that lacks a song word may carry, outside its brackets,
-   no word that rule 9 calls unexplained. "Adele - Make You Feel My Love" is not "adele send
+   no word that rule 9 calls unexplained, except that here the record's own title explains
+   nothing (as in the prototype). "Adele - Make You Feel My Love" is not "adele send
    my love". A misspelt song word therefore lifts nothing, video or audio (it leaves one word
    missing and one unexplained): YouTube's order, which is what today's module says a typo
    should get. For the original tier the song words are the query words not inside the name of
@@ -132,9 +135,10 @@ module (`_words`, `_compact`, `_share_found`, `_has_letters_without_ascii`, `_is
    - an art track;
    - **own channel**: a trusted channel whose name equals one of the row's names. The channel
      name is today's `_channel_artist`, then with trailing `official`, `vevo`, `music`, `tv`,
-     `video(s)` stripped ("EminemMusic", "PhilosopherKingsVEVO") and a leading "the" dropped
-     from both sides. Equal, not contained: today's substring test passes the fan channel
-     "ePro Team: Support for Eminem & Shady Records";
+     `video(s)`, `show` stripped ("EminemMusic", "PhilosopherKingsVEVO",
+     "KoolandthegangShow") and a leading "the" dropped from both sides. Equal, not contained:
+     today's substring test passes the fan channel "ePro Team: Support for Eminem & Shady
+     Records". A channel whose name reads as nothing ("Official Music") is no one's;
    - **label upload**: a verified channel whose name ends in "VEVO" or has the word Records,
      Recordings or Label(s). Nothing in the title makes a channel a label's (decision 6): the
      verified fan channel "Disney¡Fan!" titles its re-uploads "Official Music Video". This
@@ -823,6 +827,7 @@ fixtures).
 | 2 `feat(official_rank): label uploads and alternate videos lift, live sessions and re-uploads do not` | `ed3d12b` | 3996 passed (`tests/unit`) | Module vs prototype, `--no-other` state: full display order, every badge and the `Acts` fields (originals, record words, has-video) compared against a copy of `proto_rank2.py` bound to the pre-commit-2 module, on all 50 fixtures and all 40 held-out searches: 0 mismatches (check script not committed). Mutation check, not committed: 14 single-rule changes (rules 1, 2, 3, 5 and 8 once each; rule 6 three ways; rules 7, 9 and 12 twice each), each failed at least one test. `celebration kool and the gang`, built from synthetic rows (two verified rows titled `Kool & The Gang - Celebration (Official Video)` on `KoolandthegangShow`, one unverified filler): originals = {kool, thegang, koolandthegang}; the video is not lifted or badged and the order is unchanged, because the own-channel test needs equal names (`koolandthegangshow` is not `koolandthegang`). No rule bent; pinned as a known miss. The plan's synthetic line says `Other Song (from Film)` fails rule 6 for `song film`; in the prototype and the module it passes rule 6 (every song word is in the title), and as a video rule 9 stops it (`other` is unexplained), as an art track it is badged audio. The test pins the video case and a rule-6 case for song words only in brackets (`Alpha - Other Song (From Some Film)` for `some film`). `test_search_render.py`: the audio-and-video ordering test follows rule 12 (audio keeps its place); one new `/search/more` test for `Acts.has_video`. |
 | 3 `feat(official_rank): a label channel's other cast of the song lifts after the original's` | `d02bce5` | 4008 passed (`tests/unit`) | Module vs prototype, other acts on: 0 mismatches over the same 90 searches. The eight fixtures with other acts' videos match the plan's column; the four 60-row fixtures lift nothing on page 2; every `_STAYS_PUT` row holds. Mutation check, not committed: eight rule-11 changes; one survived (the song check on the other-acts path had no test), a test was added and it is killed. The plan's commit-3 line says another act's video lifts "before its audio"; under decision 5 a lifted video of any tier keeps the original's audio in YouTube's place, so the test pins that. |
 | 4 `docs(plans): open issues follows the search ranking changes` | `25a3f81` | n/a (docs; `tests/unit` last run at `d02bce5`) | The new "no channel on any row" entry already existed in the section ("YouTube sometimes drops the channel fields"), so it is updated in place (3 of 40 captures, no badges and no lifts) instead of duplicated. "A verified re-upload can be lifted" is struck with its closing commit, as the file's header asks, not deleted. |
+| review `fix(official_rank): review fixes for odd titles and channels` | `a97f945` | 4019 passed (`tests/unit`) | `/code-review 23ad51e..25a3f81`, 15 findings. Fixed: 3 (`unplugged` mark), 5 (guest/film drop stops at the segment end), 6 and 9 (a quote must close; `「 『` open after any character; Unicode letter check), 8 (an empty channel name is no one's), 10 (any unclosed bracket, first test of it), 12 (`read_first_page` returns `Acts()` for an unreadable query), 13 (test for rule 12's local half; the mutation `video_lifted = acts.has_video` now fails it), 15's dead `quote.start() == 0` check (gone with the quote rewrite); plus the open issue "KoolandthegangShow" (trailing `show` stripped; its known-miss test flipped to a lift). 11: the module matches the prototype (rule 6 does not subtract record words), so rule 6's wording is corrected, not the code. Each fix, patched in memory and all together, compared on all 84 captured searches (50 fixtures plus the 34 held-out captures not among them, first 30 rows) against `25a3f81`'s module: display order and every badge unchanged. The new tests fail on `25a3f81`'s module except the unclosed round bracket (already handled, untested) and the plain-guest control. Logged in open issues, not fixed: 1, 2 and 7 (a different song of the same name: act-less titles on an act's VEVO channel, exact ties), 4 ("from"/"with" brackets). Dropped: 14 (the fixture tables pin the vote by design), 15's tier scheme (mirrors the two tiers). |
 | 5 `feat(search): songs already in the library come first, and a library copy is noted on its card` | | | |
 | 6 `feat(search): the search box drops the library dropdown and the help hint` | | | |
 | 7 `feat(search): one "Add to queue after download" box in Advanced` | | | |
