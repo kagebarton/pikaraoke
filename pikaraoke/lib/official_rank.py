@@ -1,9 +1,11 @@
-"""Lift a search's original-artist official uploads, video first and then audio, to the top.
+"""Lift a search's official uploads of the song to the top, videos first.
 
-YouTube buries the official upload among lyric videos, covers and re-uploads. Which artist is
-the original is not known, so it is voted from the results: the rows YouTube vouches for (a
-verified channel, or a label-distributed "art track") name the artist in their titles and
-channels. Every rule errs toward lifting nothing, because a miss costs only YouTube's own order.
+YouTube buries the official upload among lyric videos, covers, live sessions and re-uploads. Which
+act is the original is not known, so it is voted from the results: the rows YouTube vouches for (a
+verified channel, or a label-distributed "art track") name the act in their titles and channels.
+A row lifts only when it is the song, comes from the act or its label, and says what it is. Every
+rule errs toward lifting nothing, because a miss costs only YouTube's own order. There is no
+caption lookup, which is too slow for a search: the ranking is a guess from title and channel.
 """
 
 from __future__ import annotations
@@ -12,32 +14,61 @@ import re
 import unicodedata
 from collections import Counter
 from collections.abc import Sequence
+from dataclasses import dataclass, replace
 from typing import Literal
 
 from pikaraoke.lib.youtube_dl import SearchResult
 
 OfficialKind = Literal["video", "audio"]
 
-# An artist needs this many trusted credits to be picked, and must beat the runner-up.
+# An act needs this many trusted credits to be an original.
 _MIN_CREDITS = 2
 
 _SEPARATOR = re.compile(r"\s+[-–—|]\s+|\s*[–—|]\s*")
-_BRACKETED = re.compile(r"\([^)]*\)|\[[^\]]*\]|【[^】]*】")
+_SQUARE = re.compile(r"\[[^\]]*\]|【[^】]*】")
+_ROUND = re.compile(r"\(([^)]*)\)")
+_BRACKETED = re.compile(rf"\([^)]*\)|{_SQUARE.pattern}")
+_UNCLOSED = re.compile(r"\([^)]*$")  # a bracket the title cuts off
+# An opening quote, which is not the apostrophe inside "Don't".
+_OPENING_QUOTE = re.compile(r"""(?<![A-Za-z0-9])['"‘“「『]""")
 _COLLAB = re.compile(
     r"\s*(?:,|&|\bx\b|\bft\b\.?|\bfeat\b\.?|\bfeaturing\b|\bwith\b|\band\b)\s*", re.I
 )
 _CHANNEL_NOISE = re.compile(r"\b(official|vevo|music|videos?|records|topic|channel|tv)\b", re.I)
+_CHANNEL_SUFFIX = re.compile(r"(?:official|vevo|music|tv|videos?)$")
+_LABEL_CHANNEL = re.compile(r"vevo$|\b(?:records|recordings|labels?)\b", re.I)
 # Uploads that are about the song but are not the record: the app overlays its own lyrics, and
 # live, remix or acapella audio does not match the record. A mark the query holds is the song's
 # own name ("Live and Let Die") or the version asked for, so only marks beyond the query's count.
 _NOT_THE_RECORD = re.compile(
     r"\b(lyrics?|sing[- ]?along|live|concert|cover|karaoke|remix|instrumental|acoustic|"
     r"trailer|reaction|behind the|choreography|tutorial|lesson|sped up|slowed|8d|"
-    r"multi[- ]language|scene|clip|a ?cappella|acapella)\b",
+    r"multi[- ]language|scene|clip|a ?cappella|acapella|"
+    r"demo|rehearsal|making of|footnotes|performs?|performance)\b",
     re.I,
 )
 _AUDIO = re.compile(r"\baudio\b", re.I)
-_OFFICIAL = re.compile(r"\bofficial\b|\bmusic video\b", re.I)
+# The title says what the upload is. A bare "official" does not: "(Rosanna Pansino Official)".
+_SAYS_OFFICIAL = re.compile(
+    r"\bofficial\b[^()\[\]|]*\b(?:video|audio|M/?V)\b|\bmusic video\b|\bM/?V\b", re.I
+)
+_SAYS_VERSION = re.compile(r"\b(?:version|edition|edit|remaster(?:ed)?)\b", re.I)
+# "feat. X", "with X", "from Film": guests and the film, up to the bracket or segment end.
+_GUESTS_AND_FILM = re.compile(r"\b(?:feat|ft|featuring|with|from)\b\.?[^()\[\]/|]*", re.I)
+# Words a title may carry beyond act and song without saying what it is.
+_PLAIN_WORDS = frozenset(
+    "official music video audio hd hq 4k mv explicit clean only the a an of and".split()
+)
+
+
+@dataclass(frozen=True)
+class Acts:
+    """What the first page says: the original acts' names, the words of the record's own title,
+    and whether that page lifts any video. ``Acts()`` is "nothing known"."""
+
+    originals: frozenset[str] = frozenset()
+    record_words: frozenset[str] = frozenset()
+    has_video: bool = False
 
 
 def _words(text: str) -> list[str]:
@@ -57,8 +88,12 @@ def _has_letters_without_ascii(text: str) -> bool:
 
 
 def _marks(text: str) -> Counter[str]:
-    """Each not-the-record mark in ``text`` ("live", "lyric", "sing along"), counted."""
-    return Counter(" ".join(_words(match.group())) for match in _NOT_THE_RECORD.finditer(text))
+    """Each not-the-record mark in ``text`` ("live", "lyric", "sing along"), counted. Hyphens read
+    as spaces, so "Behind-the-Scenes" carries the mark "behind the"."""
+    return Counter(
+        " ".join(_words(match.group()))
+        for match in _NOT_THE_RECORD.finditer(text.replace("-", " "))
+    )
 
 
 def _compact(text: str) -> str:
@@ -91,8 +126,17 @@ def _channel_artist(result: SearchResult) -> str:
     return _compact(_CHANNEL_NOISE.sub(" ", name))
 
 
-def _title_artists(title: str, query_words: Sequence[str]) -> set[str]:
-    """The artists a title credits: the side of "A - B" that is not the song.
+def _channel_name(result: SearchResult) -> str:
+    """``_channel_artist`` without a trailing "VEVO", "Music" and the like that the channel
+    spells into its name ("EminemMusic", "PhilosopherKingsVEVO"), and without a leading "the"."""
+    name = _channel_artist(result)
+    while (match := _CHANNEL_SUFFIX.search(name)) and match.start() > 0:
+        name = name[: match.start()]
+    return name.removeprefix("the")
+
+
+def _separated_artists(title: str, query_words: Sequence[str]) -> set[str]:
+    """The artists "A - B" credits: the side that is not the song.
 
     "Artist - Song" unless the left side holds every query word and the right one does not
     ("Song - Artist"). Collaborators on that side each count, and so does the whole side: the
@@ -109,6 +153,30 @@ def _title_artists(title: str, query_words: Sequence[str]) -> set[str]:
     return collaborators | {_compact(artist_side)}
 
 
+def _quoted_song_artists(title: str) -> set[str]:
+    """The artists of a title with no separator but a quoted song: the text before the quote,
+    and each round-bracket alias in it ("정국 (Jung Kook) 'Seven'" credits jungkook).
+
+    The quote must be outside every bracket: in 'Under the Sea (From "The Little Mermaid")' it
+    names the film, and the title credits no one.
+    """
+
+    def blank(match: re.Match[str]) -> str:
+        return " " * len(match.group())  # positions must not move
+
+    outside = _UNCLOSED.sub(blank, _BRACKETED.sub(blank, title))
+    quote = _OPENING_QUOTE.search(outside)
+    if quote is None or quote.start() == 0:
+        return set()
+    head = _SQUARE.sub(" ", title[: quote.start()])
+    names = {_compact(_ROUND.sub(" ", head))} | {_compact(alias) for alias in _ROUND.findall(head)}
+    return {name for name in names if name}
+
+
+def _title_artists(title: str, query_words: Sequence[str]) -> set[str]:
+    return _separated_artists(title, query_words) or _quoted_song_artists(title)
+
+
 def _credited_artists(result: SearchResult, query_words: Sequence[str]) -> set[str]:
     """The artists a row credits: its title's, plus its channel's for an art track (whose title
     is only the song) and for a title that names no one."""
@@ -118,76 +186,142 @@ def _credited_artists(result: SearchResult, query_words: Sequence[str]) -> set[s
     return {artist for artist in artists if artist}
 
 
-def pick_artist(results: Sequence[SearchResult], query: str) -> str | None:
-    """The compact name of the original artist, or None when the results do not settle it.
+def _row_names(result: SearchResult, query_words: Sequence[str]) -> set[str]:
+    """The acts a row is an upload of. A "- Topic" channel is named for its act and its title is
+    only the song (or a cover's "Song - Film"), so there the channel alone says."""
+    if result.channel.endswith(" - Topic"):
+        return {_channel_artist(result)} - {""}
+    return _credited_artists(result, query_words)
 
-    Counts credits over the trusted rows. The winner needs at least two and strictly more than
-    the runner-up. The caller passes only the first page: over more rows the vote drifts to
-    whoever uploaded the most variants of the song.
 
-    Also None for a query in a script the song check cannot read ("夜に駆ける", "BTS 봄날"):
-    with no song words left to match, every upload of the artist's would pass as the song.
+def _pick_originals(results: Sequence[SearchResult], query_words: Sequence[str]) -> frozenset[str]:
+    """Every name tied for the most trusted credits, or none below ``_MIN_CREDITS``.
+
+    A tie is a duet's two singers and the pair, or two casts of a film song; both are lifted.
     """
-    if _has_letters_without_ascii(query):
-        return None
-    query_words = _words(query)
     votes = Counter(
         artist
         for result in results
         if _is_trusted(result)
         for artist in _credited_artists(result, query_words)
     )
-    ranked = votes.most_common(2)
-    if not ranked:
-        return None
-    artist, credits = ranked[0]
-    runner_up = ranked[1][1] if len(ranked) > 1 else 0
-    return artist if credits >= _MIN_CREDITS and credits > runner_up else None
+    top = max(votes.values(), default=0)
+    if top < _MIN_CREDITS:
+        return frozenset()
+    return frozenset(name for name, count in votes.items() if count == top)
 
 
-def _is_the_song(title: str, query_words: Sequence[str], artist: str) -> bool:
-    """Whether the title, outside brackets, holds most of the query words that are not part of
-    the artist's name. Loose on purpose: a typo falls back to YouTube's order rather than
-    lifting the wrong song (Queen's "Another One Bites the Dust" for "queen bohemian rhapsody").
-    """
-    song_words = [word for word in query_words if word not in artist]
+def _unexplained(title: str, query_words: Sequence[str], names: set[str]) -> set[str]:
+    """Title words that are not the query's, an act's, a guest's or the film's. Loose on purpose
+    (a word inside an act's name passes): it only has to catch "(O2 Arena)"."""
+    known = set(query_words) | _PLAIN_WORDS
+    return {
+        word
+        for word in _words(_GUESTS_AND_FILM.sub(" ", title))
+        if word not in known and not any(word in name for name in names)
+    }
+
+
+def _is_the_song(
+    title: str, song_words: Sequence[str], query_words: Sequence[str], names: set[str]
+) -> bool:
+    """More than half the song words anywhere in the title, and one outside brackets: "Speechless
+    (from Aladdin)" is "speechless aladdin", "Another One Bites the Dust (from Bohemian Rhapsody)"
+    is not "bohemian rhapsody". The query may say more than the title ("let it go frozen" for
+    "Let It Go") or the title more than the query, but not both: a title that lacks a song word
+    and carries words of its own outside brackets is another song ("Make You Feel My Love" for
+    "send my love")."""
     if not song_words:
         return True
-    return _share_found(song_words, _BRACKETED.sub(" ", title)) > 0.5
+    outside = _BRACKETED.sub(" ", title)
+    found = _share_found(song_words, title)
+    if _share_found(song_words, outside) == 0 or found <= 0.5:
+        return False
+    return found == 1.0 or not _unexplained(outside, query_words, names)
 
 
-def official_kind(result: SearchResult, query: str, artist: str | None) -> OfficialKind | None:
-    """Whether ``result`` is the ``artist``'s own official video or audio of the song.
+def _comes_from_the_act(result: SearchResult, names: set[str]) -> bool:
+    """An art track; a trusted channel named for one of the row's acts (equal, not contained: the
+    fan channel "ePro Team: Support for Eminem" is not Eminem's); or a verified label channel.
+
+    Only the channel's name makes it a label's: the verified fan channel "Disney¡Fan!" titles its
+    re-uploads "Official Music Video".
+    """
+    channel = _channel_name(result)
+    own = _is_trusted(result) and any(name.removeprefix("the") == channel for name in names)
+    label = result.channel_verified and bool(_LABEL_CHANNEL.search(result.channel))
+    return _is_art_track(result) or own or label
+
+
+def _says_what_it_is(
+    result: SearchResult, query_words: Sequence[str], names: set[str], acts: Acts
+) -> bool:
+    """A video whose title carries more than act and song must say what it is: "(O2 Arena)" and
+    "@ The Tonight Show" are live, "(2025 Version)" and "(Official HD Video)" are not. The record's
+    own title is explained ("(To Your New Lover)"), and so is a mark, which got this far only
+    because the query asked for it ("bohemian rhapsody live" wants "(Live Aid 1985)")."""
+    title = result.title
+    if _SAYS_OFFICIAL.search(title) or _SAYS_VERSION.search(title) or _marks(title):
+        return True
+    return not _unexplained(title, query_words, names) - acts.record_words
+
+
+def official_kind(result: SearchResult, query: str, acts: Acts) -> OfficialKind | None:
+    """Whether ``result`` is an original act's official video or audio of the song.
 
     ``channel_is_verified`` alone cannot say so: it is on for lyric channels, karaoke channels,
     the Muppets and a movie trailer, and an unverified fan channel can title its re-upload
-    "(official music video)". So the row must also credit the artist and come from them: an art
-    track, a trusted channel named for the artist, or a verified label channel (DisneyMusicVEVO)
-    whose title says it is official.
+    "(official music video)". So the row must be the song, come from the act, and, as a video,
+    say what it is. Audio is spared that last test: it is never captioned either way.
     """
-    if not artist or _marks(result.title) - _marks(query):
+    if _has_letters_without_ascii(query) or _marks(result.title) - _marks(query):
         return None
     query_words = _words(query)
-    if not _is_the_song(result.title, query_words, artist):
+    names = _row_names(result, query_words)
+    credited = names & acts.originals
+    if not credited:
         return None
-    if artist not in _credited_artists(result, query_words):
+    # Only the names this row credits are struck from the song words. Striking every original's
+    # would strike the song itself when its name tied the vote ("under the sea").
+    song_words = [word for word in query_words if not any(word in name for name in credited)]
+    if not _is_the_song(result.title, song_words, query_words, names):
         return None
-    art_track = _is_art_track(result)
-    artists_own_channel = _is_trusted(result) and artist in _channel_artist(result)
-    labels_upload = result.channel_verified and bool(
-        _OFFICIAL.search(result.title) or _AUDIO.search(result.title)
+    if not _comes_from_the_act(result, names):
+        return None
+    if _is_art_track(result) or _AUDIO.search(result.title):
+        return "audio"
+    return "video" if _says_what_it_is(result, query_words, names, acts) else None
+
+
+def read_first_page(results: Sequence[SearchResult], query: str) -> Acts:
+    """Vote the originals, read the record's title off their art tracks, and note whether the
+    page lifts any video. Each step needs the one before.
+
+    Pass only the first page: over more rows the vote drifts to whoever uploaded the most
+    variants of the song.
+    """
+    originals = _pick_originals(results, _words(query))
+    acts = Acts(originals)
+    record_words = frozenset(
+        word
+        for result in results
+        if _is_art_track(result) and official_kind(result, query, acts)
+        for word in _words(result.title)
     )
-    if not (art_track or artists_own_channel or labels_upload):
-        return None
-    return "audio" if art_track or _AUDIO.search(result.title) else "video"
+    acts = replace(acts, record_words=record_words)
+    has_video = any(official_kind(result, query, acts) == "video" for result in results)
+    return replace(acts, has_video=has_video)
 
 
 def official_first(
-    results: Sequence[SearchResult], query: str, artist: str | None
+    results: Sequence[SearchResult], query: str, acts: Acts
 ) -> list[tuple[SearchResult, OfficialKind | None]]:
-    """The artist's official videos, then their official audio, then the rest.
+    """The rows in display order with their kinds: the originals' videos first, then YouTube's
+    order. A kind is a badge, not a promise that the row moved.
 
-    Stable: each group keeps YouTube's order.
+    The originals' audio goes first only when no video is lifted, here or on the first page: it
+    is almost never captioned, so beside a video it keeps its place. Stable.
     """
-    ranked = [(result, official_kind(result, query, artist)) for result in results]
-    return [pair for group in ("video", "audio", None) for pair in ranked if pair[1] == group]
+    kinds = [official_kind(result, query, acts) for result in results]
+    lifted = {"video"} if acts.has_video or "video" in kinds else {"video", "audio"}
+    return sorted(zip(results, kinds), key=lambda pair: pair[1] not in lifted)
