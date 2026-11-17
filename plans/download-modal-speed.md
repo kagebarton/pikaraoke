@@ -889,3 +889,25 @@ faked everywhere, their bodies recorded; real YouTube search per run; 390x844. S
 | 6a | box ticked: "Queue", then "Queued"; `/download` body `queue: true`; `/lyrics_select` body `genius_id: 1` | 3/3 |
 | 6b | box unticked: "Add to library", then "Added"; `/download` body `queue: false` | 3/3 |
 | 7 | the list is 44 px tall (wrapper and select), `::after` content `" "`, display block, border 3px on the bottom and left, none on the right, colour `rgb(26, 188, 156)`; `::before` content `none`; no `is-small`; wrapper font size 17.6px | 3/3 |
+
+### Unfaked pass at HEAD `2aa02ae` (raw)
+
+Run 2026-11-17 on the VM, after the commit 3 trials. The worktree app on port 5637 with fake
+processing jobs (`FAKE_JOB_S=5`, no models loaded: 177 MB resident, nothing about whisper, torch or
+cuda in its log) and Ken's Genius token seeded into its own config. Nothing mocked: real YouTube
+search and lookup, real Genius, real Play through headless Chromium (reports H.264 as playable), real
+download. Scripts `real_check.py` and `ui_trials.py` in the session scratchpad, not committed. One
+run each, not three; 390x844.
+
+| scenario | what was seen |
+| -------- | ------------- |
+| A: "Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)", no tap | one wait line, "Checking YouTube for captions…", until the captions view at 6.0 s; one `/caption_check`, one `/lyrics_search`, no `/preview`; no console errors. "Other lyrics…": groups `YouTube`, `Genius.com`; options `__srt__` "YouTube captions (recommended)", then "Never Gonna Give You Up — Rick Astley (1987)" (id 84851, selected), and two more; Queue on; the (i) shows `passed` and `title-hits` |
+| A2: Play tapped after the answer | video playing 0.3 s after the tap, `currentTime` 0.05 s, not paused, `readyState` 4, no error |
+| A3: Play tapped at 0.3 s, before the answer | the Play button breathed; captions view at 6.3 s; video playing at 6.4 s; at 9.6 s `currentTime` 9.60 s, not paused; one `/caption_check`, one `/lyrics_search`; no console errors |
+| B: "Gangnam Style- PSY (Official Music Video)" (card 0; `9bZkp7q19f0` was not in the results) | only the "Checking…" line was ever shown; the list at 5.2 s with no second wait; groups `Genius.com`; first option "Choose the lyrics" selected, Queue off; the search button shown; the (i) shows `none` and `title-hits`; the list is 48 px tall; one request each |
+| C, first query ("xqzv garage band demo take 2019") | YouTube returned no cards; the script waited 90 s for one and failed. Not a page result |
+| C, "church talent show 2008 home video" → "AUMC All-Church Talent Show Video 1 starring Sue Pettigrass Dance Solo" | list at 4.9 s; "No lyrics found for this video."; the box open, not focused; no search button; Queue off; the (i) shows `none`, `title-none`, `empty` |
+| C, "my cat plays piano" → "This is like how my cat plays Piano Sonata" | the same state at 4.8 s |
+| C, "wedding toast speech" → "The Wedding Toast" | captions view at 5.4 s (its caption passed the gate), so not a no-lyrics case |
+| D: Queue tapped on A's captions view | the button read "Queued"; the dialog had closed after the fade; `/get_queue` right after showed the entry `waiting: download` for the watch URL; the video downloaded into the launch's library; the lyric choice file held `{"yt_id": "dQw4w9WgXcQ", "mode": "srt"}`; after the fake job the entry read `waiting: processing` |
+| E: client setting pointed at `no_such_client` in the working tree (restored afterwards; `git status` clean, no `no_such_client` in the tree) | inconclusive, not a pass of the "Done when" item: card 0 was a different upload ("Official Animated Video") whose answer did not show the captions view, and Play started the video in headless Chromium, so no 403 was seen. The by-hand check with a refused link is still not done |
