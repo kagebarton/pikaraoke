@@ -1,6 +1,7 @@
-"""Unit tests for search routes: /lyrics_search, /lyrics_select, /preview and /caption_check."""
+"""Unit tests for search routes: /lyrics_search, /lyrics_select and /caption_check."""
 
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -336,48 +337,74 @@ class TestLyricsSelect:
 
 
 # ---------------------------------------------------------------------------
-# /preview and /caption_check
+# /caption_check
 # ---------------------------------------------------------------------------
 
 
-@patch(
-    "pikaraoke.routes.search.get_preview_info", return_value=("https://example.test/v", True, 213.0)
-)
-def test_preview_returns_the_video_length(mock_info, client):
-    resp = client.get("/preview?url=https://youtu.be/dQw4w9WgXcQ")
-
-    assert resp.get_json() == {
-        "stream_url": "https://example.test/v",
-        "srt_available": True,
-        "duration": 213.0,
-    }
-
-
 class TestCaptionCheck:
-    """GET /caption_check → the picker's gate on the caption it would offer."""
+    """GET /caption_check → the dialog's one lookup: the caption's gate and the preview link."""
 
     @patch("pikaraoke.routes.search.check_video_caption")
-    def test_checks_the_video_against_the_previewed_length(self, mock_check, client):
-        mock_check.return_value = CaptionCheck(found=True, wpm=3.0, passed=False)
+    def test_checks_the_video_by_its_id_alone(self, mock_check, client):
+        mock_check.return_value = (
+            CaptionCheck(found=True, wpm=3.0, passed=False),
+            "https://example.test/v",
+        )
 
-        resp = client.get("/caption_check?yt_id=dQw4w9WgXcQ&duration=213.5")
+        resp = client.get("/caption_check?yt_id=dQw4w9WgXcQ")
 
-        mock_check.assert_called_once_with("dQw4w9WgXcQ", 213.5)
-        assert resp.get_json() == {"found": True, "passed": False, "failed": False}
+        mock_check.assert_called_once_with("dQw4w9WgXcQ")
+        assert resp.get_json() == {
+            "found": True,
+            "passed": False,
+            "failed": False,
+            "stream_url": "https://example.test/v",
+        }
 
-    @pytest.mark.parametrize("duration", ["", "NA"])
     @patch("pikaraoke.routes.search.check_video_caption")
-    def test_a_missing_length_is_passed_on_as_none(self, mock_check, client, duration):
-        mock_check.return_value = CaptionCheck(found=False, wpm=None, passed=False, failed=True)
+    def test_no_link_answers_a_null_stream_url(self, mock_check, client):
+        mock_check.return_value = (CaptionCheck(found=True, wpm=60.0, passed=True), None)
 
-        resp = client.get(f"/caption_check?yt_id=dQw4w9WgXcQ&duration={duration}")
+        resp = client.get("/caption_check?yt_id=dQw4w9WgXcQ")
 
-        mock_check.assert_called_once_with("dQw4w9WgXcQ", None)
-        assert resp.get_json() == {"found": False, "passed": False, "failed": True}
+        assert resp.get_json() == {
+            "found": True,
+            "passed": True,
+            "failed": False,
+            "stream_url": None,
+        }
 
     @patch("pikaraoke.routes.search.check_video_caption")
     def test_invalid_yt_id_returns_400(self, mock_check, client):
-        resp = client.get("/caption_check?yt_id=../etc&duration=60")
+        resp = client.get("/caption_check?yt_id=../etc")
 
         assert resp.status_code == 400
         mock_check.assert_not_called()
+
+    def test_preview_is_gone(self, client):
+        assert client.get("/preview?url=https://youtu.be/dQw4w9WgXcQ").status_code == 404
+
+    @patch("pikaraoke.lib.youtube_dl._impersonate_args", return_value=[])
+    @patch("pikaraoke.lib.youtube_dl.get_installed_js_runtime", return_value=None)
+    def test_one_yt_dlp_call_answers_the_caption_and_the_link(
+        self, mock_js, mock_impersonate, client, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr("pikaraoke.lib.library_regen.get_temp_directory", lambda: str(tmp_path))
+
+        def fake_run(cmd, **kwargs):
+            srt = cmd[cmd.index("-o") + 1].replace("%(ext)s", "en.srt")
+            words = " ".join(["la"] * 60)
+            Path(srt).write_text(f"1\n00:00:01,000 --> 00:00:04,000\n{words}\n", encoding="utf-8")
+            return MagicMock(returncode=0, stdout=b"https://example.test/v.mp4\n60\n", stderr=b"")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            resp = client.get("/caption_check?yt_id=dQw4w9WgXcQ")
+
+        assert mock_run.call_count == 1
+        assert resp.get_json() == {
+            "found": True,
+            "passed": True,
+            "failed": False,
+            "stream_url": "https://example.test/v.mp4",
+        }
+        assert list(tmp_path.iterdir()) == []

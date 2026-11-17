@@ -14,7 +14,7 @@ import pytest
 
 from pikaraoke.lib import library_regen as lr
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
-from pikaraoke.lib.youtube_dl import ASR_JSON3_SUFFIX
+from pikaraoke.lib.youtube_dl import ASR_JSON3_SUFFIX, VideoLookup
 from pikaraoke.pipeline.config import PipelineConfig
 
 # ---------------------------------------------------------------------------
@@ -788,40 +788,76 @@ class TestCheckCaption:
 class TestCheckVideoCaption:
     """``check_video_caption`` measures against YouTube's length, before any download."""
 
+    LINK = "https://example.test/v.mp4"
+
     @pytest.fixture
-    def downloaded(self, tmp_path, monkeypatch):
-        """Fake a 60-word caption download; yields the URLs asked for."""
+    def looked_up(self, tmp_path, monkeypatch):
+        """Fake a lookup of a 60-word caption; yields the URLs asked for and the answer's
+        ``length`` (60 s) and ``link``, which a test may change before a check runs."""
         root = tmp_path / "pk_tmp"
         root.mkdir()
         monkeypatch.setattr(lr, "get_temp_directory", lambda: str(root))
-        urls = []
+        seen = SimpleNamespace(urls=[], length=60.0, link=self.LINK)
 
-        def fake_dl(url, dest, stem):
-            urls.append(url)
+        def fake_lookup(url, dest, stem):
+            seen.urls.append(url)
             srt = Path(dest) / f"{stem}.en.srt"
             words = " ".join(["la"] * 60)
             srt.write_text(f"1\n00:00:01,000 --> 00:00:04,000\n{words}\n", encoding="utf-8")
-            return str(srt)
+            return VideoLookup(srt_path=str(srt), duration_s=seen.length, stream_url=seen.link)
 
-        monkeypatch.setattr(lr, "download_manual_en_subs", fake_dl)
-        yield urls
+        monkeypatch.setattr(lr, "lookup_video", fake_lookup)
+        yield seen
         assert list(root.iterdir()) == []
 
-    def test_a_caption_dense_for_the_video_length_passes(self, downloaded):
-        result = lr.check_video_caption("dQw4w9WgXcQ", 60.0)
+    def test_a_caption_dense_for_the_video_length_passes(self, looked_up):
+        check, _ = lr.check_video_caption("dQw4w9WgXcQ")
 
-        assert result == lr.CaptionCheck(found=True, wpm=60.0, passed=True)
-        assert downloaded == ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"]
+        assert check == lr.CaptionCheck(found=True, wpm=60.0, passed=True)
+        assert looked_up.urls == ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"]
 
-    def test_the_same_caption_on_a_long_video_is_too_sparse(self, downloaded):
-        result = lr.check_video_caption("dQw4w9WgXcQ", 600.0)  # 6 wpm
+    def test_the_same_caption_on_a_long_video_is_too_sparse(self, looked_up):
+        looked_up.length = 600.0  # 6 wpm
 
-        assert result == lr.CaptionCheck(found=True, wpm=6.0, passed=False)
+        check, _ = lr.check_video_caption("dQw4w9WgXcQ")
 
-    def test_with_no_length_the_caption_cannot_be_measured_and_passes(self, downloaded):
-        assert lr.check_video_caption("dQw4w9WgXcQ", None) == lr.CaptionCheck(
-            found=True, wpm=None, passed=True
-        )
+        assert check == lr.CaptionCheck(found=True, wpm=6.0, passed=False)
+
+    def test_with_no_length_the_caption_cannot_be_measured_and_passes(self, looked_up):
+        looked_up.length = None
+
+        check, _ = lr.check_video_caption("dQw4w9WgXcQ")
+
+        assert check == lr.CaptionCheck(found=True, wpm=None, passed=True)
+
+    def test_the_link_comes_back_with_the_answer(self, looked_up):
+        _, link = lr.check_video_caption("dQw4w9WgXcQ")
+
+        assert link == self.LINK
+
+    def test_a_lookup_with_no_link_answers_the_caption_the_same(self, looked_up):
+        looked_up.link = None
+
+        check, link = lr.check_video_caption("dQw4w9WgXcQ")
+
+        assert check == lr.CaptionCheck(found=True, wpm=60.0, passed=True)
+        assert link is None
+
+    def test_a_lookup_that_fails_is_a_check_that_could_not_run(self, tmp_path, monkeypatch):
+        root = tmp_path / "pk_tmp"
+        root.mkdir()
+        monkeypatch.setattr(lr, "get_temp_directory", lambda: str(root))
+
+        def fail(url, dest, stem):
+            raise lr.CaptionDownloadFailed("timed out")
+
+        monkeypatch.setattr(lr, "lookup_video", fail)
+
+        check, link = lr.check_video_caption("dQw4w9WgXcQ")
+
+        assert check == lr.CaptionCheck(found=False, wpm=None, passed=False, failed=True)
+        assert link is None
+        assert list(root.iterdir()) == []
 
 
 @pytest.fixture(
