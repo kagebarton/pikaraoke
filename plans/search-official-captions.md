@@ -1,6 +1,7 @@
 # Search: lift the videos most likely to have captions, and stop lifting the wrong ones
 
-Model: Claude Sonnet 5.5 (spec by Claude Fable 5.2, 2026-11-11)
+Model: Claude Sonnet 5.5 (spec by Claude Fable 5.2, 2026-11-11; rules revised 2026-11-16 after
+the held-out check, see Measurements)
 
 Branch `search_official_captions` off `dev` at `1016e20`, worktree
 `.claude/worktrees/search_official_captions` (inside the main checkout, gitignored via
@@ -25,6 +26,10 @@ live searches (Measurements, below) found three faults in the current ranking:
 - The query is sent to YouTube wrapped in quotes, so a missing apostrophe ("how far ill go
   moana") returns 30 uploads with no official one among them.
 
+The first draft of the rules (2026-11-11) was tuned on the same 44 fixtures and 60 searches
+that tested it. A check on 40 new searches (2026-11-16, Measurements) found it no better than
+YouTube's own order there, and rules 1, 5, 6, 7, 9 and 12 were revised.
+
 ## Decisions (Ken, 2026-11-11)
 
 1. Drop the quotes around the search query.
@@ -40,9 +45,21 @@ live searches (Measurements, below) found three faults in the current ranking:
    he ruled label channels only. The old plan's decision 2 (original artist only) otherwise
    stands: Pentatonix's own-channel "Bohemian Rhapsody" stays where YouTube put it.
 
-Still in force from the old plan: video before audio; official lyric videos, live, remix,
-karaoke and the like are not lifted unless the query asks for that version; the vote is taken
-over the first page only; a query in a script the matching cannot read lifts nothing.
+Decisions (Ken, 2026-11-16, after the held-out check):
+
+5. "I only want audio to be lifted when there's no official video, and no other videos with
+   manual captions." The second half cannot be known without a caption lookup (decision 3), so
+   the rule is the first half: audio is lifted only when no video is. Beside a lifted video it
+   keeps YouTube's place and its "Official audio" badge.
+6. A title that says "official" does not make a verified channel a label's. Only the
+   channel's name does. (Ken agreed this for videos. The spec applies it to audio too, and
+   drops the re-upload bar that went with it, see rule 7: neither changes a row in the 84
+   searches.)
+
+Still in force from the old plan: official lyric videos, live, remix, karaoke and the like are
+not lifted unless the query asks for that version; the vote is taken over the first page only;
+a query in a script the matching cannot read lifts nothing. "Video before audio" is superseded
+by decision 5.
 
 ## What exists (checked 2026-11-11, `dev` at `1016e20`)
 
@@ -66,7 +83,8 @@ over the first page only; a query in a script the matching cannot read lifts not
 ## Design
 
 The reference is `plans/search-official-captions/proto_rank2.py`: a working prototype of every
-rule below, checked against all 44 fixtures. Write the module cleanly; the prototype is there
+rule below, checked against all 44 fixtures and the 40 held-out searches in
+`plans/search-official-captions/holdout/`. Write the module cleanly; the prototype is there
 to settle ambiguity and is not to be imported. It borrows the unchanged helpers from today's
 module (`_words`, `_compact`, `_share_found`, `_has_letters_without_ascii`, `_is_art_track`,
 `_is_trusted`, `_channel_artist`, `_title_artists`, `_marks`, the regexes), which stay.
@@ -81,9 +99,11 @@ module (`_words`, `_compact`, `_share_found`, `_has_letters_without_ascii`, `_is
    quoted song credits the text before the opening quote, and each round-bracket alias in it.
    `BTS (방탄소년단) 'Butter' Official MV` credits `bts`; `정국 (Jung Kook) 'Seven (feat. Latto)'
    Official MV` credits `jungkook`. An opening quote is one of `' " ‘ “ 「 『` not preceded by a
-   letter or digit, so the apostrophe in "Don't" is not one. Square and `【】` brackets before
-   the quote are dropped. A title with neither a separator nor a quote credits its channel, as
-   today.
+   letter or digit, so the apostrophe in "Don't" is not one, and outside every bracket (a
+   bracket the title never closes runs to its end): in `Under the Sea (From "The Little
+   Mermaid")` the quote names the film, not the song, and the title credits no one. Square
+   and `【】` brackets before the quote are dropped. A title with neither a separator nor such
+   a quote credits its channel, as today.
 2. **The originals.** Count credits over the trusted rows of the first page, as today. The
    originals are every name tied for the most credits, when that count is at least 2. A tie is
    no longer "nobody": a duet's two singers and the pair tie ("Mena Massoud, Naomi Scott"), and
@@ -93,11 +113,20 @@ module (`_words`, `_compact`, `_share_found`, `_has_letters_without_ascii`, `_is
    alone, because a cover's art track is titled "Song - Film" or "Original Artist - Song".
 4. **Tier.** "Original" when the row's names include an original; otherwise "other" (commit 3).
 5. **Not the record.** Today's exclude list, counted per mark beyond the query's, plus: demo,
-   rehearsal, making of, footnotes, perform(s), performance.
+   rehearsal, making of, footnotes, perform(s), performance. Hyphens read as spaces, in the
+   title and the query alike, so "Behind-the-Scenes" carries the mark "behind the".
 6. **Is the song.** More than half the song words appear anywhere in the title, and at least
-   one appears outside brackets. For the original tier the song words are the query words not
-   inside an original's name, as today. (Today the whole check ignores brackets, so
-   "speechless aladdin" misses "Naomi Scott - Speechless (from Aladdin)".)
+   one appears outside brackets. (Today the whole check ignores brackets, so "speechless
+   aladdin" misses "Naomi Scott - Speechless (from Aladdin)".) And the query may say more
+   than the title ("let it go frozen" for the art track "Let It Go"), or the title more than
+   the query, but not both: a title that lacks a song word may carry, outside its brackets,
+   no word that rule 9 calls unexplained. "Adele - Make You Feel My Love" is not "adele send
+   my love". A misspelt song word therefore lifts nothing, video or audio (it leaves one word
+   missing and one unexplained): YouTube's order, which is what today's module says a typo
+   should get. For the original tier the song words are the query words not inside the name of
+   an original this row credits. Not any original's: when the song's name ties the vote
+   ("under the sea little mermaid" votes `underthesea` beside `samuelewright`), striking it
+   leaves only the film's name, which Samuel E. Wright's title carries in brackets.
 7. **Comes from the act.** One of:
    - an art track;
    - **own channel**: a trusted channel whose name equals one of the row's names. The channel
@@ -106,49 +135,70 @@ module (`_words`, `_compact`, `_share_found`, `_has_letters_without_ascii`, `_is
      from both sides. Equal, not contained: today's substring test passes the fan channel
      "ePro Team: Support for Eminem & Shady Records";
    - **label upload**: a verified channel whose name ends in "VEVO" or has the word Records,
-     Recordings or Label(s); or, for the original tier only, any verified channel whose title
-     says official or audio (RHINO, Netflix). Never when one of the row's names has its own
-     channel's video on the first page: then the row is a re-upload (7clouds' "Justin
-     Timberlake - Suit & Tie (Official Video)").
+     Recordings or Label(s). Nothing in the title makes a channel a label's (decision 6): the
+     verified fan channel "Disney¡Fan!" titles its re-uploads "Official Music Video". This
+     gives up RHINO's and Netflix's real uploads, none of which had captions. The 11-11
+     draft also barred a label upload when the act's own channel had the video on the page.
+     That bar existed for the by-title channels (7clouds' "Justin Timberlake - Suit & Tie
+     (Official Video)"), which no longer pass at all; it decides no row in the 84 searches
+     and is dropped.
 8. **"Says official"** means: "official" followed, before the bracket closes, by "video",
    "audio" or "MV"; or "music video"; or "MV" / "M/V". A bare "official" does not count:
    "(Rosanna Pansino Official)".
 9. **A video must say what it is.** Take the title, drop "feat./ft./featuring/with/from …" up
-   to the bracket or segment end, and drop the query's words, words inside the row's names and
+   to the bracket or segment end, and drop the query's words, words inside the row's names,
    the plain words (official music video audio hd hq 4k mv explicit clean only the a an of
-   and). If anything is left, the title must say official (rule 8) or say version, edition or
-   remaster(ed). "(O2 Arena)", "(AOL Sessions)", "@ The Tonight Show" fail; "(2025 Version)",
-   "(Official HD Video)" pass. Skipped for audio (the fallback, never captioned either way) and
-   for a title carrying a mark, which got this far only because the query asked for it
-   ("bohemian rhapsody live" still lifts "(Live Aid 1985)").
+   and) and the words of the record's own title: every word in the title of an art track on
+   the first page that is the original's and the song (rules 3 to 6). "Adele - Send My Love
+   (To Your New Lover)" on "Adele - Topic" explains the official video's "(To Your New
+   Lover)". If anything is left, the title must say official (rule 8) or say version,
+   edition, edit or remaster(ed). "(O2 Arena)", "(AOL Sessions)", "@ The Tonight Show" fail;
+   "(2025 Version)", "(Official HD Video)", "(Edit)" pass. Skipped for audio (never captioned
+   either way) and for a title carrying a mark, which got this far only because the query
+   asked for it ("bohemian rhapsody live" still lifts "(Live Aid 1985)").
 10. **Kind.** Audio for an art track or a title with the word "audio"; otherwise video.
 11. **Other acts (commit 3).** A row whose names include no original lifts as a video when
     its channel is a label channel by name (rule 7: verified, ends in "VEVO" or has Records,
     Recordings or Label(s)) and is not the act's own channel ("NataliaKillsVEVO" is Natalia
     Kills' own); every query word appears in its title or channel name; and rules 5, 6 (with
-    all query words), the re-upload bar of rule 7, and 9 hold. Never its audio. Residue: a
-    label channel's different song of the same name still lifts (Spinnin' Records' "Martin
-    Solveig & Dragonette - Hello" for "hello"); one row across the 44 fixtures.
-12. **Order.** The originals' videos, other acts' videos, the originals' audio, the rest.
-    Stable within each. The badge stays "Official video" / "Official audio".
+    all query words) and 9 hold. Never its audio. A label channel's title that credits no one
+    credits the channel (rule 1), so DisneyMusicVEVO's `We Don't Talk About Bruno (From
+    "Encanto")` lifts here. Residue, four rows across the 44 fixtures and the 40 held-out
+    searches: a label channel's different song of the same name (Spinnin' Records' "Martin
+    Solveig & Dragonette - Hello" for "hello"; DisneyMusicVEVO's `Stronger (From "Under the
+    Sea: A Descendants Short Story"/Official Video)` for "stronger"), and a concert or signed
+    version titled as from the film (`(From "Encanto at the Hollywood Bowl")`, `(From "The
+    Little Mermaid"/British Sign Language Version)`).
+12. **Order (decision 5).** The originals' videos, other acts' videos, then the rest in
+    YouTube's order. The originals' audio goes first only when no video is lifted, among the
+    rows being ordered or on the first page; otherwise it stays where YouTube put it. Stable
+    within each. Every row with a kind shows its badge, "Official video" / "Official audio",
+    lifted or not.
 
 ### Module shape
 
 ```python
 @dataclass(frozen=True)
 class Acts:
-    """What the first page says: the original artist's names, and the acts whose own
-    channel has a video of the song on that page."""
+    """What the first page says: the original artist's names, the words of the record's own
+    title, and whether that page lifts any video."""
     originals: frozenset[str] = frozenset()
-    own_channel: frozenset[str] = frozenset()
+    record_words: frozenset[str] = frozenset()
+    has_video: bool = False
 
 def read_first_page(results: Sequence[SearchResult], query: str) -> Acts: ...
 def official_kind(result: SearchResult, query: str, acts: Acts) -> OfficialKind | None: ...
 def official_first(results, query, acts) -> list[tuple[SearchResult, OfficialKind | None]]: ...
 ```
 
-`pick_artist` goes; `read_first_page` replaces it, and `Acts()` is "nothing known". The tier
-is internal to the module (`official_first` needs it to order; callers only see the kind).
+`pick_artist` goes; `read_first_page` replaces it, and `Acts()` is "nothing known". It fills
+the fields in order, each needing the one before: the vote, then `record_words` (rule 9, off
+the originals' art tracks), then `has_video` (rule 12, for `/search/more`, whose rows are
+ordered apart from the first page's). The tier is internal to the module (`official_first`
+needs it to order; callers only see the kind). `official_first` returns the rows in display
+order with their kinds, as today: a kind is a badge, not a promise that the row moved. The
+prototype's `other` switch and its third "lifted" value are for printing commit 2's state
+and the tables; the module has neither.
 Keep helpers small: the prototype's `lift` is one long function for reading, and the module
 should split it (who the row is, is it the song, does it come from the act, does it say what
 it is). Delete what is superseded: `pick_artist`, `_OFFICIAL`, the substring channel test.
@@ -164,23 +214,34 @@ Both routes call `read_first_page` over the first page (`results` on `/search`,
 - Any caption lookup at search time (decision 3).
 - Reading YouTube's "Official Artist Channel" badge: yt-dlp merges it with the verified tick.
 - Matching CJK or other non-Latin song names (the existing guard stays; nothing is lifted).
-- Changing audio lifts beyond the new marks: "Band Ver." and "Extended Version" art tracks
-  still lift as audio, below every video.
+- Changing which uploads count as official audio beyond the new marks: "Band Ver." and
+  "Extended Version" art tracks still get the audio badge.
+- A caption-aware audio rule (the second half of decision 5).
+- Known wrong lifts left as they are: a foreign-language cast that shares a credited singer
+  with the original lifts as the original's (DisneyMusicAsiaVEVO's Thai "Into the Unknown"
+  credits AURORA); a duet re-recording on the other singer's channel lifts ("Calum Scott,
+  Whitney Houston - I Wanna Dance With Somebody", uncaptioned; barring it also bars Reba
+  McEntire's and Lindsey Stirling's duets, both captioned); rule 11's residue.
 - Known misses left as they are, each costing only YouTube's order: "for good wicked" and
   "popular wicked" (the vote picks the song's name or nothing), "colors of the wind" (the vote
-  picks the film's name from karaoke channels), "soda pop kpop demon hunters".
+  picks the film's name from karaoke channels), "soda pop kpop demon hunters", "toxic" (the
+  vote picks BoyWithUke, whose song of that name fills the page).
 
 ## Fixtures
 
-`tests/unit/data/youtube_search/` holds 44 files. The 14 from 2026-11-08 are quoted-search
-captures. The 30 new ones are committed on this branch as `8187552` (on their own, ahead of the
-tests that read them, because they cannot be captured again; it lands on `dev` with the rest).
-They are real unquoted `ytsearch30` captures from 2026-11-11, cut to the same
-fields (`id, url, title, channel, uploader, channel_is_verified, duration, description[:40]`).
+`tests/unit/data/youtube_search/` holds 44 files, and six held-out captures join them
+(below). The 14 from 2026-11-08 are quoted-search captures. The 30 new ones are committed on
+this branch as `8187552` (on their own, ahead of the tests that read them, because they cannot
+be captured again; it lands on `dev` with the rest). They are real unquoted `ytsearch30`
+captures from 2026-11-11, cut to the same fields (`id, url, title, channel, uploader,
+channel_is_verified, duration, description[:40]`).
 File stem = the query with `_` for spaces, as before.
 
 Position = YouTube's, 1-based. "Other acts' videos" is empty after commit 2 and as listed
-after commit 3; everything else is the same after both.
+after commit 3; everything else is the same after both. The audio column is the rows badged
+"Official audio". They are lifted, in the order listed, only where the videos columns are both
+"none": defying gravity, dont stop believin, hallelujah, seasons of love rent. Everywhere else
+they keep YouTube's place. No fixture lifts audio after commit 2 and loses it after commit 3.
 
 ### New fixtures (unquoted captures, 2026-11-11)
 
@@ -193,7 +254,7 @@ after commit 3; everything else is the same after both.
 | speechless aladdin | naomiscott | `mw5VIEIvuMI` (#1) | none | `DwTogmKwYWo` (#4), `J8CVHdMvv30` (#25) |
 | how far ill go moana | auliicravalho | `cPAbx5kgCJo` (#1) | `_nVJl4-o2XA` (#3), `IhZI-a1eiCg` (#14) | `keGr19WWwoA` (#24) |
 | circle of life lion king | thelionking | none | `GibiNy4d4gc` (#1), `IwH9YvhPN7c` (#2) | none |
-| youre welcome moana | dwaynejohnson, moana | `79DijItQXMM` (#1), `5CQLqMebytM` (#6) | `0DLzyvT4eUo` (#10) | `khg-OuAtt5E` (#4) |
+| youre welcome moana | dwaynejohnson, moana | `79DijItQXMM` (#1) | `0DLzyvT4eUo` (#10) | `khg-OuAtt5E` (#4) |
 | backstreet boys shape of my heart | backstreetboys | `OT5msu-dap8` (#1) | none | none |
 | john legend all of me | johnlegend | `450p7goxZqg` (#1), `xwsYvBYZcx4` (#5) | none | none |
 | colbie caillat realize | colbiecaillat | `GlZxZ2n2zpw` (#1), `pwpHhN-vtRI` (#5), `u5Exxrl7frA` (#9) | none | none |
@@ -212,9 +273,9 @@ after commit 3; everything else is the same after both.
 | mirrors | justintimberlake | `uuZE_IRwLNI` (#1) | none | `U41KPUfOSFk` (#6) |
 | tribute | none | none | none | none |
 | the lonely island threw it on the ground | thelonelyisland | `gAYL5H46QnQ` (#1) | none | none |
-| vitamin c graduation | vitaminc | `tz_NxOF7RB4` (#1) | none | none |
+| vitamin c graduation | vitaminc | none | none | none |
 | the philosopher kings cry | thephilosopherkings | `EUW0eDhKoxw` (#1) | none | none |
-| golden kpop demon hunters | huntrx | `hohuFW0zQUw` (#16) | none | none |
+| golden kpop demon hunters | huntrx | none | none | none |
 | celine dion my heart will go on | celinedion | `9bFHsd3o1w0` (#1), `bf-HGyke89Y` (#8) | none | `mNsm2P0l_7Y` (#11), `cJnSrovvM74` (#19) |
 
 ### Existing fixtures (quoted captures, 2026-11-08)
@@ -237,9 +298,31 @@ after commit 3; everything else is the same after both.
 | someone like you | adele | `hLQl3WQQoQ0` (#1) | none | `22c3_LoIfZQ` (#17) |
 
 For the 14 existing fixtures the originals' videos and audio are exactly today's `_LIFTED`
-table, so that table passes unchanged after commit 2.
+table, but its test is not: audio is now at the top in only the four fixtures with no video.
 
-Must stay unlifted, after commit 2 and after commit 3 (new fixtures):
+### Held-out fixtures (unquoted captures, 2026-11-16)
+
+Six of the 40 searches in `plans/search-official-captions/holdout/`, each the capture that
+exposed a fault in the 11-11 draft. Copy them into `tests/unit/data/youtube_search/` under
+the same names.
+
+| query | originals | original's videos | other acts' videos (commit 3) | original's audio |
+|---|---|---|---|---|
+| adele send my love | adele | `fk4BbF7B29w` (#1) | none | `Fq-AHPOshKc` (#5) |
+| under the sea little mermaid | samuelewright, underthesea | `GC_mV1IpjWA` (#1) | `Wbv_huklr5E` (#2), `Uki_W4nYbr4` (#22) | `ChNJ_FMtSnk` (#3), `b32vFD5Acrc` (#12), `ZhFwcueYEKE` (#14) |
+| we dont talk about bruno encanto | wedonttalkaboutbruno | none | `bvWRMAU6V-c` (#1), `-QOSz9G1GnY` (#5) | none |
+| do you want to build a snowman | frozen | none | `1APv9t_LyOY` (#2) | none |
+| justin timberlake sexyback | justintimberlake | `3gOHvDP_vCs` (#1), `-oqXwnXjgDE` (#13) | none | none |
+| be our guest beauty and the beast | thebeast | none | none | none |
+
+Audio keeps YouTube's place in all six. What each pins: "(To Your New Lover)" is the record's
+own title (rule 9) and "Make You Feel My Love" is another song (rule 6); the song's name ties
+the vote without hiding Samuel E. Wright's video (rule 6); `Song (From "Film")` credits no one
+(rule 1); "Behind-the-Scenes" is a mark (rule 5); "(Edit)" is a version (rule 9); a fan
+channel's "Official Music Video" is no label's (rule 7). `-QOSz9G1GnY` and `Uki_W4nYbr4` are
+rule 11's residue, listed because the rules lift them, not because they should.
+
+Must stay unlifted, after commit 2 and after commit 3 (new and held-out fixtures):
 
 | query | id (#) | what | rule |
 |---|---|---|---|
@@ -253,17 +336,26 @@ Must stay unlifted, after commit 2 and after commit 3 (new fixtures):
 | britney spears oops i did it again | `MHfCJT6hkZ4` (#9) | own channel, "The Making of … (Vevo Footnotes)" | 5 |
 | ne-yo so sick | `XLtinWelxkE` (#8) | own channel, "The Making Of 'So Sick'" | 5 |
 | eminem lose yourself | `jNYR1ioecJY` (#29) | fan channel "ePro Team: Support for Eminem…", full live set | 5, 7 |
-| justin timberlake suit and tie | `8fWBQtknJdA` (#3) | 7clouds, "(Official Video)" | 7, re-upload |
-| adele someone like you | `il-NdjTtUAI` (#25) | Casey Ford Alexander, "Adele - Someone Like You (Music Video)" | 7, re-upload |
+| justin timberlake suit and tie | `8fWBQtknJdA` (#3) | 7clouds, "(Official Video)" | 7 |
+| adele someone like you | `il-NdjTtUAI` (#25) | Casey Ford Alexander, "Adele - Someone Like You (Music Video)" | 7 |
 | tenacious d tribute | `W4uqbxvOK2A` (#2) | own channel, "Tribute to "Tribute": … Fan Compilation" | 1 |
 | tenacious d tribute | `qSf6JznfdkY` (#16) | own channel, "(1995 Demo Version - Official Audio)" | 5 |
-| ed sheeran perfect | `eiDiKwbGfIY` (#3) | "Ed Sheeran and Andrea Bocelli" channel, Perfect Symphony | 7, re-upload |
+| ed sheeran perfect | `eiDiKwbGfIY` (#3) | "Ed Sheeran and Andrea Bocelli" channel, Perfect Symphony | 7 |
 | ed sheeran perfect | `fgcwFILyTVo` (#27) | own channel, "(Backstage Rehearsal)" | 5 |
 | backstreet boys i want it that way | `nUhVJBCpPSM` (#28) | "SethDrums - Topic" cover art track | 3 |
 | part of your world | `azpDUgf2RLc` (#27) | "Rosanna Pansino - Topic" cover art track | 3 |
+| youre welcome moana | `5CQLqMebytM` (#6) | Disney¡Fan!, "MOANA - You're Welcome (HD) Music Video" | 7 |
+| vitamin c graduation | `tz_NxOF7RB4` (#1) | RHINO, "[Official Music Video]" | 7 |
+| golden kpop demon hunters | `hohuFW0zQUw` (#16) | Netflix Philippines, "‘Golden’ Music Video" | 7 |
+| adele send my love | `0put0_a--Ng` (#12) | XL Recordings, "Adele - Make You Feel My Love (Official Video)" | 6 |
+| adele send my love | `9IzKueQ2ZxY` (#10) | Adele's art track "Make You Feel My Love" | 6 |
+| do you want to build a snowman | `-9ZWF8vxmzM` (#25) | Shine On Media, "Behind-the-Scenes Music Video" | 5, 7 |
+| do you want to build a snowman | `KKP0Txebobg` (#14) | DisneyMusicVEVO, `(From "Frozen: The Broadway Musical"/Audio Only)` | 1, 11 |
+| be our guest beauty and the beast | `Lt1Fck9DDp8` (#7) | Disney¡Fan!, "(Official Music Video(" | 7 |
 
-Perfect Symphony is a real official video; it is lost to the re-upload rule because its
-channel is a joint one. Accepted: it has no captions.
+Perfect Symphony, RHINO's Vitamin C video and Netflix's "Golden" are real official videos
+on channels that are neither the act's own by name nor a label's by name. Accepted: none has
+captions.
 
 The old `_STAYS_PUT` table: all six rows hold after commit 2 and after commit 3, including
 `ojRj2JK5oCI` (Pentatonix, own channel, "bohemian rhapsody") and `mHONNcZbwDY` (Lionel
@@ -285,27 +377,48 @@ log row in a separate plan-only commit, so landing can drop it cleanly. This fil
 
 1. **`fix(search): the query goes to YouTube unquoted`.** `youtube_dl.py:249` and the
    assertion at `tests/unit/test_youtube_dl.py:473`. Nothing else.
+
+   Then, on its own like `8187552`: **`test(official_rank): six held-out searches frozen as
+   fixtures`**, the six files named under "Held-out fixtures", copied from `holdout/`.
 2. **`feat(official_rank): label uploads and alternate videos lift, live sessions and
    re-uploads do not`.** Rules 1-10 and 12, the `Acts` API, both routes, and the tests:
-   - `_LIFTED` grows by the 30 new rows (originals as a set, videos, audio); the 14 old rows
-     keep their IDs.
+   - `_LIFTED` grows by the 30 new rows and the 6 held-out rows (originals as a set, videos,
+     audio); the 14 old rows keep their IDs. Its tests change with rule 12: every listed row
+     carries its kind; the videos come first in the listed order; the audio comes first, in
+     the listed order, only where no video is listed, and otherwise sits where YouTube put it;
+     everything else keeps YouTube's order.
    - `_STAYS_PUT` grows by the table above.
    - Rewrite the tests that call `pick_artist`: a tie now names both; one trusted credit is
      still not enough; no trusted rows changes no order; the drift test compares sets.
    - Synthetic-row tests, one per rule that a fixture does not isolate: a quoted title
      credits the text before the quote and its bracket alias (rule 1); a channel named
      "Alpha Fans United" is not Alpha's (rule 7); "AlphaMusic" and "AlphaVEVO" are; a verified
-     re-upload titled "(Official Video)" is not lifted when Alpha's own channel has the video
-     and is lifted when it does not (rule 7); a bare "(Someone Official)" does not say official
-     (rule 8); "Song (from Film)" passes the song check for "song film" and "Other Song (from
-     Film)" does not (rule 6); "bohemian rhapsody live" still lifts "(Live Aid 1985)" (rule 9's
-     exemption; this existing case must keep passing).
+     channel that is neither Alpha's nor a label's by name is not lifted for "Alpha - Some
+     Song (Official Video)", with or without Alpha's own channel on the page, and "Beta
+     Records" is (rule 7); a bare "(Someone Official)" does not say official (rule 8); "Song
+     (from Film)" passes the song check for "song film" and "Other Song (from Film)" does not
+     (rule 6); "bohemian rhapsody live" still lifts "(Live Aid 1985)" (rule 9's exemption;
+     this existing case must keep passing).
+   - One per revised rule, beside the held-out fixtures that pin them: `Some Song (From "Some
+     Film")` credits its channel, and `Alpha 'Some Song' (From "Some Film")` still credits
+     Alpha (rule 1); "Behind-the-Scenes" and "Making-Of" are marks (rule 5); for "alpha some
+     long song", "Alpha - Other Long Song (Official Video)" is not the song, for "alpha some
+     long song film" the art track "Some Long Song" still is (the query says more, the title
+     nothing of its own), and the misspelt "alpha some long sogn" lifts nothing (rule 6); with
+     two verified "Some Song - Film" rows tying `somesong` with `alpha` in the vote, "Alpha -
+     Some Song (from Film) (Official Video)" on a VEVO channel still lifts for "some song
+     film" (rule 6); "Alpha - Some Song (Its Subtitle)" on Alpha's channel lifts when Alpha's
+     art track is titled so and not when it is titled "Some Song" (rule 9); "(Edit)" lifts
+     (rule 9). All were run through the prototype on 2026-11-16.
+   - Rule 12, on synthetic rows: audio beside a lifted video keeps its place and its kind;
+     audio with no video is first; rows 31-60 with audio and no video are not reordered when
+     the first page lifted a video (`Acts.has_video`).
    - "celebration kool and the gang" from open-issues: add the case with the channel
      "KoolandthegangShow" and report in the Results log what it does. Do not bend a rule to
      make it pass.
    - Render tests in `test_search_render.py` follow the API change.
 3. **`feat(official_rank): a label channel's other cast of the song lifts after the
-   original's`.** Rule 11, the "other acts' videos" column for all 44 fixtures (five fixtures
+   original's`.** Rule 11, the "other acts' videos" column for all 50 fixtures (eight fixtures
    have rows), and synthetic tests: another act's video on a label channel lifts, after the
    original's videos and before its audio; the same video on that act's own channel does not,
    nor on its own "ActVEVO" channel; a query that names the original ("alpha some song") lifts
@@ -313,10 +426,12 @@ log row in a separate plan-only commit, so landing can drop it cleanly. This fil
    cannot read lifts nothing.
 4. **`docs(plans): open issues follows the search ranking changes`.** In
    `plans/open-issues.md`, "Search results": remove or rewrite the entries this fixes ("A
-   verified re-upload can be lifted" becomes the residue: a re-upload still lifts when the
-   act's own channel is not on the first page; "A band whose channel spells its name another
-   way" per what commit 2 found), and add the "Not doing" misses above. Point the section at
-   this plan.
+   verified re-upload can be lifted" is fixed for channels that are not labels by name; "A
+   band whose channel spells its name another way" per what commit 2 found), and add the "Not
+   doing" misses and known wrong lifts above, rule 11's residue, the real official videos
+   decision 6 gives up (RHINO, Netflix), and one new entry: YouTube sometimes answers a search
+   with no channel on any row (3 of 40 captures on 2026-11-16, gone on a second fetch), and
+   such a page gets no badges and no lifts. Point the section at this plan.
 
 **Stop after commit 4** (and its Results row). Don't land, push or retire anything. Report a
 Review-due checkpoint per CLAUDE.md for commits 1-4: multi-file, new algorithm, so it is due.
@@ -340,6 +455,12 @@ instance can run at a time; stop the main one first. Live results differ from th
 - [ ] "circle of life lion king": both Disney uploads (Carmen Twillie and Lebo M., Elton John)
       are at the top.
 - [ ] "queen bohemian rhapsody": no cover has a badge.
+- [ ] "adele send my love": Adele's video is first with the badge; nothing titled "Make You
+      Feel My Love" has a badge.
+- [ ] "under the sea little mermaid": Samuel E. Wright's official video is first.
+- [ ] "nsync bye bye bye" (or any search with an official video and an official audio): the
+      "Official audio" card has its badge and is not pulled above unbadged videos.
+- [ ] "dont stop believin" (no official video on the page): the "Official audio" card is first.
 - [ ] Show more still appends about 30 cards with no duplicates.
 
 ## Measurements (2026-11-11)
@@ -372,8 +493,8 @@ Quoted against unquoted: same first result in 51 of 60; zero rows in common for 
 go moana" and "ill make a man out of you"; current-code outcome "video lifted" 44 quoted, 47
 unquoted.
 
-Prototype (final rules, other acts from label channels only) over the 60 unquoted searches
-plus the 14 old fixtures, captions by tier:
+Prototype (the 11-11 draft of the rules, other acts from label channels only) over the 60
+unquoted searches plus the 14 old fixtures, captions by tier:
 
 | tier | with captions | of |
 |---|---|---|
@@ -393,18 +514,98 @@ Top of the page, 60 unquoted searches:
 |---|---|---|---|
 | YouTube's | 40 | 47 | 53 of 180 |
 | current code | 43 | 45 | 62 of 180 |
-| prototype (final rules) | 46 | 48 | 66 of 180 |
+| prototype (11-11 draft) | 46 | 48 | 66 of 180 |
 
 Tried and dropped: record length against the art track's as a live-version test (official
 videos run 0.78x to 1.6x the record); keeping marked rows (lyrics, karaoke) out of the vote
 (loses the pick for "s club 7", "vitamin c graduation", "soda pop", and swaps "how far ill go
 moana" to the 2026 cast).
 
+### Held-out check (2026-11-16)
+
+40 searches not used to write the 11-11 draft (20 "artist title", 7 title only, 11 film and
+stage songs, 2 non-Latin), captured unquoted on 2026-11-16 with the app's command, in
+`plans/search-official-captions/holdout/` with a README and their caption lookups
+(`holdout/captions.json`, 232 IDs, same lookup as above). Five share 5 to 7 video IDs with
+the tuning data (the README names them) and are counted apart. Three (`toxic`, `what is this
+feeling wicked`, `周杰倫 晴天`) first came back with no channel on 28 to 30 rows; a second
+fetch the same day returned the channels, and those captures are the ones kept.
+
+"11-11 draft" is the prototype at `eae97c8`. "Revised" is the rules in this plan. The
+revisions were written from the faults this set exposed, so the revised rows below are not a
+held-out measurement; only the draft's rows are.
+
+Top of the page:
+
+| order | top card captioned | any of top 3 captioned | captioned cards in top 3 |
+|---|---|---|---|
+| **35 held-out** | | | |
+| YouTube's | 14 | 19 | 22 of 105 |
+| current code | 13 | 19 | 20 of 105 |
+| 11-11 draft, after commit 2 | 13 | 17 | 18 of 105 |
+| 11-11 draft, after commit 3 | 13 | 18 | 19 of 105 |
+| revised, after commit 2 | 14 | 21 | 24 of 105 |
+| revised, after commit 3 | 16 | 21 | 26 of 105 |
+| **5 overlapping** | | | |
+| YouTube's | 5 | 5 | 6 of 15 |
+| current code, draft and revised (all the same) | 5 | 5 | 8 of 15 |
+| **30 unquoted fixtures** (2026-11-11 captures) | | | |
+| YouTube's | 24 | 27 | 33 of 90 |
+| current code | 24 | 25 | 36 of 90 |
+| 11-11 draft, after commit 2 | 26 | 27 | 35 of 90 |
+| 11-11 draft, after commit 3 | 26 | 27 | 39 of 90 |
+| revised, after commit 2 | 26 | 27 | 38 of 90 |
+| revised, after commit 3 | 26 | 27 | 40 of 90 |
+| **14 quoted fixtures** (2026-11-08 captures) | | | |
+| YouTube's | 10 | 13 | 15 of 42 |
+| current code, draft and revised (all the same) | 11 | 12 | 14 of 42 |
+
+The fixture rows needed 67 more lookups (2026-11-16, appended to `captions.json`), because
+the revised order leaves cards in the top 3 that the draft's order never showed.
+
+Captions by tier, after commit 3:
+
+| tier | 11-11 draft, held-out 35 | revised, held-out 35 | revised, overlap 5 | revised, 44 fixtures |
+|---|---|---|---|---|
+| original's video, own channel | 10 of 21 | 12 of 23 | 7 of 7 | 31 of 40 |
+| original's video, label upload | 2 of 7 | 3 of 4 | none | 9 of 9 |
+| other act's video (label channel) | 4 of 5 | 6 of 8 | none | 6 of 7 |
+| original's audio, lifted | 0 of 17 | 0 of 2 | none | 1 of 5 |
+| original's audio, badge only | n/a | 0 of 17 | 0 of 4 | 1 of 34 |
+
+Current code on the 35: lifted video 12 of 37, lifted audio 0 of 20. Of the 11 uncaptioned
+own-channel videos the revised rules lift on the 35, ten are the official video itself (Bruno
+Mars x3, Jessie J x2, Westlife x2, Justin Timberlake, Queen, Kelly Clarkson) and one is the
+Calum Scott duet.
+
+What the draft did on the held-out set, and the revision each led to:
+
+| search | row | what the draft did | rule |
+|---|---|---|---|
+| adele send my love | `fk4BbF7B29w` (#1, captioned), Adele's video "Send My Love (To Your New Lover)" | not lifted: the subtitle read as unexplained | 9: the art track's words |
+| adele send my love | `0put0_a--Ng` (#12), XL Recordings "Make You Feel My Love (Official Video)" | lifted to #1: two of three song words | 6: not both |
+| under the sea little mermaid | `GC_mV1IpjWA` (#1, captioned), Samuel E. Wright's official video | not lifted, the 2023 cast lifted above it: `underthesea` tied the vote and its words were struck | 6: only the row's own names |
+| we dont talk about bruno encanto and three more film searches | `Song (From "Film")` titles | credited "Song (From"; that name joined the originals; the official video got no badge | 1: quote outside brackets |
+| do you want to build a snowman | `-9ZWF8vxmzM` (#25), Shine On Media "Behind-the-Scenes Music Video" | lifted to #1 | 5: hyphens |
+| be our guest beauty and the beast; when will my life begin tangled | `Lt1Fck9DDp8` (#7), `Q9I_8S_h7GI` (#10), Disney¡Fan! "Official Music Video" | lifted to #1; current code does too | 7: decision 6 |
+| justin timberlake sexyback | `-oqXwnXjgDE` (#13, captioned), own channel "(Edit)" | not lifted | 9: edit |
+| kelly clarkson breakaway and 17 more | the original's audio | lifted above every unlifted card; 0 of 17 captioned | 12: decision 5 |
+
+Label uploads by title alone (the branch decision 6 removes), both sets: 0 of 6 captioned
+(Disney¡Fan! x3, Shine On Media, RHINO, Netflix Philippines).
+
+Tried and not taken: other acts only from a channel that also carries the original (removes
+both different-song lifts of rule 11's residue, and takes the badge off four right rows:
+both "circle of life" casts, the 2019 "hakuna matata", Circle of Stars); own channel only
+when it is an original's (removes the Calum Scott duet and two captioned duets in the
+fixtures).
+
 ## Results log
 
 | commit | hash | tests | notes |
 |---|---|---|---|
 | 1 `fix(search): the query goes to YouTube unquoted` | | | |
+| `test(official_rank): six held-out searches frozen as fixtures` | | | |
 | 2 `feat(official_rank): label uploads and alternate videos lift, live sessions and re-uploads do not` | | | |
 | 3 `feat(official_rank): a label channel's other cast of the song lifts after the original's` | | | |
 | 4 `docs(plans): open issues follows the search ranking changes` | | | |
