@@ -806,7 +806,7 @@ files, and one finder angle per Self-Review axis.
 | commit | hash | unit tests | checks | notes |
 | ------ | ---- | ---------- | ------ | ----- |
 | 1 `feat(search): one yt-dlp lookup answers the dialog's caption check and its preview link` | `142d0c3` | baseline before the branch's code: 3849 passed, 0 failed. After: 3862 passed, 0 failed (+13). `TestCheckCaption` unchanged and passing | pre-commit passed on the 7 files; import smoke of `youtube_dl`, `library_regen`, `routes.search` ok; real-YouTube measurement below (8 videos + the bad-client row); `search.html`'s script not driven in a browser this commit (ui-check is commit 2); no `graphify-out/graph.json`, no update | Run 2026-11-17 on the VM, yt-dlp 2026.10.26, curl_cffi 0.14.0, deno 2.7.7. Client setting put back after the last row; no `no_such_client` left in the tree. `/code-review` due at the stop (plan, Stop section) |
-| 2 `feat(search): the download dialog opens at once on the thumbnail and says what it waits for` | | | | |
+| 2 `feat(search): the download dialog opens at once on the thumbnail and says what it waits for` | `8a7bcd8` | 3864 passed, 0 failed (+2 over commit 1: the card's length, the dialog's place) | pre-commit passed on the 3 files; import smoke ok; the rendered inline scripts parse (deno, `new Function`); ui-check at 390x844, nine trials of three runs, counts below; Ken's phone checks not done | Deviations from the spec, each small: `#lyrics-loading` and `CAPTION_NOTES.checking` are deleted here (commit 2 supersedes them) rather than in commit 3; a Play tap sets the breathing state whether the link is known or not, so the button breathes while the video buffers; the title and the line under it sit in a `#modal-video-head` wrapper; the page's outer `</div>` now closes after `{% endif %}` (before, it was inside the `{% if search_rows %}` block and unclosed on a page with no results); the download handlers take the id, title and watch link from the dialog's state instead of looking the card up. Typed (custom) searches keep latest-wins through `d.typedSeq`. Trial 5 run 1 failed on my check's lower bound (see below), not on the page |
 | 3 `feat(search): the dialog's lyric choice is one list of lyrics with an (i), and its button reads Queue` | | | | |
 | manual checks (Ken) | | n/a | | |
 
@@ -833,3 +833,36 @@ passed.
 
 Every call exited 0. No video in the table has a caption that fails the gate; the one sparse case
 (found, below the gate) is covered by the unit tests only.
+
+### Commit 2 ui-check (raw)
+
+Scripts `ui_trials.py` (async Playwright, from the ui-check venv) in the session scratchpad, not
+committed. The worktree app on port 5637, `FAKE_JOB_S=5`; a real YouTube search ("adele hello") per
+run; `/caption_check` and `/lyrics_search` answered by `page.route` after the delay each trial sets,
+`/lyrics_select` and `/download` faked in trial 7 so nothing downloads. Viewport 390x844. The
+dialog is polled every 100 ms from the click; the first card is whichever card YouTube puts first
+that run. Screenshots: `shots/commit2/t<trial>_r<run>_<state>.png` in the scratchpad (66 files).
+
+| trial | what | passes |
+| ----- | ---- | ------ |
+| 1 | caption passes at 1.5 s, Genius at 3 s: thumbnail, title, line under it and "Checking YouTube for captions…" at once; captions block at 1.5 s; the held list never shows; one `/caption_check`, one `/lyrics_search`, no `/preview` | 3/3 |
+| 2 | no caption at 1 s, Genius at 3 s: "Searching Genius for lyrics…" between; the list at 3 s | 3/3 |
+| 3 | sparse at 2 s, Genius at 0.5 s: the list at 2 s with the sparse note; "Searching Genius…" never shown | 3/3 |
+| 4 | Play tapped at 0.2 s, answer at 1.5 s with a link that answers 404: the Play button breathes, then "Preview unavailable"; one `/caption_check`, one `/lyrics_search`, no `/preview`; the captions block still shown | 3/3 |
+| 5 | an answer with no link: "Preview unavailable" with no tap, Play gone | 3/3 on the rerun; 2/3 on the first full run |
+| 6a | close at 0.5 s, open another card: the first card's answers (1.5 s, 3 s) change nothing; the second's own show | 3/3 |
+| 6b | the same, reopening the same card | 3/3 |
+| 7 | a card tapped during the fade-out after a download: the dialog stays open and shows that card | 3/3 |
+| 8 | a results copy with an old-style dialog in sessionStorage, back on Search by the nav link: one dialog on the page, the new one; a card opens it; no console errors | 3/3 |
+| 9 | reduced motion: with motion, `breathe` on the wait line and the waiting Play button; after `emulate_media`, `none` with opacity 1 and 0.5 | 3/3 |
+
+Two things went wrong during the run, neither in the page:
+
+- The first launch was on port 5591. Another session's ui-check launched its app on 5591 while this
+  run was going; `launch.sh` kills whatever listens on its port, so this run's app was replaced
+  (trial 5 onward saw connection errors). Every count above is from a second launch on port 5637,
+  over all ten trials.
+- Trial 5 run 1 failed `unavailable first at 0.994` against a lower bound of 1.0 s. The timeline
+  clock starts after the click returns, so it trails the request's delay by tens of ms; "Preview
+  unavailable" was off at 0.5 s and on at the answer. The bound became 0.9 s and trial 5 was rerun
+  alone: 3/3.
