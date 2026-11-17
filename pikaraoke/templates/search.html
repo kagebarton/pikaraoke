@@ -79,14 +79,20 @@
 		transition: opacity 0.3s ease;
 	}
 
+	/* Body: the title row, then the library copies noted on the card; fills the text column */
+	.search_result_items_body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		flex: 1;
+		min-width: 0;
+		text-align: left;
+	}
 	/* Meta: title fills space, button pinned right */
 	.search_result_items_meta {
 		display: flex;
 		align-items: center;
 		gap: 1rem;
-		flex: 1;
-		min-width: 0;
-		text-align: left;
 	}
 	.search_result_items_meta > div:first-child {
 		flex: 1;
@@ -96,14 +102,15 @@
 		flex-shrink: 0;
 	}
 
-	/* Library copy of a searched song, noted once above the results */
-	.similar-song {
+	/* A library copy of the searched song, noted on the first card it matches */
+	.search_result_items_body .library-copy {
 		display: flex;
 		align-items: center;
 		gap: 1rem;
-		margin-top: 0.5rem;
+		margin: 0;
+		padding: 0.5rem 0.75rem;
 	}
-	.similar-song > strong {
+	.library-copy > span {
 		flex: 1;
 		min-width: 0;
 	}
@@ -668,7 +675,7 @@
 		$(document).on("click.search", ".search_result_items_enqueue", function () {
 			enqueueLocalSong($(this).closest("li").attr("data-file-path"), this);
 		});
-		$(document).on("click.search", ".similar-song-enqueue", function () {
+		$(document).on("click.search", ".library-copy-enqueue", function () {
 			enqueueLocalSong($(this).attr("data-file-path"), this);
 		});
 
@@ -1286,17 +1293,6 @@ $(document).on("click.search", ".search_result_items_select", function () {
 			<small><i>'{{search_string}}'</i></small>
 			{%- endtrans %}
 		</label>
-		{% if similar_songs %}
-		<div class="notification is-info is-light similar-songs">
-			Already in the library:
-			{% for path in similar_songs %}
-			<div class="similar-song">
-				<strong>{{ filename_from_path(path) }}</strong>
-				<button class="button is-success is-small similar-song-enqueue" data-file-path="{{ path }}">Add to Queue</button>
-			</div>
-			{% endfor %}
-		</div>
-		{% endif %}
 		<div class="field">
 			<label class="checkbox is-flex is-align-items-center">
 				<input type="checkbox" checked id="add-to-queue-search" class="checkbox" />
