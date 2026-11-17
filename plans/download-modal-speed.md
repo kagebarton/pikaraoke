@@ -1,8 +1,8 @@
 # Download modal: open at once, one YouTube lookup
 
-Model: Claude Opus 5.5 writes the step-by-step spec for Claude Sonnet 5.5 from this brief
-(brief by Claude Fable 5.2, 2026-11-11; decisions 7-15 on the dialog's layout added by Claude
-Opus 5.5, 2026-11-17)
+Model: Claude Sonnet 5.5 executes the Spec section, commit by commit (spec by Claude Opus 5.5,
+2026-11-17; brief by Claude Fable 5.2, 2026-11-11; decisions 7-15 on the dialog's layout added
+by Claude Opus 5.5, 2026-11-17)
 
 Branch `download_modal_speed`, rebased onto `dev` at `764df44` on 2026-11-17 (first cut from
 `1016e20`), worktree
@@ -10,9 +10,9 @@ Branch `download_modal_speed`, rebased onto `dev` at `764df44` on 2026-11-17 (fi
 `models/` is symlinked in). Work and run everything from the worktree. If `dev` has moved,
 rebase onto it before the first code commit.
 
-This is a brief, not a spec: it fixes what Ken decided, what was measured, and what must hold.
-The function shapes, the route shape, the exact wording of each (i) note and the commit split
-are Opus's to write (see "For Opus to settle").
+Goal through "Overlap" is the brief: what Ken decided, what was measured, and what must hold.
+"Spec" is how, settled by Opus: Sonnet follows it, and where it is more specific than the brief,
+it wins.
 
 ## Goal
 
@@ -313,6 +313,8 @@ formats. Between 2026-11-11 and this re-check, `youtube_dl.py` and the `/preview
 
 ## For Opus to settle
 
+Settled in "Spec", O1-O13.
+
 - The shape and home of the combined lookup, and how `_check_caption` shares it with
   `check_video_caption` without changing `check_caption(job)` for the library tools.
 - The combined call's timeout. Today the link call gives up at 15 s and the caption call at
@@ -392,6 +394,418 @@ the same box `postDownload` sends (Constraints), and commit 7 repoints `postDown
 whichever lands second points the label at the surviving box. Its commit 8 renames the card's
 button to "Queue…" in `search_result.html`. Whichever lands second rebases.
 
+## Spec (Claude Opus 5.5, 2026-11-17)
+
+Line numbers are `764df44`'s. `dev` has not moved since, and the branch has no code of its own.
+
+### Settled by Opus
+
+O1-O13 answer the "For Opus to settle" items. O14-O17 are readings of the brief; Ken can
+overrule any of them.
+
+- **O1. The combined lookup.**
+  - `youtube_dl.py`: a module constant
+    `_MANUAL_EN_SUB_ARGS = ["--write-subs", "--sub-langs", "en.*", "--convert-subs", "srt"]`,
+    with a one-line comment: the video download and every caption fetch share it, so a fetched
+    caption is what a download would save. `build_ytdl_download_command`,
+    `download_manual_en_subs` and the new lookup all use it: one copy, not three.
+  - `_run_caption_command(video_url, dest_dir, stem, extra_args, timeout) -> bytes`: makes
+    `dest_dir`, runs `yt_dlp_cmd + ["--skip-download", *extra_args, *_MANUAL_EN_SUB_ARGS, "-o",
+    <dest_dir>/<stem>.%(ext)s] + _js_runtime_args() + _impersonate_args() + [video_url]` and
+    returns its stdout. It raises `CaptionDownloadFailed` on a timeout, a yt-dlp that can't run,
+    or a non-zero exit, with today's messages. `download_manual_en_subs` becomes this call with no
+    extra args and its 60 s, then `_select_en_srt`; its behaviour and tests do not change.
+  - `@dataclass(frozen=True) class VideoLookup` with `srt_path: str | None`,
+    `duration_s: float | None` and `stream_url: str | None`, one comment per field.
+  - `lookup_video(video_url, dest_dir, stem) -> VideoLookup`: `_run_caption_command` with
+    `--no-simulate`, `-f 18/worst[ext=mp4][protocol*=http]/worst[protocol*=http]`,
+    `--ignore-no-formats-error`, `--print url`, `--print duration` and the client setting
+    (`youtube:player_client=tv_simply,default`), whose comment from `6a6dfd2` moves over word
+    for word. Timeout: O2. Of stdout's non-empty lines, the first is the link when it starts
+    with `http` (yt-dlp prints `NA` when no format matched); the second is the length when it
+    parses as a float (`NA` for a live stream). `srt_path` comes from `_select_en_srt`. The
+    docstring says why `--no-simulate` (`--print` alone writes no caption) and why
+    `--ignore-no-formats-error` (a video with no playable format still answers the caption).
+  - Delete `get_preview_info`.
+  - `library_regen.py`: `_check_caption` splits in two. `_caption_scratch()` is a context
+    manager: `tempfile.mkdtemp(prefix="caption_check_", dir=get_temp_directory())`, removed in a
+    `finally`. `_measure_caption(srt_path, duration, name) -> CaptionCheck` is "not found" when
+    `srt_path` is None, else `_wpm` and `_caption_passes`. `check_caption(job)` keeps its
+    signature, its `download_manual_en_subs` call and its lazy length read (`media_duration` is
+    read only for a readable caption), so the library tools see no change.
+    `check_video_caption(video_id) -> tuple[CaptionCheck, str | None]` runs
+    `lookup_video(watch_url(video_id), <scratch>, video_id)` and measures against
+    `duration_s`. A failed lookup is `CaptionCheck(found=False, wpm=None, passed=False,
+    failed=True)` with no link. Both keep today's warning when a check can't run.
+  - `CaptionCheck` gains no field: `library_tools` serialises it (`asdict`,
+    `library_tools.py:1542`), so a link field would leak into the run status.
+- **O2. Timeout: 30 s**, inline, with a one-line reason: one lookup measured 4-6 s; 30 s
+  outlasts a slow day without leaving a guest a minute (the caption call's 60 s) before the
+  Genius list. A timeout reads as "could not check" in the dialog, as today.
+- **O3. The route keeps its name.** `/caption_check?yt_id=<id>` answers
+  `{found, passed, failed, stream_url}`, `stream_url` null when there is none; `duration`
+  goes. The caption answer is what the dialog waits on (decision 2) and the link rides along,
+  so the name still says what the route is for; its `url_for` and its tests stay put. `/preview`
+  and `PreviewQuery` are deleted.
+- **O4. The (i) notes**, from the mockup's. Each is one `.info-tip-line` in the markup, through
+  `{% trans %}`, with a `data-note` key. The script shows the lines that apply and hides the
+  rest (`is-hidden`), so no note text is built in the script.
+
+  | key          | shown when                                  | text |
+  | ------------ | ------------------------------------------- | ---- |
+  | `passed`     | the caption passed                          | This video has its own lyric captions, written for it rather than made by YouTube's speech recognition. They usually give the best timing. |
+  | `sparse`     | the caption is too sparse                   | This video's captions are too sparse to be lyrics. |
+  | `failed`     | the lookup could not answer                 | Could not check this video's captions. |
+  | `none`       | no manual English caption                   | This video has no captions of its own. |
+  | `title-hits` | the list holds the title search's hits      | These are Genius lyrics found from the video's title. Wrong song? Pick another, or search for other lyrics. |
+  | `title-none` | the title search found nothing              | Genius found nothing for the video's title. |
+  | `typed-hits` | the list holds a typed search's hits        | These are Genius lyrics found for what you typed. Pick the one that matches this video. |
+  | `empty`      | the list offers nothing                     | A song needs lyrics to become karaoke: search by title and artist, or pick another video. |
+
+  The captions screen's (i) holds `passed` only. The list layout's (i) shows one caption line
+  (`passed`, `sparse`, `failed` or `none`), then one Genius line (`title-hits`, `title-none` or
+  `typed-hits`), then `empty` only when the list offers nothing. Mockup screen 5's one sentence
+  becomes `none`, `title-none` and `empty`.
+- **O5. The (i) on the search page:** `search.html` loads `library-pages.css` and
+  `library-pages.js` and imports `info_tip`. Both files are already shared, every rule in them
+  is scoped by class, and the SPA loads each file once (`spa-navigation.js`,
+  `loadedResources`). Moving the (i) into files of its own would touch seven library templates
+  for no change in behaviour. The two files' header comments name the search page's dialog. The
+  hit label reuses `libraryPages.byline`.
+- **O6. What gets selected.** Every fill of the list selects the server's preselect, else
+  "Choose the lyrics" (decision 13). For "Other lyrics…" that is the Genius preselect (mockup
+  screen 6), or "Choose the lyrics" with YouTube captions one tap away. The server preselects
+  nothing for typed text, so a typed search always opens on "Choose the lyrics": Queue cannot
+  stay on lyrics the guest searched to replace.
+- **O7. A typed search that finds nothing** leaves the list and its selection as they were,
+  keeps the box open with the text, and shows "Nothing found for that search." under the box
+  until the next search. Replacing the list would drop YouTube captions, and decision 8 lets a
+  passing caption always be queued. An error answer reads the same, as today: `/lyrics_search`
+  answers 200 with no hits when Genius is down.
+- **O8. Reduced motion:** under `prefers-reduced-motion: reduce` the breathing line holds still
+  at full opacity, and a waiting Play button (O14) holds at half opacity.
+- **O9. The length** comes from a new `data-ytDuration="{{result.duration}}"` on the card's
+  `<li>`, beside `data-ytChannel`. The line under the title reads "channel · length", or
+  whichever exists, or is hidden when neither does (a card restored from a copy saved before
+  this change has no length).
+- **O10. Closing does not stop the lookup.** Aborting the request would not stop yt-dlp: the
+  server's request thread runs it to the end. Stopping it needs a record of processes per
+  request and a cancel route, to save about 5 s of one process. The dialog drops the late
+  answer (O12).
+- **O11. The open issue "A restored search page can show a stuck card":** the dialog's half is
+  fixed here; the card's half is not.
+  - The dialog moves out of `#container_search_result`, the element Show more's save copies,
+    to just after it and outside `{% if search_rows %}`, so a saved copy never holds the
+    dialog and a restored page still has one. A copy saved before this change holds its own
+    old dialog, with the same ids; the restore drops it before inserting the copy (one line
+    and a comment), so a phone tab restored after the update opens the new dialog.
+  - Every open rebuilds every part of the dialog (commit 2). Today's reset misses the list's
+    Download button, whose green success state carries into the next open.
+  - The card's half (an in-library button saved mid-flash) is not touched here, and
+    `search_official_captions` Part 2 rewrites that button. Reword the entry at landing.
+- **O12. Stale answers: one open number.** `stillShowing` (open, same video) lets an answer
+  from an earlier open of the same card through, and it can refill a list the guest is using.
+  Every open and every close bumps one counter; every answer (lookup, title search, typed
+  search) carries the number it was asked under and is dropped when that no longer matches.
+  Typed searches also keep latest-wins among themselves. This replaces `stillShowing` and
+  `_lyricsSeq`; the constraint they serve stays.
+- **O13. Three commits,** the brief's split, each leaving the page working: commit 1 keeps
+  today's dialog on the new route.
+- **O14. No spinner on Play** (reading). The brief's "the thumbnail shows a spinner" predates
+  decision 9 ("not a spinner, for every wait"), and the brief lists the video spinner among
+  what decisions 7-15 change. Tapped before the link, the Play button breathes with decision
+  9's animation, and the video starts when the link arrives. The thumbnail stays over the video
+  until it plays (`playing`), so the box never goes black while it buffers. The spinner
+  overlay and its CSS go.
+- **O15. No link, no Play** (reading). When the answer has no link, the Play button gives way
+  to "Preview unavailable" at once, rather than waiting for a tap on a button that cannot work.
+  A video that reports an error after Play shows the same, over the thumbnail.
+- **O16. One Queue path** (reading). Captions and Genius alike: post `/lyrics_select`, then on
+  success `/download`. Today the captions path sends both at once, so a download could start
+  before its choice is written. The video's id, link and title are taken at the tap, not read
+  from the dialog's state when the answer arrives.
+- **O17. A consequence of decision 8, recorded.** With Genius down or no Genius token set, a
+  video without a passing caption cannot be queued from the dialog. The direct URL in Advanced
+  still downloads it.
+
+### Before the first commit
+
+1. In the worktree: clean status on `download_modal_speed`, HEAD the commit that added this
+   spec. Fetch; if `dev` has moved past `764df44`, rebase onto it and recheck the line numbers
+   you rely on.
+2. Run the unit suite once untouched and note any failures, so failures older than the branch
+   are named in the Results log, not fixed.
+3. Read Part 2 of `search_official_captions`' plan:
+   `git show edd5fa3:plans/search-official-captions.md`, from "## Part 2".
+
+### Each commit
+
+- Pre-commit on the changed files; the unit suite
+  (`/home/ken/miniconda3/envs/pik/bin/python -m pytest tests/unit`), no failure the baseline
+  lacks; an import smoke of the changed modules (`pikaraoke.lib.youtube_dl`,
+  `pikaraoke.lib.library_regen`, `pikaraoke.routes.search`); `test_search_render.py` renders
+  `search.html`, so it covers the template.
+- Read `git diff --cached` against the commit's list below, then CLAUDE.md's self-review.
+  `graphify update .` only if `graphify-out/graph.json` exists.
+- The commit's Results row goes in a plan-only commit of its own.
+
+### Commit 1: `feat(search): one yt-dlp lookup answers the dialog's caption check and its preview link`
+
+Decision 3; O1, O2, O3. Files: `pikaraoke/lib/youtube_dl.py`, `pikaraoke/lib/library_regen.py`,
+`pikaraoke/routes/search.py`, `pikaraoke/templates/search.html`,
+`tests/unit/test_youtube_dl.py`, `tests/unit/test_library_regen.py`,
+`tests/unit/test_search_routes.py`.
+
+1. The server: O1, O2, O3.
+2. `search.html`, the least that keeps today's dialog working: `openPreviewModal` makes one
+   request, `/caption_check?yt_id=`, in place of `/preview` then `checkCaption`. A link in the
+   answer starts the video as today; then the caption answer branches as `checkCaption`'s
+   success and error handlers do now. Fold `checkCaption` into it and keep the rest, spinner and
+   autoplay included: commit 2 rewrites the open.
+3. Tests.
+   - `test_youtube_dl.py`: `TestLookupVideo` replaces `TestGetPreviewInfo`, with
+     `subprocess.run` mocked and `_default_patches`:
+     - one `subprocess.run` call, whose command carries `--skip-download`, `--no-simulate`,
+       `--ignore-no-formats-error`, the format, `--print url`, `--print duration`,
+       `-o <dest>/<stem>.%(ext)s`, the client setting (keep the old test's comment on why) and
+       the URL last;
+     - a link, a length and a written `<stem>.en.srt` come back together;
+     - `NA` for the link with a caption written: `stream_url` None, the caption still found;
+     - no caption written: `srt_path` None, the link kept;
+     - `NA` for the length: `duration_s` None;
+     - an error exit, a timeout and a missing yt-dlp each raise `CaptionDownloadFailed`
+       (parametrized as in `TestDownloadManualEnSubs`);
+     - the commands of `build_ytdl_download_command`, `download_manual_en_subs` and
+       `lookup_video` each carry `_MANUAL_EN_SUB_ARGS` as one unbroken run.
+   - `test_library_regen.py`: `TestCheckVideoCaption` fakes `lr.lookup_video` in place of
+     `download_manual_en_subs`. Its three tests stay, unpacking `(check, link)`. New: the link
+     comes back with the answer; a lookup with no link answers the caption the same; a failed
+     lookup answers `failed=True` with no link. The fixture's empty-scratch assert stays.
+     `TestCheckCaption` must pass unchanged.
+   - `test_search_routes.py`: `TestCaptionCheck` mocks `check_video_caption` returning
+     `(CaptionCheck, link)`: it is called with the id alone; the answer has the four keys,
+     `stream_url` null when there is no link; an invalid id answers 400 as now. Delete
+     `test_preview_returns_the_video_length`; `/preview` answers 404. One test through the route
+     with only `subprocess.run` mocked (plus `library_regen.get_temp_directory` pointed at
+     `tmp_path` and `_default_patches`; the fake run writes a 60-word caption where `-o` says):
+     `GET /caption_check?yt_id=dQw4w9WgXcQ` makes exactly one yt-dlp call and answers passed with
+     the link. Update the module docstring.
+4. Measure before committing, on the VM against real YouTube (scripts in the scratchpad, not
+   committed). For at least five videos (the two in Measurements, at least one with no manual
+   English caption, the rest your pick), run `download_manual_en_subs` and `lookup_video` into
+   folders under `get_temp_directory()`, and record per video: found by each, each caption's
+   word count, the lookup's time, and the link's status from one ranged GET with an Android
+   Chrome user agent. Add one row for a captioned video with the client setting changed to
+   `no_such_client,default` in the working tree; put it back and check `git status` before
+   committing. **If any video's caption answer differs between the two functions, do not
+   commit: stop and report the table.** The Results row carries the table raw.
+
+### Commit 2: `feat(search): the download dialog opens at once on the thumbnail and says what it waits for`
+
+Decisions 1, 2 and 9; O8-O12, O14, O15. Files: `search.html`, `search_result.html`,
+`tests/unit/test_search_render.py`. Today's lyric widgets stay; commit 3 replaces them.
+
+1. The card: `data-ytDuration` (O9).
+2. The dialog's markup moves after `#container_search_result` and out of
+   `{% if search_rows %}`; the restore drops a saved copy's own dialog (O11).
+3. The top of the dialog: the title; `#modal-video-meta` (O9); the 16:9 box holds the
+   `<video>`, always rendered (`controls playsinline muted preload="metadata"` as today), under
+   `#modal-thumb-layer`. The layer holds the card's own thumbnail (its `img` src, so nothing new
+   is fetched; `object-fit: cover`), a round Play button `#modal-play` (`icon-play`,
+   `aria-label` "Play preview" through `_()`), and "Preview unavailable"
+   `#modal-preview-unavailable`, hidden. Delete `#video-loading-overlay`, `.video-spinner` and
+   `@keyframes video-spin`.
+4. The breathing line `#lyrics-wait`, in `#lyrics-section` just before where Queue appears: a
+   large, bold, centred line (mockup: 24 px, about 36 px below the thumbnail) whose opacity
+   breathes from 0.35 to 1 and back over 2.4 s. While the dialog waits it is the only thing in
+   the lyric section. O8 under reduced motion.
+5. State: one object for the open dialog, made anew on every open. It holds the open number
+   (O12), the video (id, title, channel, link to the watch page), the caption answer (not yet,
+   passed, sparse, failed, none), the stream link (not yet, none, a URL), whether Play waits,
+   the title search's answer (not yet, or `{hits, preselect}`) and which view shows. Opening
+   fills the top from the card with no request, then starts both requests at once:
+   - `/caption_check?yt_id=`; an error answer reads as failed, with no link;
+   - `/lyrics_search` with `title`, `channel` (always sent) and `typed` from
+     `pikaraoke_search_term`, as `searchLyricsForActiveVideo` sends today; an error answer
+     reads as no hits. The answer is held, not shown.
+6. One render step sets the lyric section from the state, each time an answer arrives or the
+   guest acts:
+   - no caption answer yet: `#lyrics-wait` "Checking YouTube for captions…" alone;
+   - the caption passed: today's captions block, at once, whether or not Genius has answered;
+   - any other caption answer, or after "More options": the held list at once, with today's
+     sparse or failed note; while the title search hasn't answered, `#lyrics-wait`
+     "Searching Genius for lyrics…" instead. Today's custom search shows the same line while it
+     runs, in place of "Searching lyrics...".
+   - "More options" shows the held answer and does not search again.
+7. Play:
+   - link known: inside the tap, set the video's `src`, `load()`, `play()`;
+   - link not known yet: inside the tap, today's unlock (`play()` the empty video, then
+     `pause()`; lines 976-979 move here from the open), and the Play button breathes (O14); a
+     link in the answer then starts the video, and no link gives O15;
+   - an answer with no link: O15 at once, tapped or not;
+   - the video's `playing` event hides the layer. Its `error` event, while this dialog is open
+     and the video has a `src`, brings the layer back with "Preview unavailable". Bind both
+     once when the script runs, not on each open: today's per-open `playing` listener piles up
+     whenever a video never plays.
+8. Close and reset: closing bumps the open number, pauses the video and clears its `src` as
+   today. One reset, run on open and on close, puts back every element the dialog changes: the
+   top, the layer, the views, the list, the custom box and its input, the notes, every button's
+   classes, `disabled` and text, and the wait line (O11). The fade's delayed close closes only
+   the dialog it faded (its open number), and an open removes `is-fading-out`: today a card
+   tapped during the 2 s fade opens a dialog that the fade then closes, unseen.
+9. Rewrite the "Flow:" comment (lines 659-674) for the new order.
+10. Test (`test_search_render.py`): a card carries `data-ytduration` with the result's length,
+    and an empty one when YouTube gave none.
+11. ui-check (`.claude/skills/ui-check`; script in the scratchpad, not committed). Launch the
+    worktree, run a real search, and fake `/caption_check` and `/lyrics_search` with Playwright's
+    `page.route`, each answering after a delay the trial sets. Screenshot every state at
+    390×844. Run each trial three times and record the pass counts:
+    1. the caption passes at 1.5 s, Genius at 3 s: thumbnail, title, the line under it and
+       "Checking YouTube for captions…" at once; the captions block at 1.5 s; one
+       `/caption_check` request;
+    2. no caption at 1 s, Genius at 3 s: "Searching Genius for lyrics…" between; the list at 3 s;
+    3. sparse at 2 s, Genius at 0.5 s: the list at 2 s, with no second wait;
+    4. Play tapped at 0.2 s, the answer at 1.5 s with a link that answers 404: the Play button
+       breathes, then "Preview unavailable"; no request beyond the two at open, none on Play;
+    5. an answer with no link: "Preview unavailable" with no tap;
+    6. close at 0.5 s and open another card: the first card's late answers change nothing; the
+       same when the same card is reopened;
+    7. a card tapped during the fade-out after a download opens a dialog that stays open;
+    8. a results copy saved in sessionStorage with an old-style dialog inside: back on Search,
+       a card opens the new dialog;
+    9. reduced motion (`emulate_media`): the line has no animation.
+    If ui-check can't launch (the RDP drive not mounted), say so in the Results row and leave
+    these to Ken.
+
+### Commit 3: `feat(search): the dialog's lyric choice is one list of lyrics with an (i), and its button reads Queue`
+
+Decisions 7, 8 and 10-15; O4-O7, O16. Files: `search.html`, `pikaraoke/routes/search.py`,
+`static/library-pages.css` and `static/library-pages.js` (header comments only),
+`tests/unit/test_search_routes.py`, `tests/unit/test_search_render.py`.
+
+1. `search.html` loads `library-pages.css` and `library-pages.js` in its scripts block and
+   imports `info_tip` (O5).
+2. The lyric section's markup, in this order (mockup screens 2-5):
+   - `#lyrics-caption-view`: `Lyrics: <strong>YouTube captions</strong>` (one `{% trans %}`)
+     with its (i), the `passed` line.
+   - `#lyrics-list-view`: the label "Lyrics" (`<label for="lyrics-dropdown">`) with its (i)
+     holding all of O4's lines; `#lyrics-select-wrap` (`select is-fullwidth`, no `is-small`)
+     around `#lyrics-dropdown`; `#lyrics-empty` "No lyrics found for this video.", in the
+     warning colour, in the list's place (mockup screen 5); `#lyrics-search-open` "Search for
+     other lyrics…" (outlined, full width, 44 px, `icon-search`); `#lyrics-custom-search`
+     holding the label "Type the song title and artist", the input and a Search button; under
+     it, `#lyrics-search-none` "Nothing found for that search.", hidden. Keep the ids
+     `lyrics-custom-input` and `lyrics-custom-btn`: the page-wide Enter handler (line 277)
+     exempts the input by its id, until `search_official_captions` commit 6 deletes that
+     handler.
+   - `#lyrics-wait` (commit 2).
+   - One `#lyrics-queue-btn` (`is-primary is-fullwidth`, 48 px, bold) for both views.
+   - `#lyrics-other`: "Other lyrics…" as a link-styled `<button>` with a 44 px tap area, in the
+     captions view only.
+   - Delete `#lyrics-caption-note`, `#lyrics-loading`, `#lyrics-srt-primary` with
+     `#lyrics-srt-note` and `#lyrics-srt-btn`, `#lyrics-more-options`, `#lyrics-results-label`,
+     `#lyrics-download-wrap` with `#lyrics-download-btn`, the input's placeholder,
+     `CAPTION_NOTES`, and the CSS of each.
+3. The label rows: "Lyrics" and "Lyrics: YouTube captions" at one size (mockup: 15 px). The
+   (i)'s icon sits about 4 px after the label's last letter, through a negative left margin on
+   `.info-tip-btn` in a rule scoped to the dialog; the 36 px button keeps its size (decision 10).
+4. The list's arrow (decision 14): delete the `⌄` rule and the rule that hides Bulma's arrow.
+   Bulma 1.0.4's own arrow is drawn with borders and sized in `em`, and `bulma-dark.css` already
+   colours it `--dark-link`. Give `#lyrics-select-wrap` the list's font size
+   (`--lyrics-dropdown-font-size`), so the box is 44 px and the arrow scales with it, and give
+   the arrow a 3 px border (mockup).
+5. The list (decision 13), filled by one function from the answer it shows: a "YouTube" group
+   holding `__srt__` "YouTube captions (recommended)" when the caption passed; a "Genius.com"
+   group of hits, each "title — " + `libraryPages.byline(hit)`; the disabled "Choose the lyrics"
+   first when nothing is selected (O6). No other group, no emoji. With neither group:
+   `#lyrics-empty` in the list's place, the box open by itself and not focused (focus would
+   raise a phone's keyboard over the dialog), the search button hidden, Queue disabled
+   (decision 8).
+6. The views:
+   - the caption passed: the captions view. "Other lyrics…" switches to the list view on the
+     held title answer, selected by O6; until the title search answers, "Searching Genius for
+     lyrics…".
+   - any other caption answer: the list view.
+   - The list view's (i) shows O4's lines for the moment's state.
+7. Searching for other lyrics: the button gives way to the box and focuses the input. Search or
+   Enter with text hides `#lyrics-search-none`; while the search runs, `#lyrics-wait`
+   "Searching Genius for lyrics…" stands in Queue's place. With hits, the Genius group is
+   replaced, the selection is "Choose the lyrics" (O6) and the Genius line becomes
+   `typed-hits`. With none: O7. The box stays open after either.
+8. Queue (decision 15).
+   - `queueAfterDownload()` returns the tick of `#add-to-queue-search`. `postDownload` and the
+     button's label both read it, so what the button says and what happens cannot disagree.
+   - The label reads "Queue" when ticked and "Add to library" when not, set on every render.
+     The button is enabled in the captions view, and in the list view when something is
+     selected.
+   - A tap (O16): take the video from the state; disable the button, with no spinner (decision
+     9); post `/lyrics_select` (`mode: "srt"` from the captions view or for `__srt__`, else
+     `genius_id`); on success `postDownload`, the label "Queued" or "Added" with today's check
+     icon, and `fadeOutPreviewModal(1000)`; on an error, today's "!" flash, then back.
+9. Strings: the script's (the wait lines, the four Queue labels, "Choose the lyrics", "Preview
+   unavailable", the group and option labels) sit in one object through
+   `{{ _("…") | tojson }}`; the markup's go through `{% trans %}`. "…" is U+2026. The catalogs
+   are not regenerated.
+10. `/lyrics_select` (decision 7): `mode` accepts only `"srt"`, the error message says so, and
+    the docstring loses `raw`. The pipeline's `raw` branch and the library tools' transcribe
+    choice are untouched.
+11. Tests.
+    - `test_search_routes.py`: the `mode: raw` test becomes "`raw` answers 400 and writes
+      nothing". New: `srt` answers 204 and writes `{"yt_id": …, "mode": "srt"}` (no test covers
+      it today).
+    - `test_search_render.py`: the results page loads `library-pages.css` and
+      `library-pages.js`; the dialog holds an `info-tip`; the page has no `__raw__`,
+      "Raw Transcription", "Other Options" or `__custom__`; `id="lyrics-custom-input"` appears
+      exactly once.
+12. ui-check, as in commit 2, with `/lyrics_select` and `/download` also faked so nothing
+    downloads; record their bodies. Screenshot every state at 390×844 beside the mockup's
+    screen; three runs of each, pass counts in the Results row:
+    1. the caption passed: "Lyrics: YouTube captions", Queue and "Other lyrics…", no search
+       button; Queue posts `mode: "srt"`, then `/download`;
+    2. "Other lyrics…": the YouTube group, then the Genius group, the preselect selected; with
+       no preselect, "Choose the lyrics" and Queue disabled;
+    3. sparse, hits, no preselect: "Choose the lyrics", Queue disabled until a pick; the (i)
+       shows `sparse` and `title-hits`;
+    4. no caption, no hits: "No lyrics found for this video.", the box open and not focused, no
+       search button, Queue disabled; the (i) shows `none`, `title-none` and `empty`;
+    5. a typed search with hits: "Choose the lyrics"; with none: the list and its selection
+       unchanged, "Nothing found for that search.";
+    6. the box ticked: "Queue", then "Queued", `/download` sent `queue: true`; unticked: "Add
+       to library", "Added", `queue: false`;
+    7. the list is 44 px tall and its arrow is Bulma's `::after`, with no `::before`.
+
+### Stop
+
+After commit 3 and its Results row. Don't push, land or retire anything. Report a Review-due
+checkpoint for commits 1-3 (several files, a helper the library tools share, and a client state
+machine with answers racing each other): the `/code-review` line with the commit range, the
+files, and one finder angle per Self-Review axis.
+
+### Manual checks (Ken, on phones)
+
+- [ ] Each screen matches the mockup's lower row. Where they differ, the decisions win (the
+  card reads "Queue…", decision 15).
+- [ ] The list's arrow sits right on Android Chrome.
+- [ ] iPhone (Safari) and Android (Chrome): Play tapped before the wait ends starts the video
+  once it ends; tapped after, it starts at once.
+- [ ] A video with a good manual caption: the captions screen after one wait. A video without:
+  the Genius list the moment the wait ends.
+- [ ] "Add to queue after download" unticked: the dialog reads "Add to library", and the song
+  downloads without joining the queue.
+
+### At landing (not this run)
+
+- `plans/open-issues.md` on `dev`: reword "A restored search page can show a stuck card" to
+  the card's half only (O11), in a plan-only commit.
+- Whichever of this branch and `search_official_captions` Part 2 lands second points
+  `queueAfterDownload()` at the surviving box (`#add-to-queue` after Part 2's commit 7), and
+  rebases over `search_result.html` and `search.html`, which both edit.
+
 ## Results log
 
-(empty)
+| commit | hash | unit tests | checks | notes |
+| ------ | ---- | ---------- | ------ | ----- |
+| 1 `feat(search): one yt-dlp lookup answers the dialog's caption check and its preview link` | | | | |
+| 2 `feat(search): the download dialog opens at once on the thumbnail and says what it waits for` | | | | |
+| 3 `feat(search): the dialog's lyric choice is one list of lyrics with an (i), and its button reads Queue` | | | | |
+| manual checks (Ken) | | n/a | | |
