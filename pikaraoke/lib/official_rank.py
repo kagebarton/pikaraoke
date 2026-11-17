@@ -30,14 +30,15 @@ _SEPARATOR = re.compile(r"\s+[-–—|]\s+|\s*[–—|]\s*")
 _SQUARE = re.compile(r"\[[^\]]*\]|【[^】]*】")
 _ROUND = re.compile(r"\(([^)]*)\)")
 _BRACKETED = re.compile(rf"\([^)]*\)|{_SQUARE.pattern}")
-_UNCLOSED = re.compile(r"\([^)]*$")  # a bracket the title cuts off
-# An opening quote, which is not the apostrophe inside "Don't".
-_OPENING_QUOTE = re.compile(r"""(?<![A-Za-z0-9])['"‘“「『]""")
+_UNCLOSED = re.compile(r"[(\[【][^)\]】]*$")  # a bracket the title cuts off
+# A quoted song: a quote with no letter or digit before it (not the apostrophe in "Don't") that
+# closes ("Don't Stop 'Til You Get Enough" quotes nothing). 「」 and 『』 are never apostrophes.
+_QUOTED = re.compile(r"""(?<!\w)(?:'[^']*'|"[^"]*"|‘[^’]*’|“[^”]*”)|「[^」]*」|『[^』]*』""")
 _COLLAB = re.compile(
     r"\s*(?:,|&|\bx\b|\bft\b\.?|\bfeat\b\.?|\bfeaturing\b|\bwith\b|\band\b)\s*", re.I
 )
 _CHANNEL_NOISE = re.compile(r"\b(official|vevo|music|videos?|records|topic|channel|tv)\b", re.I)
-_CHANNEL_SUFFIX = re.compile(r"(?:official|vevo|music|tv|videos?)$")
+_CHANNEL_SUFFIX = re.compile(r"(?:official|vevo|music|tv|videos?|show)$")
 _LABEL_CHANNEL = re.compile(r"vevo$|\b(?:records|recordings|labels?)\b", re.I)
 # Uploads that are about the song but are not the record: the app overlays its own lyrics, and
 # live, remix or acapella audio does not match the record. A mark the query holds is the song's
@@ -46,7 +47,7 @@ _NOT_THE_RECORD = re.compile(
     r"\b(lyrics?|sing[- ]?along|live|concert|cover|karaoke|remix|instrumental|acoustic|"
     r"trailer|reaction|behind the|choreography|tutorial|lesson|sped up|slowed|8d|"
     r"multi[- ]language|scene|clip|a ?cappella|acapella|"
-    r"demo|rehearsal|making of|footnotes|performs?|performance)\b",
+    r"demo|rehearsal|making of|footnotes|performs?|performance|unplugged)\b",
     re.I,
 )
 _AUDIO = re.compile(r"\baudio\b", re.I)
@@ -56,7 +57,9 @@ _SAYS_OFFICIAL = re.compile(
 )
 _SAYS_VERSION = re.compile(r"\b(?:version|edition|edit|remaster(?:ed)?)\b", re.I)
 # "feat. X", "with X", "from Film": guests and the film, up to the bracket or segment end.
-_GUESTS_AND_FILM = re.compile(r"\b(?:feat|ft|featuring|with|from)\b\.?[^()\[\]/|]*", re.I)
+_GUESTS_AND_FILM = re.compile(
+    rf"\b(?:feat|ft|featuring|with|from)\b\.?(?:(?!{_SEPARATOR.pattern})[^()\[\]/|])*", re.I
+)
 # Words a title may carry beyond act and song without saying what it is.
 _PLAIN_WORDS = frozenset(
     "official music video audio hd hq 4k mv explicit clean only the a an of and".split()
@@ -141,7 +144,8 @@ def _channel_artist(result: SearchResult) -> str:
 
 def _channel_name(result: SearchResult) -> str:
     """``_channel_artist`` without a trailing "VEVO", "Music" and the like that the channel
-    spells into its name ("EminemMusic", "PhilosopherKingsVEVO"), and without a leading "the"."""
+    spells into its name ("EminemMusic", "PhilosopherKingsVEVO", "KoolandthegangShow"), and
+    without a leading "the"."""
     name = _channel_artist(result)
     while (match := _CHANNEL_SUFFIX.search(name)) and match.start() > 0:
         name = name[: match.start()]
@@ -178,8 +182,8 @@ def _quoted_song_artists(title: str) -> set[str]:
         return " " * len(match.group())  # positions must not move
 
     outside = _UNCLOSED.sub(blank, _BRACKETED.sub(blank, title))
-    quote = _OPENING_QUOTE.search(outside)
-    if quote is None or quote.start() == 0:
+    quote = _QUOTED.search(outside)
+    if quote is None:
         return set()
     head = _SQUARE.sub(" ", title[: quote.start()])
     names = {_compact(_ROUND.sub(" ", head))} | {_compact(alias) for alias in _ROUND.findall(head)}
@@ -255,9 +259,14 @@ def _is_the_song(
 
 def _is_own_channel(result: SearchResult, names: set[str]) -> bool:
     """A trusted channel named for one of the row's acts. Equal, not contained: the fan channel
-    "ePro Team: Support for Eminem" is not Eminem's."""
+    "ePro Team: Support for Eminem" is not Eminem's. A channel whose name reads as nothing
+    ("Official Music") is no one's."""
     channel = _channel_name(result)
-    return _is_trusted(result) and any(name.removeprefix("the") == channel for name in names)
+    return (
+        bool(channel)
+        and _is_trusted(result)
+        and any(name.removeprefix("the") == channel for name in names)
+    )
 
 
 def _is_label_channel(result: SearchResult) -> bool:
@@ -349,8 +358,10 @@ def read_first_page(results: Sequence[SearchResult], query: str) -> Acts:
     page lifts any video. Each step needs the one before.
 
     Pass only the first page: over more rows the vote drifts to whoever uploaded the most
-    variants of the song.
+    variants of the song. A query the matching cannot read knows nothing.
     """
+    if _has_letters_without_ascii(query):
+        return Acts()
     originals = _pick_originals(results, _words(query))
     acts = Acts(originals)
     record_words = frozenset(
