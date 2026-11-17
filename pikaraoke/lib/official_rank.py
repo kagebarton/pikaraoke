@@ -3,8 +3,9 @@
 YouTube buries the official upload among lyric videos, covers, live sessions and re-uploads. Which
 act is the original is not known, so it is voted from the results: the rows YouTube vouches for (a
 verified channel, or a label-distributed "art track") name the act in their titles and channels.
-A row lifts only when it is the song, comes from the act or its label, and says what it is. Every
-rule errs toward lifting nothing, because a miss costs only YouTube's own order. There is no
+A row lifts only when it is the song, comes from the act or its label, and says what it is. Another
+act's video lifts only from a label channel, after the original's (a film song's second cast).
+Every rule errs toward lifting nothing, because a miss costs only YouTube's own order. There is no
 caption lookup, which is too slow for a search: the ranking is a guess from title and channel.
 """
 
@@ -15,11 +16,12 @@ import unicodedata
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from pikaraoke.lib.youtube_dl import SearchResult
 
 OfficialKind = Literal["video", "audio"]
+_Tier = Literal["original", "other"]  # whose upload: an original's, or another act's on a label
 
 # An act needs this many trusted credits to be an original.
 _MIN_CREDITS = 2
@@ -59,6 +61,17 @@ _GUESTS_AND_FILM = re.compile(r"\b(?:feat|ft|featuring|with|from)\b\.?[^()\[\]/|
 _PLAIN_WORDS = frozenset(
     "official music video audio hd hq 4k mv explicit clean only the a an of and".split()
 )
+
+
+class _Lift(NamedTuple):
+    tier: _Tier
+    kind: OfficialKind
+
+
+# Where a row goes: the originals' videos (and their audio when no video lifts), other acts'
+# videos, then everything else.
+_FIRST, _AFTER_FIRST, _REST = 0, 1, 2
+_VIDEO_PLACE: dict[_Tier, int] = {"original": _FIRST, "other": _AFTER_FIRST}
 
 
 @dataclass(frozen=True)
@@ -240,17 +253,46 @@ def _is_the_song(
     return found == 1.0 or not _unexplained(outside, query_words, names)
 
 
-def _comes_from_the_act(result: SearchResult, names: set[str]) -> bool:
-    """An art track; a trusted channel named for one of the row's acts (equal, not contained: the
-    fan channel "ePro Team: Support for Eminem" is not Eminem's); or a verified label channel.
-
-    Only the channel's name makes it a label's: the verified fan channel "Disney¡Fan!" titles its
-    re-uploads "Official Music Video".
-    """
+def _is_own_channel(result: SearchResult, names: set[str]) -> bool:
+    """A trusted channel named for one of the row's acts. Equal, not contained: the fan channel
+    "ePro Team: Support for Eminem" is not Eminem's."""
     channel = _channel_name(result)
-    own = _is_trusted(result) and any(name.removeprefix("the") == channel for name in names)
-    label = result.channel_verified and bool(_LABEL_CHANNEL.search(result.channel))
-    return _is_art_track(result) or own or label
+    return _is_trusted(result) and any(name.removeprefix("the") == channel for name in names)
+
+
+def _is_label_channel(result: SearchResult) -> bool:
+    """A verified channel whose name ends in "VEVO" or says Records, Recordings or Label. Only the
+    name makes a channel a label's: the verified fan channel "Disney¡Fan!" titles its re-uploads
+    "Official Music Video"."""
+    return result.channel_verified and bool(_LABEL_CHANNEL.search(result.channel))
+
+
+def _is_the_originals_upload(
+    result: SearchResult, query_words: Sequence[str], names: set[str], credited: set[str]
+) -> bool:
+    """The song, from the act itself (art track or own channel) or its label. ``credited`` are
+    the originals the row names."""
+    # Only those names are struck from the song words. Striking every original's would strike
+    # the song itself when its name tied the vote ("under the sea").
+    song_words = [word for word in query_words if not any(word in name for name in credited)]
+    return _is_the_song(result.title, song_words, query_words, names) and (
+        _is_art_track(result) or _is_own_channel(result, names) or _is_label_channel(result)
+    )
+
+
+def _is_another_cast_on_a_label(
+    result: SearchResult, query_words: Sequence[str], names: set[str]
+) -> bool:
+    """Another act's video of the song on a label channel (DisneyMusicVEVO's second cast of a
+    film song). Never from the act's own channel, which would lift every other song of that
+    name, and only when the query names nothing the row lacks, so "queen bohemian rhapsody"
+    keeps covers out."""
+    return (
+        _is_label_channel(result)
+        and not _is_own_channel(result, names)
+        and _share_found(query_words, f"{result.title} {result.channel}") == 1.0
+        and _is_the_song(result.title, query_words, query_words, names)
+    )
 
 
 def _says_what_it_is(
@@ -266,31 +308,40 @@ def _says_what_it_is(
     return not _unexplained(title, query_words, names) - acts.record_words
 
 
-def official_kind(result: SearchResult, query: str, acts: Acts) -> OfficialKind | None:
-    """Whether ``result`` is an original act's official video or audio of the song.
-
-    ``channel_is_verified`` alone cannot say so: it is on for lyric channels, karaoke channels,
-    the Muppets and a movie trailer, and an unverified fan channel can title its re-upload
-    "(official music video)". So the row must be the song, come from the act, and, as a video,
-    say what it is. Audio is spared that last test: it is never captioned either way.
-    """
+def _lift(result: SearchResult, query: str, acts: Acts) -> _Lift | None:
+    """Whose official video or audio of the song ``result`` is, or None."""
     if _has_letters_without_ascii(query) or _marks(result.title) - _marks(query):
         return None
     query_words = _words(query)
     names = _row_names(result, query_words)
+    if not names:
+        return None
+    is_audio = _is_art_track(result) or bool(_AUDIO.search(result.title))
     credited = names & acts.originals
-    if not credited:
+    if credited:
+        tier: _Tier = "original"
+        found = _is_the_originals_upload(result, query_words, names, credited)
+    else:
+        tier = "other"
+        found = not is_audio and _is_another_cast_on_a_label(result, query_words, names)
+    if not found:
         return None
-    # Only the names this row credits are struck from the song words. Striking every original's
-    # would strike the song itself when its name tied the vote ("under the sea").
-    song_words = [word for word in query_words if not any(word in name for name in credited)]
-    if not _is_the_song(result.title, song_words, query_words, names):
-        return None
-    if not _comes_from_the_act(result, names):
-        return None
-    if _is_art_track(result) or _AUDIO.search(result.title):
-        return "audio"
-    return "video" if _says_what_it_is(result, query_words, names, acts) else None
+    if is_audio:
+        return _Lift(tier, "audio")
+    return _Lift(tier, "video") if _says_what_it_is(result, query_words, names, acts) else None
+
+
+def official_kind(result: SearchResult, query: str, acts: Acts) -> OfficialKind | None:
+    """Whether ``result`` is an official video or audio of the song, and which.
+
+    ``channel_is_verified`` alone cannot say so: it is on for lyric channels, karaoke channels,
+    the Muppets and a movie trailer, and an unverified fan channel can title its re-upload
+    "(official music video)". So the row must be the song, come from the act or a label, and, as
+    a video, say what it is. Audio is spared that last test (it is never captioned either way),
+    and only an original's audio is ever lifted or badged.
+    """
+    lift = _lift(result, query, acts)
+    return lift.kind if lift else None
 
 
 def read_first_page(results: Sequence[SearchResult], query: str) -> Acts:
@@ -316,12 +367,21 @@ def read_first_page(results: Sequence[SearchResult], query: str) -> Acts:
 def official_first(
     results: Sequence[SearchResult], query: str, acts: Acts
 ) -> list[tuple[SearchResult, OfficialKind | None]]:
-    """The rows in display order with their kinds: the originals' videos first, then YouTube's
-    order. A kind is a badge, not a promise that the row moved.
+    """The rows in display order with their kinds: the originals' videos, other acts' videos,
+    then YouTube's order. A kind is a badge, not a promise that the row moved.
 
     The originals' audio goes first only when no video is lifted, here or on the first page: it
     is almost never captioned, so beside a video it keeps its place. Stable.
     """
-    kinds = [official_kind(result, query, acts) for result in results]
-    lifted = {"video"} if acts.has_video or "video" in kinds else {"video", "audio"}
-    return sorted(zip(results, kinds), key=lambda pair: pair[1] not in lifted)
+    lifts = [_lift(result, query, acts) for result in results]
+    video_lifted = acts.has_video or any(lift and lift.kind == "video" for lift in lifts)
+
+    def place(lift: _Lift | None) -> int:
+        if lift is None:
+            return _REST
+        if lift.kind == "video":
+            return _VIDEO_PLACE[lift.tier]
+        return _REST if video_lifted else _FIRST
+
+    order = sorted(range(len(results)), key=lambda i: (place(lifts[i]), i))
+    return [(results[i], lifts[i].kind if lifts[i] else None) for i in order]
