@@ -15,7 +15,9 @@ from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name, is_ad
 from pikaraoke.lib.genius import GeniusUnavailable
 from pikaraoke.lib.library_regen import (
     CUSTOM_ORIGIN,
+    LRC_AUTO_ORIGIN,
     LRC_ORIGIN,
+    LRC_ORIGINS,
     MOVIE_ORIGIN,
     SHEETS,
     RegenError,
@@ -213,7 +215,7 @@ def _name_of_origin(origin: str | None) -> str | None:
         return _("Custom lyrics")
     if origin == MOVIE_ORIGIN:
         return _("Movie subtitles")
-    if origin == LRC_ORIGIN:
+    if origin in LRC_ORIGINS:
         return "LRCLIB"
     if origin == "srt":
         return _("YouTube captions")
@@ -260,7 +262,7 @@ def _timed_tile(status: SongStatus) -> Tile:
 
 def _lrclib_tile(status: SongStatus) -> Tile:
     label = "LRCLIB"
-    if status.origin == LRC_ORIGIN:
+    if status.origin in LRC_ORIGINS:
         return Tile(label, _("Timing"), _("times this song"))
     if status.lrclib_state == "n/a":
         return Tile(label, "—", _("Genius or custom lyrics only"))
@@ -299,6 +301,20 @@ def _lrclib_pick(status: SongStatus) -> str:
     if match.get("duration") is not None:
         text += f" · {_mmss(match['duration'])}"
     return text
+
+
+def _download_check_note(status: SongStatus) -> str | None:
+    """The line under a song's LRCLIB pick when the download checked LRCLIB and timed the song
+    another way: that no record passed, or that the check could not run."""
+    outcome = (status.lrclib_auto or {}).get("outcome")
+    if outcome in ("no_pick", "no_records"):
+        return _("Checked at download: no LRCLIB record passed the timing check.")
+    if outcome in ("search_failed", "error"):
+        return _(
+            "LRCLIB could not be checked at download. "
+            "Repair lyrics can time this song from LRCLIB by hand."
+        )
+    return None
 
 
 def _alignment(status: SongStatus) -> Alignment | None:
@@ -397,6 +413,10 @@ def _cue_route_text(status: SongStatus) -> str:
         return _("Lyrics from the movie's subtitles, timed against the subtitles' own line times.")
     if status.origin == LRC_ORIGIN:
         return _("Lyrics from an LRCLIB match, timed against its own line times.")
+    if status.origin == LRC_AUTO_ORIGIN:
+        return _(
+            "Lyrics from an LRCLIB match picked at download, timed against its own line times."
+        )
     return _("Lyrics from the YouTube caption, timed against the caption's own line times.")
 
 
@@ -450,7 +470,13 @@ def _versions(history: list[HistoryEntry]) -> list[Version]:
     for i, entry in enumerate(history):
         older = history[i + 1] if i + 1 < len(history) else None
         lrclib_id = (entry.lrclib or {}).get("id")
-        if entry.genius:
+        # Before the Genius test: an automatic pick's bundle keeps that identity.
+        if entry.origin == LRC_AUTO_ORIGIN:
+            genius_text = (
+                _("LRCLIB timing (auto, edited)") if entry.edited else _("LRCLIB timing (auto)")
+            )
+            lrclib_text = None
+        elif entry.genius:
             genius_text = _("Genius · %(artist)s") % {"artist": entry.genius.get("artist", "")}
             lrclib_text = _lrclib_label(entry.lrclib)
         elif entry.origin == CUSTOM_ORIGIN:
@@ -461,7 +487,7 @@ def _versions(history: list[HistoryEntry]) -> list[Version]:
             genius_text, lrclib_text = _("LRCLIB timing"), None
         else:
             genius_text, lrclib_text = _("YouTube captions"), None
-        if entry.edited:
+        if entry.edited and entry.origin != LRC_AUTO_ORIGIN:  # the automatic name says it itself
             genius_text = _edited_name(genius_text)
         older_lrclib = (older.lrclib or {}).get("id") if older else lrclib_id
         lrclib_changed = lrclib_text is not None and lrclib_id != older_lrclib
@@ -515,7 +541,8 @@ def song_info():
         tiles=_tiles(status),
         source=_("Genius lyrics") if status.origin == "genius" else _source_name(status),
         lrclib_pick=_lrclib_pick(status),
-        lrclib_row=status.lrclib_state != "n/a" or status.origin == LRC_ORIGIN,
+        lrclib_check=_download_check_note(status),
+        lrclib_row=status.lrclib_state != "n/a" or status.origin in LRC_ORIGINS,
         alignment=_alignment(status),
         history=history,
         has_backups=any(not v.current for v in history),

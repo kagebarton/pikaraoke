@@ -459,10 +459,10 @@ class TestSongInfoPage:
         assert "Genius or custom lyrics only" in html  # the cue route never uses LRCLIB
         assert "https://genius.com" not in html
 
-    def lrclib_timed(self, env) -> str:
+    def lrclib_timed(self, env, origin: str = "lrclib_srt", **lyrics) -> str:
         """A song timed on the cue route by an LRCLIB match, whose header the .lrc on disk keeps."""
         bundle = caption_bundle()
-        bundle["lyrics"] = {"origin": "lrclib_srt", "lines": ["one"]}
+        bundle["lyrics"] = {"origin": origin, "lines": ["one"], **lyrics}
         song = env.add_song("A---aaaaaaaaaaa.mp4", bundle)
         path = lrclib.lrc_path(Path(song))
         path.parent.mkdir(exist_ok=True)
@@ -485,6 +485,99 @@ class TestSongInfoPage:
         assert "Captions" not in picks  # the cue route reads no third source
         assert "Lyrics from an LRCLIB match, timed against its own line times." in html
         assert "https://genius.com" not in html
+
+    def test_a_song_the_download_timed_from_lrclib_says_so_in_its_route_and_keeps_no_genius_row(
+        self, env
+    ):
+        song = self.lrclib_timed(env, "lrclib_auto_srt", genius=GENIUS)
+
+        html = text(env.page(song))
+
+        assert (
+            "Lyrics from an LRCLIB match picked at download, timed against its own line times."
+            in html
+        )
+        tiles = html.split('class="tabs is-fullwidth si-tabs"')[0].split("</style>")[-1]
+        assert "Timing" in tiles and "times this song" in tiles
+        picks = html.split('id="tab-picks"')[1].split('id="tab-alignment"')[0]
+        assert '<span class="si-val">LRCLIB</span>' in picks
+        assert "Invented Song · Invented Artist · 3:20" in picks  # the pick, from the .lrc's header
+        assert "Genius lyrics" not in html and "https://genius.com" not in html
+        assert "Checked at download" not in html
+
+    def test_a_hand_picked_song_does_not_claim_a_pick_at_download(self, env):
+        html = text(env.page(self.lrclib_timed(env)))
+
+        assert "picked at download" not in html
+
+    def test_an_automatic_version_is_named_before_its_genius_identity(self, env):
+        song = self.lrclib_timed(env, "lrclib_auto_srt", genius=GENIUS)
+        write_bundle(
+            env.folder,
+            "A---aaaaaaaaaaa",
+            root=env.folder / "regen_backups" / "20261019T175506Z",
+            captured_at="2026-09-21T10:00:00+00:00",
+            **poor_genius_bundle(),
+        )
+
+        history = text(env.page(song)).split('id="tab-history"')[1]
+
+        assert 'class="si-chg">LRCLIB timing (auto)' in history  # Genius -> automatic: a new pick
+        assert "Genius · Kristin Chenoweth" in history  # the backup under it keeps its name
+
+    def test_an_edited_automatic_version_reads_auto_edited_in_one_bracket(self, env):
+        song = self.lrclib_timed(env, "lrclib_auto_srt", genius=GENIUS)
+        write_sheet(env.folder, "A---aaaaaaaaaaa", suffix=".lrclib-auto-edited.srt")
+        write_bundle(
+            env.folder,
+            "A---aaaaaaaaaaa",
+            lyrics={
+                "origin": "lrclib_auto_srt",
+                "genius": GENIUS,
+                "lines": ["one"],
+                "source_path": "lyrics/A---aaaaaaaaaaa.lrclib-auto-edited.srt",
+            },
+            pipeline_decisions={"method_used": "cue_align"},
+        )
+
+        history = text(env.page(song)).split('id="tab-history"')[1]
+
+        assert "LRCLIB timing (auto, edited)" in history
+        assert "(auto) (edited)" not in history
+
+    @pytest.mark.parametrize(
+        ("outcome", "line"),
+        [
+            ("no_pick", "Checked at download: no LRCLIB record passed the timing check."),
+            ("no_records", "Checked at download: no LRCLIB record passed the timing check."),
+            (
+                "search_failed",
+                "LRCLIB could not be checked at download. "
+                "Repair lyrics can time this song from LRCLIB by hand.",
+            ),
+            (
+                "error",
+                "LRCLIB could not be checked at download. "
+                "Repair lyrics can time this song from LRCLIB by hand.",
+            ),
+        ],
+    )
+    def test_a_joint_song_the_download_could_not_time_from_lrclib_says_why(
+        self, env, outcome, line
+    ):
+        bundle = poor_genius_bundle()
+        bundle["pipeline_decisions"]["lrclib_auto"] = {"outcome": outcome, "records": 3}
+
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", bundle)))
+
+        picks = html.split('id="tab-picks"')[1].split('id="tab-alignment"')[0]
+        assert line in picks
+        assert picks.count("at download") == 1
+
+    def test_a_joint_song_with_no_check_on_record_says_nothing_of_one(self, env):
+        html = text(env.page(env.add_song("A---aaaaaaaaaaa.mp4", poor_genius_bundle())))
+
+        assert "at download" not in html
 
     def test_an_lrclib_version_is_named_as_such_with_no_lrclib_label(self, env):
         stem = "A---aaaaaaaaaaa"
@@ -1288,6 +1381,7 @@ class TestOverviewRoute:
             "caption": 1,
             "movie": 0,
             "lrc": 0,
+            "lrc_auto": 0,
             "genius": 1,
             "custom": 0,
             "no_timed_source": 1,  # the Genius song is joint-timed with no LRC beside it
@@ -1399,6 +1493,18 @@ class TestSongListsRoute:
 
         assert [r["subline"] for r in song_list(env, "caption")] == ["Cue align"]
         assert [r["subline"] for r in song_list(env, "movie")] == ["Cue align"]
+
+    def test_the_automatic_lrclib_list_holds_only_what_the_download_picked(self, env):
+        hand, auto = caption_bundle(), caption_bundle()
+        hand["lyrics"] = {"origin": "lrclib_srt", "lines": ["one"]}
+        auto["lyrics"] = {"origin": "lrclib_auto_srt", "lines": ["one"]}
+        env.add_song("A---aaaaaaaaaaa.mp4", hand)
+        env.add_song("B---bbbbbbbbbbb.mp4", auto)
+
+        assert [r["name"] for r in song_list(env, "lrc")] == ["A"]
+        assert [r["name"] for r in song_list(env, "lrc_auto")] == ["B"]
+        assert [r["subline"] for r in song_list(env, "lrc_auto")] == ["Cue align"]
+        assert env.client.get("/library/overview").get_json()["lrc_auto"] == 1
 
     @staticmethod
     def joint_bundle(*, ytasr: bool = False, fill: dict | None = None, match=None) -> dict:
@@ -1896,6 +2002,21 @@ class TestRepairPage:
         assert 'var CURRENT_SOURCE = "lrclib"' in html
         assert "rp-tag" in card(html, "lrclib")
         assert all("rp-tag" not in card(html, s) for s in ("caption", "genius", "custom", "movie"))
+
+    def test_a_song_the_download_timed_from_lrclib_opens_on_lrclib_with_its_genius_song_offered(
+        self, env
+    ):
+        bundle = caption_bundle()
+        bundle["lyrics"] = {"origin": "lrclib_auto_srt", "genius": GENIUS, "lines": ["one"]}
+        song = env.add_song("A---aaaaaaaaaaa.mp4", bundle)
+        write_sheet(env.folder, "A---aaaaaaaaaaa", suffix=".lrclib-auto.srt")
+
+        html = text(self.page(env, song))
+
+        assert 'var CURRENT_SOURCE = "lrclib"' in html
+        assert "rp-tag" in card(html, "lrclib")
+        assert all("rp-tag" not in card(html, s) for s in ("caption", "genius", "custom", "movie"))
+        assert "var CURRENT_GENIUS_ID = 7" in html  # Repair to Genius offers it with no search
 
     def test_the_page_hands_the_match_on_disk_to_the_list_as_a_row(self, env):
         song = LrcTimingEnv.song(env)
@@ -3770,6 +3891,28 @@ class TestOpenRunRoute:
 
         assert song["now"] == "Now: LRCLIB timing"
         assert song["group"] == "reuse"
+
+    @pytest.mark.parametrize(
+        ("suffix", "now"),
+        [
+            (".lrclib-auto.srt", "Now: LRCLIB timing (auto)"),
+            (".lrclib-auto-edited.srt", "Now: LRCLIB timing (auto, edited)"),
+        ],
+    )
+    def test_the_status_says_an_lrclib_song_the_download_picked_is_automatic(
+        self, env, suffix, now
+    ):
+        bundle = caption_bundle()
+        bundle["lyrics"] = {"origin": "lrclib_auto_srt", "genius": GENIUS, "lines": ["one"]}
+        env.add_song("Mine---aaaaaaaaaaa.mp4", bundle)
+        write_sheet(env.folder, "Mine---aaaaaaaaaaa", suffix=suffix)
+        env.client.post("/library/run", json={"mode": "reset"})
+        finish_checks(env)
+
+        [song] = env.client.get("/library/run/status").get_json()["songs"]
+
+        assert song["now"] == now
+        assert song["group"] == "reuse"  # the sheet on disk wins a reset
 
     def test_the_reset_run_says_custom_lyrics_keep_theirs(self, env):
         env.add_song("Mine---aaaaaaaaaaa.mp4", custom_bundle())  # not custom by itself: no sheet

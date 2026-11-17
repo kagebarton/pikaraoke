@@ -141,7 +141,7 @@
     </div>
     {% endif %}
     {% if lrclib_row %}
-    <div class="si-row"><span class="si-key">LRCLIB</span><span class="si-val">{{ lrclib_pick }}</span></div>
+    <div class="si-row"><span class="si-key">LRCLIB</span><span class="si-val">{{ lrclib_pick }}{% if lrclib_check %}<br><span class="si-muted">{{ lrclib_check }}</span>{% endif %}</span></div>
     {% endif %}
     {% if status.lrclib_state != 'n/a' %}
     <div class="si-row">

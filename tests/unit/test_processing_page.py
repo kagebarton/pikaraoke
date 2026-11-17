@@ -106,6 +106,7 @@ class TestProcessingPage:
             "caption",
             "movie",
             "lrc",
+            "lrc_auto",
             "genius",
             "custom",
             "no_timed_source",
@@ -120,10 +121,25 @@ class TestProcessingPage:
         body = get(env, "/processing", admin=True).get_data(as_text=True)
 
         by_source = body[body.index("By lyric source") :]
-        for name in ("caption", "movie", "lrc", "genius", "custom", "no_timed_source"):
+        for name in ("caption", "movie", "lrc", "lrc_auto", "genius", "custom", "no_timed_source"):
             assert f'data-list="{name}"' in by_source
         assert 'data-list="all"' not in by_source
         assert "Cue align times each line from a timed source." in body
+
+    def test_the_automatic_lrclib_list_follows_the_hand_picked_one(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        assert body.index('data-list="lrc"') < body.index('data-list="lrc_auto"')
+        assert "LRCLIB (auto) · cue align" in body
+
+    def test_a_job_row_names_an_automatic_lrclib_pick_apart_from_a_hand_picked_one(self, env):
+        """The row's method is ``<origin>+<route>``; the plain ``lrclib`` prefix would take both."""
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        auto = body.index("method.indexOf('lrclib_auto') === 0) return T.lyricLrclibAuto")
+        hand = body.index("method.indexOf('lrclib') === 0) return T.lyricLrclib;")
+        assert auto < hand
+        assert 'lyricLrclibAuto: "LRCLIB (auto)"' in body
 
     def test_a_song_row_in_a_list_links_to_song_info_and_to_repair(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)

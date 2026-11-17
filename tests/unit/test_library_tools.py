@@ -189,6 +189,7 @@ class TestSongsInList:
             "caption": 0,
             "movie": 0,
             "lrc": 0,
+            "lrc_auto": 0,
             "genius": 2,
             "custom": 0,
             "no_timed_source": 0,
@@ -4376,7 +4377,6 @@ class TestNowSource:
             ("caption_edited", "captions"),
             ("movie_edited", "movie"),
             ("lrclib_edited", "lrclib"),
-            ("lrclib_auto_edited", "lrclib"),
         ],
     )
     def test_an_edited_sheet_names_its_source_and_says_so(self, tmp_path, kind, source):
@@ -4389,13 +4389,22 @@ class TestNowSource:
         [
             (partial(write_movie_sheet, text=WORDS_SRT), "movie"),
             (partial(write_lrc_sheet, text=WORDS_SRT), "lrclib"),
-            (partial(write_edited_sheet, kind="lrclib_auto"), "lrclib"),
             (write_sheet, "custom"),
         ],
-        ids=["movie", "lrclib", "lrclib_auto", "custom"],
+        ids=["movie", "lrclib", "custom"],
     )
     def test_a_plain_sheet_is_as_it_was(self, tmp_path, write, source):
         assert self.now(tmp_path, write) == {"source": source}
+
+    @pytest.mark.parametrize(
+        ("kind", "edited"), [("lrclib_auto", {}), ("lrclib_auto_edited", {"edited": True})]
+    )
+    def test_the_downloads_lrclib_pick_names_lrclib_and_says_it_was_automatic(
+        self, tmp_path, kind, edited
+    ):
+        now = self.now(tmp_path, lambda folder, stem: write_edited_sheet(folder, stem, kind))
+
+        assert now == {"source": "lrclib", "auto": True, **edited}
 
     def test_a_caption_with_no_sheet_is_captions_and_not_edited(self, tmp_path):
         now = self.now(tmp_path, write_cue_caption)
