@@ -239,9 +239,10 @@
 #lyrics-custom-input,
 #lyrics-custom-btn { height: 2.5em; line-height: 2.5em; }
 #lyrics-dropdown { max-width: 100%; }
-/* The list is full size. Bulma sizes its box (2.5em, 44px) and draws its arrow with borders, both
-   in em of the wrapper, so the wrapper takes the list's font size and the arrow scales with it. */
-#lyrics-select-wrap { font-size: var(--lyrics-dropdown-font-size); }
+/* The list is full size, 48px like Queue. Bulma draws its arrow with borders in em of the wrapper, so
+   the wrapper takes the list's font size and the arrow scales with it; the box height is Bulma's
+   control height, which the wrapper's children inherit. */
+#lyrics-select-wrap { font-size: var(--lyrics-dropdown-font-size); --bulma-control-height: 48px; }
 #lyrics-select-wrap::after { border-width: 3px; }
 #lyrics-section { display: flex; flex-direction: column; gap: 12px; margin-top: 0.75rem; }
 /* "Lyrics" and "Lyrics: YouTube captions" are one size; the (i)'s icon sits about 4px after the
