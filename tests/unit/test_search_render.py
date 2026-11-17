@@ -223,6 +223,29 @@ def test_the_library_autocomplete_route_is_gone(mock_get, client):
     assert client.get("/autocomplete?q=mirrors").status_code == 404
 
 
+@pytest.mark.parametrize("query", [None, "karaoke"], ids=["bare", "results"])
+@patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_one_ticked_add_to_queue_box_leads_advanced_with_or_without_results(
+    mock_get, _site, client, query
+):
+    """Both downloads read it, so it must be on the page whether or not results are showing."""
+    mock_get.return_value = _mock_karaoke()
+    with patch("pikaraoke.routes.search.get_search_results", return_value=_RESULTS):
+        url = "/search" if query is None else f"/search?search_string={query}"
+        body = client.get(url).get_data(as_text=True)
+
+    assert body.count('id="add-to-queue"') == 1
+    assert re.search(r'<input[^>]*checked[^>]*id="add-to-queue"', body)
+    assert (
+        body.index('id="advanced-settings"')
+        < body.index('id="add-to-queue"')
+        < body.index('id="direct-download-url"')
+    )
+    assert "add-to-queue-search" not in body
+    assert "add-to-queue-direct" not in body
+
+
 # ---------------------------------------------------------------------------
 # Library songs: cards first, and a copy under another YouTube ID noted on its card
 # ---------------------------------------------------------------------------
