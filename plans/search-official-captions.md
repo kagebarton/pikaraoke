@@ -477,7 +477,8 @@ Results row in a separate plan-only commit).
 
 Mockup (private to Ken): https://claude.ai/artifact/1Q8jEkXEy5v5ZZeBvP7mCA. Three phone
 screens for the search "adele hello": today, after, and after with Advanced opened. It
-carries decisions 7-13. Where this section and the mockup differ, this section wins.
+carries decisions 7-13 (its "Add…" predates decision 13's amendment to "Queue…"). Where
+this section and the mockup differ, this section wins.
 
 ### Decisions (Ken, 2026-11-17)
 
@@ -494,8 +495,10 @@ carries decisions 7-13. Where this section and the mockup differ, this section w
     alike, ticked by default. An untick lasts until the browser tab closes (not an app
     restart, not a page change).
 12. The in-library button reads "Queue" (was "Add to Queue").
-13. "Select" reads "Add…": the dialog with the preview and the lyrics choice still opens
-    first, and the ellipsis says so.
+13. "Select" reads "Queue…": the dialog with the preview and the lyrics choice still opens
+    first, and the ellipsis says so. Amended by Ken 2026-11-17 (was "Add…") once the
+    dialog's own button became "Queue" (`download_modal_speed`), so the card and the dialog
+    name the same action.
 
 Spec choices (Opus, not ruled by Ken; reopen any of them by asking):
 
@@ -581,8 +584,8 @@ onto `dev` first, so they hold until Part 1's commits move `routes/search.py`.
   runs full width under the title row (mockup). On desktop, where the card is a row, it stays
   in the text column, not a third column beside it.
 - Buttons: in-library `{% trans %}Queue{% endtrans %}`; otherwise
-  `{% trans %}Add…{% endtrans %}` (U+2026, one character). Class names stay. The catalogs are
-  not regenerated; "Add…" shows in English until they are.
+  `{% trans %}Queue…{% endtrans %}` (U+2026, one character). Class names stay. The catalogs are
+  not regenerated; "Queue…" shows in English until they are.
 
 **Search box (`search.html`).**
 
@@ -651,8 +654,8 @@ onto `dev` first, so they hold until Part 1's commits move `routes/search.py`.
    the page. If the `ui-check` skill can drive it, also check: untick, SPA to Queue and back,
    still unticked; a download POST then sends `queue: false`; a fresh browser context starts
    ticked. Otherwise leave it to Ken's checks and say so in the Results row.
-8. **`feat(search): result buttons read Queue and Add…`.** `search_result.html`; test
-   assertions on button text follow.
+8. **`feat(search): result buttons read Queue, and Queue… where the dialog opens`.**
+   `search_result.html`; test assertions on button text follow.
 
 **Stop after commit 8** (and its Results row). Don't land, push or retire anything. Report a
 Review-due checkpoint for commits 5-8: multi-file and a script rewrite, so it is due.
@@ -662,7 +665,7 @@ Review-due checkpoint for commits 5-8: multi-file and a script rewrite, so it is
 - [ ] A song you own by its exact video: that card is first, above the official one, with a
       green Queue button that queues it.
 - [ ] A song you own under another upload: the first card matching it shows "In library:
-      <name>" with Queue; no "Already in the library" box; that card's Add… opens the dialog.
+      <name>" with Queue; no "Already in the library" box; that card's Queue… opens the dialog.
 - [ ] Typing in the search box opens no list (neither library songs nor past searches); Enter
       and Search both run it; Clear empties it.
 - [ ] No help hint under the search box.
@@ -823,5 +826,5 @@ fixtures).
 | 5 `feat(search): songs already in the library come first, and a library copy is noted on its card` | | | |
 | 6 `feat(search): the search box drops the library dropdown and the help hint` | | | |
 | 7 `feat(search): one "Add to queue after download" box in Advanced` | | | |
-| 8 `feat(search): result buttons read Queue and Add…` | | | |
+| 8 `feat(search): result buttons read Queue, and Queue… where the dialog opens` | | | |
 | manual checks (Part 1 and Part 2) | | n/a | |
