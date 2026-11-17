@@ -146,8 +146,9 @@ that queued them is already closed; 7.1f).
   `library-tools.md`.
 - **CLI paths never run on real data:** `regen --song --reset` and backfill's
   queued path. Record: `library-tools.md`.
-- **Simplicity leftovers:** `_ActiveJob.kind` is set and never read;
-  `prepare_regen_job` accepts plan kinds no caller builds; ~~the int-not-bool
+- **Simplicity leftovers:** ~~`_ActiveJob.kind` is set and never read~~ (dropped,
+  `104e5580` on `lrclib_fit_pick`); `prepare_regen_job` accepts plan kinds no
+  caller builds; ~~the int-not-bool
   Genius id check is written three times~~ (one `library_tools.is_whole_number`,
   `13dbee03`, from `genius_search_accuracy`); ~~the watch URL is built in more than
   one module~~ (one `library_regen.watch_url`, `f4aa97b`). Record: web plan, 3.1i and 8.1f.
@@ -965,12 +966,24 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   would put inline groups into the wrong line with no error. Fix: one function
   that returns the lines, spans and groups from a single parse (stage 2
   review, finding 8).
-- **The LRCLIB origin name is spelled twice.** `backing_vocals.ORIGINS` writes
-  out `"lrclib_srt"` because the align stage cannot import `library_regen`,
-  where `LRC_ORIGIN` lives with the other origin names; a test keeps the two
-  equal. Moving only that one to `lrclib` would split the list, so the fix is
-  a small module the stage can import that holds every origin name (stage 2
-  review, finding 11).
+- **The LRCLIB origin names are spelled twice.** `backing_vocals.ORIGINS` writes
+  out `"lrclib_srt"` and, since `lrclib_fit_pick` (4d2), `"lrclib_auto_srt"`,
+  because the align stage cannot import `library_regen`, where `LRC_ORIGIN` and
+  `LRC_AUTO_ORIGIN` live with the other origin names; a test keeps them equal.
+  Moving only these to `lrclib` would split the list, so the fix is a small
+  module the stage can import that holds every origin name (stage 2 review,
+  finding 11; the second name from the review of `2fd9c4f9~1..313384ea`).
+
+## LRCLIB timing picked at download (on `lrclib_fit_pick`)
+
+- **A pick does not look at what is already in `lyrics/`.** The align stage
+  moves the picked sheet in and writes the record's `.lrc` without checking for
+  another sheet or for the admin's choice. A download over a song already in the
+  library (same file name) would leave the auto sheet beside an older custom,
+  movie or LRCLIB sheet, and the next regen replays the older one, which comes
+  first in `SHEETS`; a skip marker or a hand-placed `.lrc`, which the joint fill
+  treats as the admin's choice, is overwritten. Needs a re-download over a
+  library song; not seen. Record: review of `2fd9c4f9~1..313384ea`, finding 5.
 
 ## Test suite (Windows box)
 
