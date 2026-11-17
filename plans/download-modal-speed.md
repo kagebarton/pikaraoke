@@ -201,8 +201,9 @@ caption answer. The real command is built from the existing helpers (`yt_dlp_cmd
 - On open, with no network wait: the card's thumbnail with a Play button over it, the title,
   the channel and the length, and the breathing line "Checking YouTube for captions…"
   (decision 9).
-- On open, two requests start together: the combined lookup, and the Genius search (title
-  first, then the page's search term, as `runLyricsSearch` does today). The Genius answer is
+- On open, two requests start together: the combined lookup, and the Genius search (one
+  `/lyrics_search` call with the video's title and channel and the page's search term, as
+  `searchLyricsForActiveVideo` sends today; the server works out what to ask). The Genius answer is
   held, not shown.
 - When the lookup answers: a caption that passes shows the caption-passed screen (decision 11).
   Otherwise the held Genius list shows at once in the list layout (decision 12), with the
@@ -294,6 +295,21 @@ Where one lookup's time goes (`-v`, video 9bZkp7q19f0, seconds from process star
 | 3.41   | deno finished the JS challenge         |
 | 3.83   | m3u8 information downloaded            |
 | 3.88   | link printed                           |
+
+Re-check (2026-11-17, `dev` at `764df44`, same yt-dlp 2026.10.26 and curl_cffi 0.14.0, deno
+2.7.7): the combined lookup above, one process each; link tested with one ranged GET, Android
+Chrome user agent.
+
+| video       | time   | exit | caption file | duration | link | format, client in the link |
+| ----------- | ------ | ---- | ------------ | -------- | ---- | -------------------------- |
+| dQw4w9WgXcQ | 6.03 s | 0    | `x.en.srt`   | 213      | 206  | 18 (mp4 360p), `TVHTML5_SIMPLY` |
+| fJ9rUzIMcZQ | 5.43 s | 0    | `x.en.srt`   | 359      | 206  | not recorded               |
+
+New since 2026-11-11, on both: `WARNING: [youtube] <id>: tv_simply client https formats require
+a GVS PO Token which was not provided. They will be skipped as they may yield HTTP Error 403.`
+Format 18 still came from `tv_simply` and played; the warning is about that client's other
+formats. Between 2026-11-11 and this re-check, `youtube_dl.py` and the `/preview` and
+`/caption_check` routes did not change.
 
 ## For Opus to settle
 
