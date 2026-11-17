@@ -333,7 +333,7 @@ Found in the `search_official_first` review and its live checks, 2026-11-08. Ken
 review's other findings for now. Record: `plans/search-official-first.md` on tag
 `archive/search_official_first`, "Review follow-ups" and the Results log.
 
-The ranking was rewritten on branch `search_official_captions` (2026-11-17, `37ba443`..`d02bce5`
+The ranking was rewritten on branch `search_official_captions` (2026-11-17, `37ba443`..`a97f945`
 there, not on `dev` yet), and the entries below that say "the rewrite" describe it. Rules,
 "Not doing" and the measurements: `plans/search-official-captions.md` on that branch.
 
@@ -356,13 +356,17 @@ there, not on `dev` yet), and the entries below that say "the rewrite" describe 
   (VEVO, Records, Recordings, Label), never a title that says "official". The fixture row for
   7clouds' "Suit & Tie (Official Video)" pins it; "old town road" itself was not re-run. A
   re-upload on a channel that is a label by name would still lift.
-- **A band whose channel spells its name another way gets no lift.** "celebration kool and the
+- ~~**A band whose channel spells its name another way gets no lift.** "celebration kool and the
   gang": the rewrite's vote now finds the band, a tie naming its full name and its split-up
   parts. But the channel is "KoolandthegangShow", and "Show" is not a word the own-channel
   test strips, so the band's own video is still not recognised as the band's and the page
   keeps YouTube's order (a "Kool & The Gang - Topic" art track would still lift as audio).
   Pinned as a known miss in `test_a_band_whose_channel_adds_a_word_to_its_name_is_not_found`;
-  built from synthetic rows, not a capture. Not ruled.
+  built from synthetic rows, not a capture. Not ruled.~~ Closed 2026-11-17 by
+  `search_official_captions` (`a97f945`): the own-channel test strips a trailing "Show" too,
+  pinned by `test_a_band_channel_that_adds_show_to_its_name_is_the_bands_own`. No row moved in
+  the 84 captured searches. Other spellings of an act's name ("Ed Sheeran and Andrea Bocelli")
+  still miss.
 - **YouTube sometimes drops the channel fields.** About 1 in 12 live searches came back with
   no channel, uploader, verified flag or description on any row (3 of 40 captures on
   2026-11-16: `toxic`, `what is this feeling wicked`, `周杰倫 晴天`, all fine on a second fetch
@@ -388,6 +392,28 @@ there, not on `dev` yet), and the entries below that say "the rewrite" describe 
   (`(From "Encanto at the Hollywood Bowl")`, `(From "The Little Mermaid"/British Sign Language
   Version)`). Requiring the channel to carry the original too would remove the first two and
   also the badge from four right rows, so it was not taken. Not ruled further.
+- **A different song of the same name can still lift in two more ways.** Neither happens in
+  the 84 captured searches.
+  - A title that names no act is credited to its channel's name as spelled, and whether that
+    counts as the act's own channel depends on the spelling. So an act's VEVO channel can pass
+    as a label: a "LionelRichieVEVO" upload titled just "Hello (Official Music Video)" would
+    lift as another cast for "hello". The same spelling accident lifts DisneyMusicVEVO's `We
+    Don't Talk About Bruno (From "Encanto")`, and two of the residue rows above. Making the
+    names agree loses the Bruno lift, and "Walt Disney Records" (spaced) already fails to lift
+    such a title. Keeping Bruno while blocking the act's own channel needs a new signal, such
+    as whether the channel's name is credited elsewhere on the page, and a re-measure.
+  - Rule 2 makes every act tied for the most credits an original (for duets and film casts),
+    so two acts with different songs of one name, tied exactly, both lift: Adele's and Lionel
+    Richie's "Hello", two credits each.
+
+  Not ruled. Record: `/code-review` of `23ad51e..25a3f81` on `search_official_captions`,
+  findings 1, 2 and 7.
+- **A "from" or "with" bracket hides a live upload from the "say what it is" check.** Guests
+  and the film are dropped before the check, and "from …" or "with …" is dropped to the
+  bracket's end, so "(From Wembley Stadium)", "(from The Tonight Show)" and "(With The Royal
+  Philharmonic Orchestra)" pass on the act's own channel while "(Wembley Stadium)" fails.
+  Dropping only a quoted film would stop `Speechless (from Aladdin)` lifting. Not seen in the
+  84 searches. Not ruled. Record: as above, finding 4.
 - **Real official videos the ranking gives up.** Only a channel's name makes it the act's or a
   label's (decision 6), so Ed Sheeran's "Perfect Symphony" on "Ed Sheeran and Andrea Bocelli",
   RHINO's Vitamin C video and Netflix Philippines' "Golden" are not lifted. None has captions,
