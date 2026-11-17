@@ -133,6 +133,18 @@ scratch disk. Network: at most one LRCLIB lookup (Here I Go).
 | 13 | 2026-11-16 | 7 extra pairs, **not in the plan** (added to read rows 10 and 12) | same | Kickapoo library v12 vs A: transcribe_words text differs 0, ≥11 ms 22, ≥0.3 s 0, max 0.140 s; words ≥0.3 s 21, max 32.132 s; pass-1 lines starts moved ≥0.3 s 5 (lines 18, 20, 41, 42, 43), sharing 3/0. Kickapoo library v12 vs Windows v11: transcribe_words text differs 0, ≥11 ms 23, ≥0.3 s 0, max 0.140 s; words ≥0.3 s 38, max 32.132 s; pass-1 starts moved ≥0.3 s 5 (lines 18, 20, 41, 42, 43), sharing 3/0. Kickapoo Windows v11 vs B: transcribe_words n 455/460, unmatched 21/26, ≥11 ms 98, ≥0.3 s 6, max 0.740 s; words ≥0.3 s 23, max 30.685 s; pass-1 starts moved ≥0.3 s 7 (lines 5, 20, 25, 29, 30, 36, 38), sharing 0/0. |
 | 14 | 2026-11-16 | 8 Kickapoo lines 41-43 | same | Pass 1 start-end for lines 41 / 42 / 43. Windows v11: 236.61-237.52 / 237.52-237.86 / 238.38-238.56, interpolated_line_ids []. Library v12: 230.62-230.62 for all three, interpolated_line_ids [41, 42, 43]. A: 236.61-237.52 / 237.52-237.88 / 238.41-238.58, []. B: 236.61-237.50 / 237.50-238.02 / 238.54-238.72, []. Selected source for lines 41-43: align in v11, A and B; interp in library v12. R14's 237.43 / 237.53 / 243.89 are not in pass1_line_timings; v11's `windowed_realign` span words for the three `Rock`s start at 237.426, 243.894, 243.894 (the first one ends at 237.526). The same `Rock` word starts: A 236.598 / 237.718 / 238.772; B 236.590 / 237.678 / 238.262; library v12 236.586 / 238.110 / 238.210. `monotone_discard` lists lines 41, 42, 43 (best_t0 97.16 / 207.316 / 210.416, selected_t0 None) in library v12 only; v11, A and B each list one line near 195 s (among others): line 38 (v11) or line 39 (A, B), with best_t0 195.436 / 195.476 / 195.476 and selected_t0 220.48 / 223.9 / 223.88. Lines whose selected source differs between any two of the four bundles: L17, L18 (library v12 transcribe, others align), L25 (B transcribe, others align), L29, L30 (B align, others transcribe), L31 (A and library v12 transcribe, v11 and B align), L40 (v11 align, others transcribe), L41-43 (library v12 interp, others align). selected_source counts: library v12 align 25 / transcribe 16 / interp 3. |
 | 15 | 2026-11-16 | extra, **not in the plan**: encoding of the two Kickapoo stems | Fable 5.2, this worktree (85d3a1b7). `ffprobe -show_entries stream=codec_name,profile,sample_rate,channels,bit_rate,duration:format_tags=encoder` on `$X/lib/vocal/` and `~/pikaraoke-songs/vocal/`, read-only | Scratch stem (made here): aac LC, 44100 Hz, 2 ch, 263.5 s, bit_rate 179336, encoder `Lavf60.16.100`. Library stem (Windows-made): aac LC, 44100 Hz, 2 ch, 263.5 s, bit_rate 189954, encoder `Lavf62.12.101`. |
+| 16 | 2026-11-17 | 10 seed (Windows arms) | Opus 5.5 on the VM, worktree `.claude/worktrees/whisper_input_fresh_vs_regen` at aa8bee03 (`git diff --stat 97bd57f3 HEAD -- pikaraoke scripts` empty). w1: `cp --parents` from the library of every file holding the video ID, outside `regen_backups/` and `karaoke/`; w2: `cp -r $X/seed`, then `$X/lib/vocal` and `$X/lib/nonvocal`; w0: `cp -r $X/seed` | w1: 4 videos, 4 v11 bundles, 3 `.lrc` (none for `pXNd2V88d60`), 3 `.en.asr.json3`, 4 `.srt` + `.srt.generated`, 4 vocal + 4 nonvocal; every file `cmp`-equal to the library's. w2 and w0: `diff -rq` equal to `$X/seed`; w2's stems `diff -rq` equal to `$X/lib`. Vocal SHA256 (first 16): w1 Kickapoo `53e41e87e8c0d2c3`, `1YiAzyCzZzw` `631afe0b39cac9f8`, `pXNd2V88d60` `142b3769d4572640`, `GI6CfKcMhjY` `767d746d0addc2d4`; w2 Kickapoo `9a823f343c413e38`, Here I Go `8b9c5d09aeea9f0b`. Nonvocal: w1 `f54f68d96546301a`, `62c899bb81e68683`, `01acccb7db95566c`, `e1a33ffbc2c38e8e` (same order); w2 `5de73d5e770c8e55`, `f3a1d9b40bde99d3`. **Not done: the check of w1 against `$LV/sha256.txt`** (`linux_v12` not on D: yet). Kickapoo's stem (row 7) and v11 bundle (`cmp` with `$X/seed`) are already known equal to what the Linux library v12 read; the other three wait for `$LV`. |
+| 17 | 2026-11-17 | 11 dry runs | same, `python scripts/regen_alignment_bundles.py $WX/<run> --dry-run < /dev/null` | w1: `GI6CfKcMhjY`, `1YiAzyCzZzw`, `pXNd2V88d60` `reuse genius+ytasr`, Kickapoo `reuse genius`. w2 and w0: Kickapoo `reuse genius`, Here I Go `reuse genius+ytasr`. Every bundle v11; no caption fetch, no prompt; exit 0 each. |
+| 18 | 2026-11-17 | 12 decode, VM | same; ffmpeg `6.1.1-3ubuntu5`. The 44.1 kHz WAV was written to the session scratchpad instead of `$WX/decode/vm/` (the D: link runs at about 2 MB/s), one file overwritten per stem | `$WX/decode/vm/`, size in bytes and SHA256 (first 16): `win-hvvjiE4AdUI.pcm` 8,432,002 `c40415b895f8584d`; `win-1YiAzyCzZzw.pcm` 6,526,108 `f7cdc21b11abb149`; `win-pXNd2V88d60.pcm` 11,510,410 `9debd722efec3e05`; `win-GI6CfKcMhjY.pcm` 6,298,738 `2f6d919b8d3942fb`; `lin-hvvjiE4AdUI.pcm` 8,432,002 `dc7823eeee5b520a`; `lin-kHwpS0LakeU.pcm` 5,495,514 `6d15a0a6707e0781`. |
+| 19 | 2026-11-17 | 13 GPU runs | Ken, Windows clone `C:\temp\Github\pikaraoke` at aa8bee03 (fetched from `vm`), PiKaraoke closed; step 13's block as written, then step 14's. **W1 ran before step 10's check against `$LV`** for its three non-Kickapoo songs (offered to Ken 2026-11-17; step 9 not yet run) | `versions.txt`: `2.6.0+cu124 12.4 NVIDIA RTX A2000`. Logs `$WX/{w1,w2,w0}_run.log` end `Done. succeeded=4 failed=0 skipped=0`, `succeeded=2 failed=0 skipped=0`, `succeeded=2 failed=0 skipped=0`; the console's exit lines were not relayed. Times below are the logs' (Windows local, UTC-5). Every run: ONNX's "CUDAExecutionProvider not available" warning; no `dereverb/` folder; no `.lrc` besides the seeded ones. |
+| 20 | 2026-11-17 | 13 run W1 | `$WX/w1_run.log` | 10:33:34 to 10:47:26, then the LRCLIB backfill for 4 genius-origin songs; `pXNd2V88d60`: "no synced match". Stages per song: load_vocal, seed_artifacts, lyric_align; whisper read `<stem>_vocal.wav`. First joint match line per song (align / transcribe / ytasr / interp): `GI6CfKcMhjY` 41/16/7/2, windowed re-align 3 of 15 spans; `1YiAzyCzZzw` 1/45/10/19, 10 of 16; `pXNd2V88d60` 29/10/13/19, 7 of 7; Kickapoo 25/16/0/3, 1 of 4 (38 anchors, 3 suspects). Onset snap starts / ends: `GI6CfKcMhjY` 7/66 (+0.58 s), 18/74 (+1.75 s); `1YiAzyCzZzw` 3/75 (+0.88 s), 21/57 (+1.14 s); `pXNd2V88d60` 16/71 (+2.37 s), 25/63 (+19.71 s); Kickapoo 27/44 (+3.86 s), 16/43 (+5.08 s). |
+| 21 | 2026-11-17 | 13 run W2 | `$WX/w2_run.log` | 10:47:43 to 10:53:03, then the backfill; Here I Go: "no synced match". Stages as W1. Kickapoo 32/12/0/0, re-align 1 of 4 (38 anchors, 3 suspects); onset 26/44 (+1.76 s), ends 14/47 (+5.39 s). Here I Go 15/4/49/2, re-align 3 of 12 (48 anchors, 4 suspects); onset 3/70 (+0.62 s), ends 10/68 (+1.13 s). |
+| 22 | 2026-11-17 | 13 run W0 | `$WX/w0_run.log` | 10:53:12 to 11:01:00, then the backfill; Here I Go: "no synced match". Stages: ffmpeg_extract, loudnorm_analyze, stem_separation, ffmpeg_transcode, seed_artifacts, lyric_align; whisper read `<stem>_input_(vocals)_vocals_mel_band_roformer.wav`. Kickapoo 32/12/0/0, re-align 1 of 4 (38 anchors, 3 suspects); onset 28/44 (+3.86 s), ends 17/45 (+8.03 s). Here I Go 15/4/49/2, re-align 3 of 12 (48 anchors, 4 suspects); onset 3/70 (+0.54 s), ends 10/68 (+1.15 s). |
+| 23 | 2026-11-17 | 15 stems | Opus 5.5 on the VM, `sha256sum`, `stat -c %s`, `ffprobe -show_entries stream=bit_rate:format_tags=encoder` on `$WX/*/vocal/` | w1 and w2 vocal hashes equal to row 16. w0 Kickapoo `53e41e87e8c0d2c3`, 6,303,466 B, bit_rate 189954, `Lavf62.12.101`. w0 Here I Go `bebfc718a39dceb9`, 5,508,602 B, bit_rate 255155, `Lavf62.12.101` (the library's, Linux-made: `8b9c5d09aeea9f0b`, 5,583,424 B, 258640, `Lavf60.16.100`). The Linux box's `versions.txt`: not yet (step 9). |
+| 24 | 2026-11-17 | 16 decode compare | same; numpy over `$WX/decode/{win,vm}/*.pcm` as int16 | All six: SHA256 equal, sample counts equal, largest absolute difference 0. `win-hvvjiE4AdUI` 4,216,001 samples; `win-1YiAzyCzZzw` 3,263,054; `win-pXNd2V88d60` 5,755,205; `win-GI6CfKcMhjY` 3,149,369; `lin-hvvjiE4AdUI` 4,216,001; `lin-kHwpS0LakeU` 2,747,757. Whether the VM's ffmpeg is the Linux box's build: not yet (step 9). |
+| 25 | 2026-11-17 | 17 pairs (without `$LV`) | same; scratch `compare_win.py` (step 7's matching and measures), kept with its output in `$WX/compare_win.py` and `$WX/compare_win_out.txt`. "win v11" = the library's bundle; "lin A/B" = `$X/armA`, `$X/armB`. Per pair: transcribe_words; words; pass 1; lines whose `selected_source` differs | K W1 vs win v11: n 455/455, unmatched 0/0, >=11 ms 22, >=0.3 s 1, max 0.400 (end 0.040); words 455/455, 84, 38, max 32.132 (end 31.200); pass 1 moved 5 [18, 20, 41, 42, 43], sharing 3/0; source differs [17, 18, 31, 40, 41, 42, 43]. P W1 vs win v11: n 433/443, unmatched 7/17, 35, 2, max 4.436 (end 2.320); words 358/358, 97, 45, max 2.580 (end 2.580); pass 1 moved 7 [57, 58, 59, 60, 61, 63, 64], sharing 9/2; source [57, 58, 59, 62, 63]. R W1 vs win v11: n 349/343, unmatched 22/16, 31, 6, max 7.980 (end 12.460); words 528/528, 261, 96, max 8.784 (end 9.344); pass 1 moved 12 [14-22, 42, 47, 48], sharing 16/16; source [8, 42, 46, 47, 48]. J W1 vs win v11: n 504/503, unmatched 18/17, 109, 0, max 0.280 (end 0.280); words 532/532, 140, 6, max 1.400 (end 1.420); pass 1 moved 7 [12, 13, 19, 20, 30, 57, 58], sharing 0/0; source [10, 11, 12, 13, 15, 57, 58]. K W1 vs W2: n 455/458, unmatched 40/43, 119, 7, max 9.970 (end 9.260); words 455/455, 29, 20, max 32.132 (end 30.644); pass 1 moved 8 [5, 14, 18, 28, 38, 41, 42, 43], sharing 3/0; source [16, 17, 18, 28, 41, 42, 43]. K W2 vs lin B: n 458/460, unmatched 42/44, 121, 9, max 9.230 (end 9.280); words 455/455, 2, 0, max 0.160 (end 0.160); pass 1 moved 7 [14, 25, 28, 29, 30, 36, 38], sharing 0/0; source [16, 25, 28, 29, 30, 31]. H W2 vs lin B: n 440/440, unmatched 0/0, 6, 0, max 0.120 (end 0.120); words 455/455, 1, 0, max 0.020; pass 1 moved 0, sharing 0/0; source none. K W0 vs win v11: transcribe_words, words and pass 1 all 0 moved, max 0.000; source none. K W0 vs lin A: n 455/455, unmatched 0/0, 7, 0, max 0.020; words 455/455, 62, 22, max 30.685 (end 31.000); pass 1 moved 0, sharing 0/0; source [31, 40]. H W0 vs lin A: n 439/438, unmatched 2/1, 10, 1, max 0.560 (end 0.360); words 455/455, 1, 0, max 0.020; pass 1 moved 0, sharing 0/0; source none. **Not run: W1 vs Linux library v12** (needs `$LV`). |
+| 26 | 2026-11-17 | 17 R14 lines | same | Pass-1 start-end and selected source; `interpolated_line_ids`; pass-1 lines sharing a start; `monotone_discard` entries for these lines as (line, best_t0, selected_t0). K win v11: L41 236.61-237.52 align / L42 237.52-237.86 align / L43 238.38-238.56 align; interp []; sharing 0; none. K W1: L41-43 230.62-230.62 interp; interp [41, 42, 43]; sharing 3; (41, 97.16, None), (42, 207.316, None), (43, 210.416, None); sources align 25 / transcribe 16 / interp 3. K W2 and K W0: L41-43 as K win v11 to the hundredth; interp []; none. P win v11: L57 177.74-177.84 transcribe / L58 178.98-179.44 transcribe / L59 179.76-180.08 transcribe / L60 180.08-180.50 interp; (57, 62.34, 177.74), (58, 63.24, 178.98), (60, 76.04, None). P W1: L57-60 175.14-176.06 interp; interp gains 57, 58, 59, 62, 63; sharing 9; (57, 62.34, None), (58, 63.24, None), (60, 76.04, None). R win v11: L56 285.59-292.81 / L57 292.83-294.05 / L58 294.05-302.57 / L59 302.57-307.81 / L60 307.81-313.71 / L61 313.71-316.55 / L62 316.55-322.59, all align; sharing 16. R W1: the same lines and sources, L59 302.57-307.77, L60 307.77-313.71; interp list equal to v11's; sharing 16. J win v11: L12 27.84-29.52 ytasr / L62 168.64-175.92 transcribe; (62, 171.4, 168.64). J W1: L12 23.48-28.42 align / L62 168.64-175.94 transcribe; (62, 171.4, 168.64). |
+| 27 | 2026-11-17 | extra, **not in the plan**: final line times of R14's lines | same; `output_line_timings` of win v11 and W1, read to match R14's quoted numbers | K win v11: L41 237.43-243.35 / L42 237.53-243.89 / L43 243.89-252.03; K W1: L41-43 230.62-230.62. P win v11: L57 178.03-178.73 / L58 178.90-179.55 / L59 179.55-180.39 / L60 180.19-180.49; P W1: L57-60 175.14-176.06. R win v11: L56 287.98-292.84 / L57 292.84-294.12 / L58 294.12-302.60 / L59 302.60-308.30 / L60 308.30-310.76 / L61 310.76-313.56 / L62 313.56-328.84; R W1: the same, L58 294.12-302.58, L59 302.58-308.30. J win v11: L12 27.84-29.52 / L62 168.64-177.32; J W1: L12 23.47-28.53 / L62 168.64-177.34. R14 quotes the Linux library v12 at K 41-43 230.62, P 57-60 175.14, R 56-62 296.08, J line 12 23.48 and line 62 171.94 (J as pass 1). |
 
 Notes on the numbers (rows 8-14):
 
@@ -232,3 +244,202 @@ across the library before any code.
 - The Kickapoo A/B listen above.
 - Kickapoo's library bundle is still stacked; a regen from the same stem and
   code would likely repeat it.
+
+## Windows arms (added 2026-11-17)
+
+Model: Claude Sonnet 5.5 on the VM for steps 10-12 and 15-17; Ken runs step 9 on the
+Linux box and steps 13-14 on Windows. Reading: Opus 5.5.
+
+### Question
+
+Rows 1-15 ran on the Linux box only. Kickapoo stacked when the Linux box read the
+Windows-made stem, and not when it read a Linux-made stem or a fresh WAV. Is that the
+stem file or the machine reading it? The full regen at the onset-loud-start landing runs
+on Windows, so the answer also says whether that regen will stack these songs.
+
+State of D: on 2026-11-17 (checked from the VM):
+
+- The library's Kickapoo stem is byte-identical to the one the Linux library v12 read
+  (`53e41e87...`, row 7); its bundle there is still the Windows v11 (equal to `$X/seed`'s).
+- `1YiAzyCzZzw`, `pXNd2V88d60` and `GI6CfKcMhjY` (the other R14 songs whose pass 1 moved
+  most) hold Windows-made stems (encoder `Lavf62.12.101`) and Windows v11 bundles, each
+  captured minutes after its stem was written.
+- Here I Go's library stem is the Linux-made one (`8b9c5d09...`, encoder `Lavf60.16.100`).
+- `$X` was copied to `D:\Shared\whisper_regen\exp\`. It has both arms but not the Linux
+  library v12 bundles.
+- Windows ffmpeg: `8.1.1-full_build-www.gyan.dev`, libavformat 62.12.101 (Ken, 2026-11-17).
+  The VM's: `6.1.1-3ubuntu5`.
+
+### Runs
+
+| run | songs | stems on disk | what it isolates |
+|---|---|---|---|
+| W1 | Kickapoo, `1YiAzyCzZzw`, `pXNd2V88d60`, `GI6CfKcMhjY` | the library's (Windows-made) | against Linux library v12: the box only (same stem bytes, same code); against Windows v11: fresh WAV vs saved stem, on Windows |
+| W2 | Kickapoo, Here I Go | the Linux-made ones in `$X/lib` | against Linux arm B: the box only; W1 vs W2 on Kickapoo: the stem only, on Windows |
+| W0 | Kickapoo, Here I Go | none (fresh separation) | Kickapoo against Windows v11: does Windows repeat itself; both against Linux arm A: the box only, WAV-heard; the new stems' hashes: does a Windows separation repeat byte for byte |
+| decode | the six vocal stems of W1 and W2 | - | the saved-stem path's two ffmpeg steps (`load_vocal.py`, then whisper's loader), Windows ffmpeg vs the VM's; the fresh path's resample is not covered |
+
+Kickapoo once W1 and W2 are in:
+
+| | Windows-made stem | Linux-made stem |
+|---|---|---|
+| Linux box | library v12 (stacked, rows 12, 14) | arm B (row 6) |
+| Windows box | W1 | W2 |
+
+### Paths
+
+| name | VM | Windows |
+|---|---|---|
+| `$WX` | `/home/ken/shared-drives/D:/Shared/whisper_regen/win` | `D:\Shared\whisper_regen\win` |
+| `$X` (the Linux scratch, copied) | `/home/ken/shared-drives/D:/Shared/whisper_regen/exp` | `D:\Shared\whisper_regen\exp` |
+| `$LV` (from the Linux box, step 9) | `/home/ken/shared-drives/D:/Shared/whisper_regen/linux_v12` | `D:\Shared\whisper_regen\linux_v12` |
+| library | `/home/ken/shared-drives/D:/Shared/pikaraoke-songs` | `D:\Shared\pikaraoke-songs` |
+
+The VM sees D: only while an RDP session is connected.
+
+### Rules
+
+- Read-only on the library, `$X` and `$LV`. Every write goes under `$WX`.
+- VM steps run from the VM worktree `.claude/worktrees/whisper_input_fresh_vs_regen`
+  with `/home/ken/miniconda3/envs/pik/bin/python`, CPU only. The script puts its own
+  checkout first on `sys.path`, so it runs this branch's code, not the editable install.
+- Windows: PiKaraoke closed, nothing else on the GPU, runs in the order W1, W2, W0.
+- Stop and report instead of improvising if: a hash in step 10 differs from the Linux
+  box's, a dry run shows anything other than a reuse plan, or a run fails.
+- Results continue the log above from row 16: raw numbers, no verdicts. Commit this file
+  alone when the log is written, then stop with a short report to Ken.
+
+### Steps
+
+9. **From the Linux box (Ken).** The four current library v12 bundles, the hashes of
+   what they read, and the box's versions:
+
+   ```bash
+   mkdir -p ~/whisper_regen_linux && cd ~/pikaraoke-songs
+   cp -p alignment_debug/*{hvvjiE4AdUI,1YiAzyCzZzw,pXNd2V88d60,GI6CfKcMhjY}*.json ~/whisper_regen_linux/
+   sha256sum {vocal,nonvocal}/*{hvvjiE4AdUI,1YiAzyCzZzw,pXNd2V88d60,GI6CfKcMhjY}*.m4a \
+     regen_backups/20261116T160237Z/alignment_debug/*{hvvjiE4AdUI,1YiAzyCzZzw,pXNd2V88d60,GI6CfKcMhjY}*.json \
+     > ~/whisper_regen_linux/sha256.txt
+   ffmpeg -version | head -1 > ~/whisper_regen_linux/versions.txt
+   /home/ken/miniconda3/envs/pik/bin/python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))" >> ~/whisper_regen_linux/versions.txt
+   ```
+
+   Then copy `~/whisper_regen_linux/` to `D:\Shared\whisper_regen\linux_v12\`.
+
+10. **Seed (VM).** Plain `cp -r`; the D: mount keeps no modes, and the regen picks songs
+    by bundle schema, not file dates.
+
+    - `$WX/w1`: for each W1 song, every library file whose name holds its video ID,
+      outside `regen_backups/` and `karaoke/`, at the same subfolder: the video, the v11
+      bundle, `subtitles/`, `lyrics/`, `vocal/`, `nonvocal/`. Check against
+      `$LV/sha256.txt`: the four vocal and four nonvocal stems equal the Linux library's,
+      and the four bundles equal the Linux backup's.
+    - `$WX/w2`: a copy of `$X/seed` (Here I Go's extra json3 included), plus
+      `$X/lib/vocal/` and `$X/lib/nonvocal/`. Vocal hashes as row 7.
+    - `$WX/w0`: a copy of `$X/seed` alone.
+
+11. **Dry runs (VM).** `python scripts/regen_alignment_bundles.py $WX/<run> --dry-run`
+    for w1, w2 and w0. Every song must show a reuse plan (Kickapoo `reuse genius`, Here I
+    Go `reuse genius+ytasr`), no caption fetch, no prompt.
+
+12. **Decode on the VM.** The pipeline's two decodes of each vocal stem, to 16 kHz mono
+    PCM:
+
+    ```bash
+    cd /home/ken/shared-drives/D:/Shared/whisper_regen && mkdir -p win/decode/vm
+    for s in win/w1/vocal/*---vocal.m4a exp/lib/vocal/*---vocal.m4a; do
+      id=$(basename "$s" | sed -E 's/^.*---(.{11})---vocal\.m4a$/\1/')
+      case "$s" in exp/*) tag=lin ;; *) tag=win ;; esac
+      wav="win/decode/vm/$tag-$id.wav"
+      ffmpeg -hide_banner -loglevel warning -y -i "$s" -ac 2 -ar 44100 -sample_fmt s16 "$wav"
+      ffmpeg -loglevel error -nostdin -threads 0 -y -i "$wav" -f s16le -ac 1 -acodec pcm_s16le -ar 16000 "win/decode/vm/$tag-$id.pcm"
+      rm "$wav"
+    done
+    ```
+
+13. **GPU runs (Ken, PowerShell, after step 11).** If `git worktree list` shows the
+    branch checked out in a worktree, `cd` there and use
+    `git fetch vm; git merge --ff-only vm/whisper_input_fresh_vs_regen` instead of the
+    checkout line.
+
+    ```powershell
+    cd C:\temp\Github\pikaraoke
+    git fetch vm
+    git checkout -B whisper_input_fresh_vs_regen vm/whisper_input_fresh_vs_regen
+    git diff --stat 97bd57f3 HEAD -- pikaraoke scripts   # must print nothing
+    uv run python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))" | Out-File -Encoding ascii D:\Shared\whisper_regen\win\versions.txt
+    $env:PYTHONUTF8 = "1"
+    foreach ($r in "w1", "w2", "w0") {
+        cmd /c "uv run python scripts\regen_alignment_bundles.py D:\Shared\whisper_regen\win\$r --yes < NUL > D:\Shared\whisper_regen\win\${r}_run.log 2>&1"
+        "$r exit $LASTEXITCODE"
+        if ($LASTEXITCODE -ne 0) { break }
+    }
+    ```
+
+14. **Decode on Windows (Ken, same window).** Step 12 with Windows ffmpeg:
+
+    ```powershell
+    $out = "D:\Shared\whisper_regen\win\decode\win"
+    New-Item -ItemType Directory -Force $out | Out-Null
+    $stems = @(Get-ChildItem -LiteralPath "D:\Shared\whisper_regen\win\w1\vocal") + @(Get-ChildItem -LiteralPath "D:\Shared\whisper_regen\exp\lib\vocal")
+    foreach ($s in $stems) {
+        $id = $s.Name -replace '^.*---(.{11})---vocal\.m4a$', '$1'
+        $tag = if ($s.DirectoryName -like "*\exp\lib\vocal") { "lin" } else { "win" }
+        $wav = Join-Path $out "$tag-$id.wav"
+        ffmpeg -hide_banner -loglevel warning -y -i $s.FullName -ac 2 -ar 44100 -sample_fmt s16 $wav
+        ffmpeg -loglevel error -nostdin -threads 0 -y -i $wav -f s16le -ac 1 -acodec pcm_s16le -ar 16000 (Join-Path $out "$tag-$id.pcm")
+        Remove-Item -LiteralPath $wav
+    }
+    (Get-ChildItem -LiteralPath $out).Count   # expect 6
+    ```
+
+15. **Runs (VM).** Per run, as rows 3 and 6: exit, start and end, stages, the file whisper
+    read, LRCLIB result, joint match counts, onset snap counts, any `dereverb/` file, any
+    `.lrc` that was not seeded. SHA256 of every stem under `$WX/*/vocal/`: w1 and w2
+    unchanged from step 10; w0's two new ones against the library's Kickapoo
+    (`53e41e87...`) and Here I Go (`8b9c5d09...`), with ffprobe bit rate and encoder tag.
+    Both boxes' `versions.txt`.
+
+16. **Decode compare (VM).** Per stem, the SHA256 of `decode/win/<f>.pcm` and
+    `decode/vm/<f>.pcm`; where they differ, sample counts, largest absolute sample
+    difference and RMS of the difference (int16). Whether `$LV/versions.txt` names the
+    VM's ffmpeg build; if not, the VM stands in for the Linux box only approximately.
+
+17. **Compare (VM).** Step 7's measures, by a scratch copy of
+    `D:\Shared\whisper_regen\compare.py` (not kept), on:
+
+    | pair | what it isolates |
+    |---|---|
+    | W1 vs Linux library v12, each of the four | box only, same stem bytes |
+    | W1 vs Windows v11, each of the four | fresh WAV vs saved stem, on Windows |
+    | W1 vs W2, Kickapoo | Windows-made vs Linux-made stem, on Windows (row 12's mirror) |
+    | W2 vs Linux arm B, Kickapoo and Here I Go | box only, same stem bytes |
+    | W0 vs Windows v11, Kickapoo | does Windows repeat itself |
+    | W0 vs Linux arm A, Kickapoo and Here I Go | box only, both WAV-heard |
+
+    And R14's lines in every W bundle and in the bundle it is compared with: pass-1 start
+    and end, selected source, `interpolated_line_ids`, and lines sharing a start with a
+    neighbour. Kickapoo 41-43, `1YiAzyCzZzw` 57-60, `pXNd2V88d60` 56-62, `GI6CfKcMhjY`
+    12 and 62. As in step 7, no final line times between a v11 bundle and a new one.
+
+Cost: eight song-runs, two of them separating, about 20 minutes of A2000 GPU. About
+450 MB under `$WX`. Network: LRCLIB lookups for the genius-origin songs only. The fill
+comes after pass 1, so a new LRCLIB match does not touch the compared fields.
+
+### Reading the result (for Ken's report, not the log)
+
+- W1 stacks the same lines as Linux library v12: the stack follows the stem file, not
+  the box. The Windows full regen at landing would stack these songs, so the regen guard
+  (idea 6) or a defect fix comes first.
+- W1 does not stack: the same stem and code give a different result on another machine.
+  R14's Linux regen then does not predict a Windows one, which songs a regen stacks
+  cannot be known before it runs, and the regen guard is the only protection.
+- The four songs split: both, song by song.
+- W2 equals arm B on Here I Go: the box alone does not move a well-behaved song when the
+  input bytes match. If it differs, the pair says by how much.
+- Decoded PCM equal on both boxes: ffmpeg is not part of the box difference; the GPU and
+  torch stack is. Unequal: part of it is ffmpeg, which can be pinned.
+- W0's Kickapoo differs from Windows v11 (Linux repeated exactly, row 8): Windows does not
+  repeat itself, and W1 and W2 each need a second run before they are read. W0's
+  Kickapoo stem equal to `53e41e87...`: a Windows separation and encode repeat byte for
+  byte.
