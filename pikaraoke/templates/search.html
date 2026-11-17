@@ -2,35 +2,8 @@
 {% from 'search_result.html' import result_card %}
 {% from 'info_tip.html' import info_tip %}
 {% block scripts %}
-<link href="{{  url_for('static', filename='selectize.min.css') }}" rel="stylesheet" />
-<script src="{{  url_for('static', filename='selectize-0.12.6.min.js') }}"></script>
 <script src="{{ url_for('static', filename='library-pages.js') }}"></script>
 <style>
-	.optgroup-header {
-		font-weight: bold;
-	}
-
-	.row {
-		display: flex;
-		border-bottom: 1px solid #cccccc;
-	}
-
-	.col-icon {
-		padding-left: 1px;
-	}
-
-	.col-text {
-		padding-left: 2px;
-		font-size: 120%;
-	}
-
-	.selectize-input {
-		height: 40px;
-		border-top-right-radius: 0;
-		border-bottom-right-radius: 0;
-		font-size: 1rem;
-	}
-
 	/* --- Search result list ---------------------------------- */
 	ul.search_result_items {
 		list-style: none;
@@ -291,125 +264,11 @@
 </style>
 <script>
 	$(function () {
-		$("#search_result_selector").focus();
-
-		$("#search-link").click(function () {
-			if (!$("#search-link").is("[disabled=disabled]")) {
-				$("#search-link").addClass("is-loading");
-			}
-		});
-
 		$("#direct-download-button").click(function () {
 			var url = $("#direct-download-url").val();
 			if (!url) return;
 			downloadSong(url, "", this);
 		});
-
-		$("#add-queue-link").click(function () {});
-
-		//START SELECTIZE CHANGES
-
-		$("#add-queue-link").hide();
-		$("#add-queue-link").attr("disabled", "true");
-		$("#search-link").attr("disabled", "true");
-		var $select = $("#song_to_add").selectize({
-			valueField: "path",
-			labelField: "fileName",
-			searchField: ["fileName"],
-			optgroupField: "type",
-			optgroups: [
-				{
-					value: "autocomplete",
-					label: '{{ _("Available songs in local library") }}',
-				},
-			],
-			createOnBlur: true,
-			openOnFocus: false,
-			createFilter: function (input) {
-				return input.length >= 2;
-			},
-			onInitialize: function () {
-				var that = this;
-
-				this.$control.on("click", function () {
-					that.ignoreFocusOpen = true;
-					setTimeout(function () {
-						that.ignoreFocusOpen = false;
-					}, 50);
-				});
-			},
-
-			onFocus: function () {
-				if ($(window).width() <= 500 && $(window).height() <= 740) {
-					document.getElementById("search-field").scrollIntoView();
-				}
-				if (!this.ignoreFocusOpen) {
-					this.open();
-				}
-			},
-			onBlur: function () {
-				this.setTextboxValue(this.currentResults.query);
-			},
-			onChange: function (id) {
-				if (!id) {
-					$("#add-queue-link").attr("disabled", "true");
-					$("#search-link").attr("disabled", "true");
-					$("#add-queue-link").hide();
-					$("#search-link").show();
-				} else {
-					$("#add-queue-link").removeAttr("disabled");
-					$("#search-link").removeAttr("disabled");
-					$("#add-queue-link").show();
-					$("#search-link").hide();
-				}
-			},
-			onType: function (text) {
-				if (!text) {
-					console.log("no text");
-					$("#search-link").attr("disabled", "true");
-					{# $("#add-queue-link").show();
-					$("#search-link").hide(); #}
-				} else {
-					console.log("has text: " + text);
-					$("#search-link").removeAttr("disabled");
-					$("#add-queue-link").hide();
-					$("#search-link").show();
-				}
-			},
-			render: {
-				option: function (item, escape) {
-					return (
-						'<div class="row">' +
-						'<div class="col-icon"><i class="icon icon-music has-text-info"></i></div>' +
-						'<div class="col-text">' +
-						escape(item.fileName) +
-						"</div>" +
-						"</div>"
-					);
-				},
-				optgroup_header: function (data, escape) {
-					return '<div class="optgroup-header">' + escape(data.label) + "</div>";
-				},
-			},
-			load: function (query, callback) {
-				if (query.length < 2) return callback;
-				$.ajax({
-					url: "{{ url_for('search.autocomplete') }}" + "?q=" + query,
-					type: "get",
-					success: function (data) {
-						callback(data);
-					},
-				});
-			},
-		});
-
-		// re-populate the search field with previous search term
-		const urlParams = new URLSearchParams(window.location.search);
-		const qSearchString = urlParams.get("search_string");
-		if (qSearchString) {
-			$("#song_to_add-selectized").val(qSearchString);
-			$("#song_to_add-selectized").width("100%");
-		}
 
 		function saveSearchResults() {
 			sessionStorage.setItem(
@@ -433,112 +292,38 @@
 				$("#searching_loader").after($saved.children());
 				const savedTerm = sessionStorage.getItem("pikaraoke_search_term");
 				if (savedTerm) {
-					$("#song_to_add-selectized").val(savedTerm);
-					$("#song_to_add-selectized").width("100%");
+					$("#search-input").val(savedTerm);
 				}
 			}
 		}
 
 		$("#clear-search").on("click", function (e) {
 			e.preventDefault();
-			$select[0].selectize.clear();
-			$("#song_to_add-selectized").val("");
+			$("#search-input").val("");
 			sessionStorage.removeItem("pikaraoke_search_results");
 			sessionStorage.removeItem("pikaraoke_search_term");
 			$("#container_search_result").remove();
 		});
 
-		$("#search-link").on("click", function (e) {
-			e.preventDefault();
-			var search_term = $(".search-selectize .selectize-input input").val();
-			if (search_term) {
-				$("#searching_loader").removeClass("is-hidden");
-				$("#searching_loader #search_term").text(search_term);
-				$("#search-link").attr("disabled", "true");
-				$("#search_string").val(search_term);
-				$("#container_search_result").hide();
-				$("#container_search_form form").submit();
+		// The form submits natively, which reloads the page: show the wait first. A blank query
+		// does nothing.
+		$("#search-form").on("submit", function (e) {
+			var searchTerm = $("#search-input").val().trim();
+			if (!searchTerm) {
+				e.preventDefault();
+				return;
 			}
+			$("#searching_loader #search_term").text(searchTerm);
+			$("#searching_loader").removeClass("is-hidden");
+			$("#search-link").addClass("is-loading").attr("disabled", true);
+			$("#container_search_result").hide();
 		});
-		$("#add-queue-link").on("click", function (e) {
-			e.preventDefault();
-			if ($(".search-selectize").find(":selected").text()) {
-				$("#add-queue-link").attr("disabled", "true");
-				$("#add-queue-link").addClass("is-loading");
-				setTimeout(function () {
-					$("#add-queue-link").removeClass("is-loading");
-				}, 1000);
-				$.ajax({
-					url: "{{ url_for('queue.enqueue') }}",
-					type: "post",
-					data: $("#queue-form").serialize(),
-					success: function (data) {
-						var obj = JSON.parse(data);
-						if (obj.success[0]) {
-							showNotification(obj.success[1], "is-success");
-						} else {
-							showNotification(obj.success[1], "is-danger");
-						}
-						$select[0].selectize.clear();
-					},
-					error: function (xhr) {
-						var msg = "";
-						try { msg = JSON.parse(xhr.responseText).error; } catch (err) {}
-						showNotification(msg || "Could not add to the queue.", "is-danger");
-					},
-				});
-			}
-		});
-
-		//END SELECTIZE CHANGES
-
-		$("#youtube-link").attr("href", $("#search_result_selector").val());
-		$("#youtube-link").text($("#search_result_selector").val());
-
-		//get youtube thumbnail based on ID
-		i = -1;
-		changeImage();
 
 		// Remove any previously-registered handlers before rebinding. The SPA
 		// navigation in spa-navigation.js re-executes this inline script on every
 		// visit; without .off() the document-delegated handlers accumulate and a
 		// single download click fires N AJAX calls, creating duplicate pipeline rows.
 		$(document).off(".search");
-
-		// Enter searches, or queues the library song picked in the box. Not while the download
-		// dialog is open: its controls answer Enter themselves, and a click on its text leaves
-		// focus on the page behind it. Not once the SPA has swapped this page out either: the
-		// handler stays on the document until the next visit, and would take Enter from every
-		// other page.
-		$(document).on("keypress.search", function (event) {
-			if (event.which != 13 || _dialog || !_modal.isConnected) return;
-			event.preventDefault();
-			if ($(".search-selectize .selectize-input input").val()) {
-				$("#search-link").trigger("click");
-			} else if ($(".search-selectize").find(":selected").text()) {
-				$("#add-queue-link").trigger("click");
-			}
-		});
-
-		$(document).on("change.search", "#search_result_selector", function () {
-			var url = $("#search_result_selector").val();
-			$("#youtube-link").attr("href", url);
-			$("#youtube-link").text(url);
-			changeImage();
-		});
-		//alow click of images
-		$("#youtube-thumb").click(function (e) {
-			changeImage();
-		});
-		// SPA navigation re-executes this inline script on every visit; clear any
-		// prior interval so cycling speed stays constant and old intervals don't
-		// leak (they keep firing forever since beforeunload doesn't fire in SPA).
-		if (window.searchPage_thumbInterval) {
-			clearInterval(window.searchPage_thumbInterval);
-		}
-		window.searchPage_thumbInterval = setInterval(function () {
-			$("#youtube-thumb").trigger("click");
-		}, 2000);
 
 		$("#advanced-settings").hide();
 
@@ -560,8 +345,6 @@
 				$("#direct-download-button").attr("disabled", true);
 			}
 		});
-
-		$(".song_added_by").val(getUserCookie());
 
 		// Restore checkbox states from cookies
 		restoreCheckboxStates();
@@ -1162,14 +945,6 @@ $(document).on("click.search", ".search_result_items_select", function () {
 		}
 	}
 
-	function changeImage() {
-		var next = ++i % 4;
-		var youtube_id = $("#search_result_selector").find(":selected").data("ytid");
-		var fn = next == 0 ? "default" : next;
-		var img_src = "https://img.youtube.com/vi/" + youtube_id + "/mq" + fn + ".jpg";
-		$("#youtube-thumb").attr("src", img_src);
-	}
-
 	function restoreCheckboxStates() {
 		// Restore "Add to queue" checkbox state
 		var addToQueue = Cookies.get("add-to-queue-on-download");
@@ -1184,57 +959,33 @@ $(document).on("click.search", ".search_result_items_select", function () {
 {% endblock %} {% block content %}
 
 <div>
-	<div class="field" id="container_queue_form">
-		<form id="queue-form">
-			<div id="search-field" class="field has-addons mb-1">
-				<div class="control is-expanded">
-					<select id="song_to_add" class="search-selectize is-size-7" name="song_to_add">
-						{# TODO MSG: Label #}
-						<optgroup label="{{ _('Available Songs') }}" id="available-songs"></optgroup>
-					</select>
-				</div>
-				<div class="control">
-					{# MSG: Submit button on the search form for searching YouTube. #}
-					<a class="button is-warning" id="search-link">{% trans %}Search{% endtrans %}</a>
-					{# MSG: Submit button on the search form when selecting a locally downloaded song. The button adds it to
-					the queue. #}
-					<a class="button is-info" id="add-queue-link">{% trans %}Add to queue{% endtrans %}</a>
-				</div>
-				<input class="song_added_by" type="hidden" name="song_added_by" />
+	<form id="search-form" action="{{ url_for('search.search') }}" method="get">
+		<div class="field has-addons mb-1">
+			<div class="control is-expanded">
+				<input
+					class="input"
+					id="search-input"
+					type="text"
+					name="search_string"
+					value="{{ search_string or '' }}"
+					autocomplete="off"
+					enterkeyhint="search"
+				/>
 			</div>
-			<div class="control is-flex is-justify-content-flex-end is-align-items-center mb-2">
-				<a id="clear-search" class="has-text-danger" style="margin-right: 15px">
-					{# MSG: Link which clears the text from the search box. #} {% trans %}Clear{% endtrans %}</a
-				>
-				<label class="checkbox is-flex is-align-items-center">
-					<input type="checkbox" id="show-advanced" class="checkbox" name="show-advanced" />
-					{# MSG: Checkbox label which enables more options when searching. #} {% trans %}Advanced{% endtrans %}
-				</label>
+			<div class="control">
+				{# MSG: Submit button on the search form for searching YouTube. #}
+				<button type="submit" class="button is-warning" id="search-link">{% trans %}Search{% endtrans %}</button>
 			</div>
-
-			<article class="message">
-				<div class="message-body">
-					<div class="columns is-vcentered is-mobile">
-						<div class="column is-narrow">
-							<span class="icon has-text-warning">
-								{# MSG: Info icon at the start of the help text below the search bar. #}
-								<i class="icon icon-info-circled-1 is-size-4" title="Info"></i>
-							</span>
-						</div>
-						<div class="column has-text-warning-light">
-							<p class="mb-1 is-italic">
-								{# MSG: Help text below the search bar. #} {% trans -%}- Type a song (title/artist) to search
-								the available songs and click 'Add to queue' to add it to the queue. {%- endtrans %}
-							</p>
-							<p class="is-italic">
-								{# MSG: Additonal help text below the search bar. #} {% trans -%}- If the song doesn't appear in
-								the "Available Songs" dropdown, click 'Search' to find it on Youtube {%- endtrans %}
-							</p>
-						</div>
-					</div>
-				</div>
-			</article>
-		</form>
+		</div>
+	</form>
+	<div class="control is-flex is-justify-content-flex-end is-align-items-center mb-2">
+		<a id="clear-search" class="has-text-danger" style="margin-right: 15px">
+			{# MSG: Link which clears the text from the search box. #} {% trans %}Clear{% endtrans %}</a
+		>
+		<label class="checkbox is-flex is-align-items-center">
+			<input type="checkbox" id="show-advanced" class="checkbox" name="show-advanced" />
+			{# MSG: Checkbox label which enables more options when searching. #} {% trans %}Advanced{% endtrans %}
+		</label>
 	</div>
 
 	<div>
@@ -1270,12 +1021,6 @@ $(document).on("click.search", ".search_result_items_select", function () {
 	</div>
 
 	<hr />
-
-	<div class="field is-hidden" id="container_search_form">
-		<form action="{{ url_for('search.search') }}" method="get">
-			<input id="search_string" type="text" name="search_string" />
-		</form>
-	</div>
 
 	<div id="searching_loader" class="control is-loading is-hidden">
 		{% set placeholder_search_term %}
