@@ -1568,9 +1568,7 @@ class TestAFailedRowWhileTheJobCleansUp:
 class TestCancelActiveBeforeTheRun:
     def test_it_flags_the_job_and_leaves_the_orchestrator_alone(self, manager):
         manager._orchestrator = MagicMock()
-        manager._active = _ActiveJob(
-            song_path="/songs/A---abc.mp4", cancel_token=None, kind="regen"
-        )
+        manager._active = _ActiveJob(song_path="/songs/A---abc.mp4", cancel_token=None)
 
         manager.cancel_active("/songs/A---abc.mp4")
 
@@ -1929,21 +1927,3 @@ class TestActiveJobTiming:
         job.started_at -= 30.0
         manager._active = job
         assert 30.0 <= manager.get_active_elapsed_s() < 60.0
-
-    def test_a_job_records_which_lane_it_came_from(
-        self, events, preferences, mock_orchestrator, tmp_path, prepared
-    ):
-        mgr = _runnable_manager(events, preferences, mock_orchestrator, tmp_path)
-        seen = []
-        ctx = MagicMock(spec=StageContext)
-        ctx.artifacts = {}
-
-        def capture():
-            seen.append(mgr._active.kind)
-            return ctx
-
-        mock_orchestrator.join.side_effect = capture
-        _run_download(mgr, "/songs/A---abc.mp4")
-        _run_regen(mgr, _regen_job(tmp_path))
-
-        assert seen == ["download", "regen"]
