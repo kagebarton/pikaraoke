@@ -429,7 +429,9 @@ def test_the_dialogs_queue_button_takes_its_colour_from_the_box_not_the_markup(m
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
-def test_the_artists_official_video_and_audio_come_first_with_a_badge(mock_get, client):
+def test_the_official_video_comes_first_and_audio_beside_it_keeps_its_place_with_a_badge(
+    mock_get, client
+):
     lyrics = _result("Rick Astley - Never Gonna Give You Up (Lyrics)", "lyricsaaaaa")
     audio = _result(
         "Never Gonna Give You Up",
@@ -455,12 +457,12 @@ def test_the_artists_official_video_and_audio_come_first_with_a_badge(mock_get, 
     cards = re.findall(r"<li data-ytID=.*?</li>", body, re.S)
     assert [re.search(r'data-ytID="(\w+)"', c).group(1) for c in cards] == [
         "videoaaaaaa",
-        "audioaaaaaa",
         "lyricsaaaaa",
+        "audioaaaaaa",
     ]
     assert "Official video" in cards[0]
-    assert "Official audio" in cards[1]
-    assert "Official" not in cards[2]
+    assert "Official" not in cards[1]
+    assert "Official audio" in cards[2]
 
 
 # ---------------------------------------------------------------------------
@@ -499,7 +501,7 @@ def test_more_returns_the_second_page_cards_without_the_page_shell(mock_get, cli
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
-def test_more_picks_the_artist_from_the_first_page_and_ranks_the_second(mock_get, client):
+def test_more_votes_the_originals_over_the_first_page_and_ranks_the_second(mock_get, client):
     """Over all 60 rows Beta would win the vote; the first page's 30 name Alpha."""
     first_page = [
         _result("Alpha - Some Song (Lyrics)", i, channel="Lyrics Co", channel_verified=True)
@@ -518,6 +520,30 @@ def test_more_picks_the_artist_from_the_first_page_and_ranks_the_second(mock_get
 
     ids = re.findall(r'<li data-ytID="(\w+)"', resp.get_data(as_text=True))
     assert ids == ["alphavideo1"] + [r.id for r in second_page[:-1]]
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_more_leaves_second_page_audio_in_place_when_the_first_page_lifted_a_video(
+    mock_get, client
+):
+    """Audio goes first only on a page with no official video; page two follows page one."""
+    first_page = [
+        _result(
+            "Alpha - Some Song (Official Video)", "alphavideo1", "Alpha", channel_verified=True
+        ),
+        _result("Some Song", "alphaaudio1", channel="Alpha - Topic"),
+        _result("Some Song", "alphaaudio2", channel="Alpha - Topic"),
+    ] + _filler(27, start=3)
+    second_page = _filler(29, start=30) + [
+        _result("Some Song", "alphaaudio3", channel="Alpha - Topic")
+    ]
+
+    resp, _ = _more_body(client, mock_get, first_page + second_page)
+
+    body = resp.get_data(as_text=True)
+    ids = re.findall(r'<li data-ytID="(\w+)"', body)
+    assert ids == [r.id for r in second_page]
+    assert "Official audio" in re.findall(r"<li data-ytID=.*?</li>", body, re.S)[-1]
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")

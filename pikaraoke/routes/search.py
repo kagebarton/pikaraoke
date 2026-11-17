@@ -26,7 +26,12 @@ from pikaraoke.lib.genius import HITS_PER_QUERY, GeniusHit, write_choice
 from pikaraoke.lib.genius_query import LIBRARY_CALLS, SEARCH_PAGE_CALLS, find_song
 from pikaraoke.lib.library_regen import check_video_caption
 from pikaraoke.lib.metadata_parser import extract_youtube_id
-from pikaraoke.lib.official_rank import OfficialKind, official_first, pick_artist
+from pikaraoke.lib.official_rank import (
+    Acts,
+    OfficialKind,
+    official_first,
+    read_first_page,
+)
 from pikaraoke.lib.song_match import SongIndex, similar_songs
 from pikaraoke.lib.youtube_dl import SearchResult, get_search_results
 
@@ -70,7 +75,7 @@ class DownloadBody(Schema):
 @dataclass(frozen=True)
 class SearchRow:
     """One result card: the YouTube hit, the library file that already carries its ID, and
-    whether it was lifted as the original artist's official upload."""
+    whether it is badged as an original act's official upload."""
 
     result: SearchResult
     existing_path: str | None
@@ -95,14 +100,14 @@ def _library_copies(songs: Iterable[str], results: list[SearchResult]) -> list[s
 
 
 def _search_rows(
-    songs: Iterable[str], results: list[SearchResult], query: str, artist: str | None
+    songs: Iterable[str], results: list[SearchResult], query: str, acts: Acts
 ) -> list[SearchRow]:
-    """Result cards in display order: the artist's official uploads first, then YouTube's order."""
+    """Result cards in display order: the official uploads first, then YouTube's order."""
     # Read from the song list, not find_by_id, which misses "Title [ID].mp4" and subfolders.
     library_ids = {video_id: path for path in songs if (video_id := extract_youtube_id(path))}
     return [
         SearchRow(r, library_ids.get(r.id), official)
-        for r, official in official_first(results, query, artist)
+        for r, official in official_first(results, query, acts)
     ]
 
 
@@ -114,8 +119,8 @@ def search():
     search_string = request.args.get("search_string")
     if search_string:
         results = get_search_results(search_string, PAGE_SIZE)
-        artist = pick_artist(results, search_string)
-        search_rows = _search_rows(k.song_manager.songs, results, search_string, artist)
+        acts = read_first_page(results, search_string)
+        search_rows = _search_rows(k.song_manager.songs, results, search_string, acts)
         library_copies = _library_copies(k.song_manager.songs, results)
         show_more = len(results) >= PAGE_SIZE
     else:
@@ -141,7 +146,7 @@ def search():
 def search_more(query):
     """The next page of result cards, as HTML without the page shell, for Show more.
 
-    One fetch of two pages, with the artist voted over the first as on /search so the lifted
+    One fetch of two pages, with the originals voted over the first as on /search so the lifted
     rows agree; only the second page is returned.
     """
     k = get_karaoke_instance()
@@ -151,8 +156,8 @@ def search_more(query):
     except subprocess.CalledProcessError as e:
         logging.error(f"Could not fetch more results for {search_string!r}: {e}")
         return "", 502
-    artist = pick_artist(results[:PAGE_SIZE], search_string)
-    rows = _search_rows(k.song_manager.songs, results[PAGE_SIZE:], search_string, artist)
+    acts = read_first_page(results[:PAGE_SIZE], search_string)
+    rows = _search_rows(k.song_manager.songs, results[PAGE_SIZE:], search_string, acts)
     result_card = get_template_attribute("search_result.html", "result_card")
     return "".join(result_card(row) for row in rows)
 
