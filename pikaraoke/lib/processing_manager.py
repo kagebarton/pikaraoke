@@ -178,7 +178,6 @@ class _ActiveJob:
     cancel_token: CancelToken | None
     # A cancel arrived. A regen still preparing reads it to skip its run.
     cancelling: bool = False
-    kind: str = "download"  # which lane the job came from: "download" | "regen"
     started_at: float = field(default_factory=time.monotonic)
 
 
@@ -559,7 +558,7 @@ class ProcessingManager:
         with self._state_lock:
             for i, (song_path, _) in enumerate(self._regen_jobs):
                 if not self._is_playing(song_path):
-                    self._active = _ActiveJob(song_path=song_path, cancel_token=None, kind="regen")
+                    self._active = _ActiveJob(song_path=song_path, cancel_token=None)
                     return self._regen_jobs.pop(i)
         return None
 
