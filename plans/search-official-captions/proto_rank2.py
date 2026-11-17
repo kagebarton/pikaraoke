@@ -1,4 +1,5 @@
-"""Reference prototype of the revised official-first ranking (2026-11-11).
+"""Reference prototype of the revised official-first ranking (2026-11-11, revised 2026-11-16
+after the held-out check).
 
 Not the module. It is a working statement of the rules in plans/search-official-captions.md,
 there to settle ambiguity and to produce that plan's expected tables. It borrows the helpers
@@ -7,7 +8,8 @@ module rewrite keeps those and replaces the rest.
 
     python plans/search-official-captions/proto_rank2.py <folder of .jsonl searches> [--no-other]
 
-``--no-other`` leaves out the other acts' tier, which is the state after commit 2.
+``--no-other`` leaves out the other acts' tier, which is the state after commit 2. A lifted
+row prints "lift"; a row that only carries the badge (audio beside a lifted video) prints "badge".
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ _MIN_CREDITS = 2
 # An opening quote, not the apostrophe inside "Don't".
 _OPENING_QUOTE = re.compile(r"""(?<![A-Za-z0-9])['"‘“「『]""")
 _SQUARE = re.compile(r"\[[^\]]*\]|【[^】]*】")
+_UNCLOSED = re.compile(r"\([^)]*$")  # a bracket the title cuts off
 _ROUND = re.compile(r"\(([^)]*)\)")
 # "feat. X", "with X", "from Film": guests and the film, up to the bracket or segment end.
 _GUESTS_AND_FILM = re.compile(r"\b(?:feat|ft|featuring|with|from)\b\.?[^()\[\]/|]*", re.I)
@@ -34,7 +37,7 @@ _GUESTS_AND_FILM = re.compile(r"\b(?:feat|ft|featuring|with|from)\b\.?[^()\[\]/|
 _SAYS_OFFICIAL = re.compile(
     r"\bofficial\b[^()\[\]|]*\b(?:video|audio|M/?V)\b|\bmusic video\b|\bM/?V\b", re.I
 )
-_SAYS_VERSION = re.compile(r"\b(?:version|edition|remaster(?:ed)?)\b", re.I)
+_SAYS_VERSION = re.compile(r"\b(?:version|edition|edit|remaster(?:ed)?)\b", re.I)
 _CHANNEL_SUFFIX = re.compile(r"(?:official|vevo|music|tv|videos?)$")
 _LABEL_CHANNEL = re.compile(r"vevo$|\b(?:records|recordings|labels?)\b", re.I)
 # Words a title may carry beyond artist and song without saying what it is.
@@ -47,14 +50,17 @@ _MORE_MARKS = re.compile(r"\b(demo|rehearsal|making of|footnotes|performs?|perfo
 
 @dataclass(frozen=True)
 class Acts:
-    """What the first page says about who is who: the original artist's names, and the acts
-    whose own channel has an official video of the song on that page."""
+    """What the first page says: the original artist's names, the words of the record's own
+    title (from the original's art tracks), and whether that page lifts any video."""
 
     originals: frozenset[str] = frozenset()
-    own_channel: frozenset[str] = frozenset()
+    record_words: frozenset[str] = frozenset()
+    has_video: bool = False
 
 
 def marks(text: str) -> Counter[str]:
+    """Hyphens read as spaces, so "Behind-the-Scenes" carries the mark "behind the"."""
+    text = text.replace("-", " ")
     more = Counter(" ".join(old._words(m.group())) for m in _MORE_MARKS.finditer(text))
     return old._marks(text) + more
 
@@ -76,11 +82,14 @@ def same_act(name: str, channel: str) -> bool:
 def title_artists(title: str, query_words: Sequence[str]) -> set[str]:
     """As today for "A - B". For a title with no separator but a quoted song
     ("BTS (방탄소년단) 'Butter' Official MV"): the text before the quote, and each round-bracket alias
-    in it ("정국 (Jung Kook) 'Seven'" credits jungkook)."""
+    in it ("정국 (Jung Kook) 'Seven'" credits jungkook). The quote must be outside brackets:
+    in 'Under the Sea (From "The Little Mermaid")' it names the film, and credits no one."""
     artists = old._title_artists(title, query_words)
     if artists:
         return artists
-    quote = _OPENING_QUOTE.search(title)
+    blank = lambda match: " " * len(match.group())  # noqa: E731  (positions must not move)
+    outside = _UNCLOSED.sub(blank, old._BRACKETED.sub(blank, title))
+    quote = _OPENING_QUOTE.search(outside)
     if not quote or not quote.start():
         return set()
     head = _SQUARE.sub(" ", title[: quote.start()])
@@ -120,14 +129,22 @@ def pick_originals(results: Sequence[SearchResult], query: str) -> frozenset[str
     return frozenset(name for name, count in votes.items() if count == top)
 
 
-def is_the_song(title: str, song_words: Sequence[str]) -> bool:
+def is_the_song(
+    title: str, song_words: Sequence[str], query_words: Sequence[str], acts: set[str]
+) -> bool:
     """More than half the song words anywhere in the title, at least one outside brackets, so
     "Speechless (from Aladdin)" is "speechless aladdin" and "Another One Bites the Dust (from
-    Bohemian Rhapsody)" is not "bohemian rhapsody"."""
+    Bohemian Rhapsody)" is not "bohemian rhapsody". And the query may say more than the title
+    ("let it go frozen" for "Let It Go") or the title more than the query, but not both: a
+    title that lacks a song word and carries its own words outside brackets is another song
+    ("Make You Feel My Love" for "send my love")."""
     if not song_words:
         return True
-    outside = old._share_found(song_words, old._BRACKETED.sub(" ", title))
-    return outside > 0 and old._share_found(song_words, title) > 0.5
+    outside = old._BRACKETED.sub(" ", title)
+    found = old._share_found(song_words, title)
+    if old._share_found(song_words, outside) == 0 or found <= 0.5:
+        return False
+    return found == 1.0 or not unexplained(outside, query_words, acts)
 
 
 def unexplained(title: str, query_words: Sequence[str], acts: set[str]) -> list[str]:
@@ -143,8 +160,9 @@ def unexplained(title: str, query_words: Sequence[str], acts: set[str]) -> list[
 
 
 def lift(result: SearchResult, query: str, acts: Acts, other: bool = True):
-    """(tier, kind, source) or None. tier "original" | "other"; kind "video" | "audio";
-    source "art" | "own" | "label" (source is for reading the prototype's output only)."""
+    """(tier, kind, source) or None: whether the row is an official upload of the song. Where
+    it goes is ``official_first``'s business. tier "original" | "other"; kind "video" |
+    "audio"; source "art" | "own" | "label" (source is for reading the output only)."""
     query_words = old._words(query)
     if marks(result.title) - marks(query):
         return None
@@ -160,8 +178,11 @@ def lift(result: SearchResult, query: str, acts: Acts, other: bool = True):
     channel = channel_name(result)
     own = old._is_trusted(result) and any(same_act(name, channel) for name in credited)
     if tier == "original":
-        song_words = [w for w in query_words if not any(w in name for name in acts.originals)]
-        if not is_the_song(result.title, song_words):
+        # Only the names this row credits are struck from the song words. Striking every
+        # original's would strike the song itself when its name tied the vote ("underthesea").
+        names = credited & acts.originals
+        song_words = [w for w in query_words if not any(w in name for name in names)]
+        if not is_the_song(result.title, song_words, query_words, credited):
             return None
     else:
         # Another act's upload: only a label channel's video (a film song's other cast on
@@ -172,66 +193,73 @@ def lift(result: SearchResult, query: str, acts: Acts, other: bool = True):
             return None
         if old._share_found(query_words, result.title + " " + result.channel) < 1.0:
             return None
-        if not is_the_song(result.title, query_words):
+        if not is_the_song(result.title, query_words, query_words, credited):
             return None
 
-    # A label's upload. For the original, a verified channel whose title says official will do
-    # (RHINO, Netflix); for any other act the channel itself must read as a label's. Either
-    # way not when the act's own channel has the video on this page: then it is a re-upload.
-    by_title = tier == "original" and result.channel_verified and (says_official or is_audio)
-    label = (label_channel or by_title) and not (credited & acts.own_channel)
+    # A label's upload: the channel itself must read as a label's. A title that says
+    # "Official Music Video" proves nothing (the verified fan channel "Disney¡Fan!").
     if art:
         source = "art"
     elif own:
         source = "own"
-    elif label:
+    elif label_channel:
         source = "label"
     else:
         return None
 
     # A video whose title carries more than artist and song must say what it is: "(O2 Arena)"
     # and "@ The Tonight Show" are live, "(2025 Version)" and "(Official HD Video)" are not.
-    # Audio is left alone: it is the fallback, and never captioned either way. So is a title
-    # with a mark, which got this far only because the query asked for it ("bohemian rhapsody
-    # live" wants "(Live Aid 1985)").
+    # Words of the record's own title are explained: "(To Your New Lover)". Audio is left
+    # alone: it is the fallback, and never captioned either way. So is a title with a mark,
+    # which got this far only because the query asked for it ("bohemian rhapsody live" wants
+    # "(Live Aid 1985)").
     says_what_it_is = says_official or bool(_SAYS_VERSION.search(result.title))
     if not (is_audio or marks(result.title) or says_what_it_is):
-        if unexplained(result.title, query_words, credited):
+        if set(unexplained(result.title, query_words, credited)) - acts.record_words:
             return None
     return tier, ("audio" if is_audio else "video"), source
 
 
-def read_first_page(results: Sequence[SearchResult], query: str) -> Acts:
-    """Vote the originals, then note which acts have their own channel's video on the page.
-    Nothing for a query in a script the song check cannot read, as today."""
+def read_first_page(results: Sequence[SearchResult], query: str, other: bool = True) -> Acts:
+    """Vote the originals; read the record's title off their art tracks; and note whether the
+    page lifts any video. Each step needs the one before. Nothing for a query in a script the
+    song check cannot read."""
     if old._has_letters_without_ascii(query):
         return Acts()
     originals = pick_originals(results, query)
-    first = Acts(originals)
-    query_words = old._words(query)
-    own_channel = frozenset(
-        name
+    record_words = frozenset(
+        word
         for result in results
-        if (found := lift(result, query, first)) and found[1:] == ("video", "own")
-        for name in row_acts(result, query_words)
-        if same_act(name, channel_name(result))
+        if old._is_art_track(result) and lift(result, query, Acts(originals))
+        for word in old._words(result.title)
     )
-    return Acts(originals, own_channel)
+    acts = Acts(originals, record_words)
+    has_video = any(
+        (found := lift(result, query, acts, other)) and found[1] == "video" for result in results
+    )
+    return Acts(originals, record_words, has_video)
 
 
-_ORDER = {("original", "video"): 0, ("other", "video"): 1, ("original", "audio"): 2}
+_VIDEO_ORDER = {"original": 0, "other": 1}
 
 
 def official_first(results: Sequence[SearchResult], query: str, acts: Acts, other: bool = True):
-    """The original's videos, other acts' official videos, the original's audio, the rest.
-    Stable. Nothing is lifted when the query's script cannot be read."""
+    """The original's videos, other acts' official videos, then YouTube's order. The
+    original's audio goes first only when no video is lifted, here or on the first page: it is
+    almost never captioned, so beside a video it keeps its badge and its place. Stable.
+    Returns (result, found, lifted). Nothing when the query's script cannot be read."""
     if old._has_letters_without_ascii(query):
-        return [(result, None) for result in results]
-    lifted = [(result, lift(result, query, acts, other)) for result in results]
-    keyed = sorted(
-        enumerate(lifted), key=lambda item: (_ORDER[item[1][1][:2]] if item[1][1] else 3, item[0])
-    )
-    return [pair for _, pair in keyed]
+        return [(result, None, False) for result in results]
+    found = [(result, lift(result, query, acts, other)) for result in results]
+    video = acts.has_video or any(f and f[1] == "video" for _, f in found)
+
+    def rank(f) -> int:
+        if f and f[1] == "video":
+            return _VIDEO_ORDER[f[0]]
+        return 0 if f and not video else 2
+
+    keyed = sorted(enumerate(found), key=lambda item: (rank(item[1][1]), item[0]))
+    return [(result, f, rank(f) < 2) for _, (result, f) in keyed]
 
 
 def main() -> None:
@@ -240,13 +268,13 @@ def main() -> None:
     for path in sorted(folder.glob("*.jsonl")):
         query = path.stem.replace("_", " ")
         results = [r for r in map(_parse_search_line, path.read_text().splitlines()) if r][:30]
-        acts = read_first_page(results, query)
+        acts = read_first_page(results, query, other)
         print(f"\n== {query} | originals={sorted(acts.originals)}")
-        for result, found in official_first(results, query, acts, other):
+        for result, found, lifted in official_first(results, query, acts, other):
             if found:
                 position = results.index(result) + 1
                 print(
-                    f"   {found[0][:5]:5} {found[1]} {found[2]:5} #{position:2} "
+                    f"   {'lift ' if lifted else 'badge'} {found[0][:5]:5} {found[1]} {found[2]:5} #{position:2} "
                     f"[{result.channel[:22]}] {result.title[:88]} ({result.id})"
                 )
 
