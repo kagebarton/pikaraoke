@@ -365,7 +365,7 @@ def test_a_library_copy_is_noted_inside_the_card_it_matched(mock_get, client):
     shape, wnw = _cards(body)
     assert "In library:" not in shape
     assert "In library: <strong>Mena Massoud, Naomi Scott - A Whole New World" in wnw
-    assert f'library-copy-enqueue" data-file-path="{_MENA_WNW}"' in wnw
+    assert f'library-copy-enqueue" data-file-path="{_MENA_WNW}">Queue</button>' in wnw
     assert f'library-copy-enqueue" data-file-path="{_ZAYN_WNW}"' in wnw
     assert "Mirrors" not in body
     assert "Already in the library" not in body
@@ -472,7 +472,7 @@ def test_more_notes_no_library_copy(mock_get, client):
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
-def test_card_offers_add_to_queue_only_for_a_library_copy(mock_get, client):
+def test_card_offers_queue_only_for_a_library_copy_and_queue_dots_for_the_dialog(mock_get, client):
     results = [
         _result("Justin Timberlake - Mirrors", "uuZE_IRwLNI", "JT Channel", "8:04"),
         _result("Africa", "FTQbiNvZqaY", channel="", duration=""),
@@ -482,12 +482,13 @@ def test_card_offers_add_to_queue_only_for_a_library_copy(mock_get, client):
 
     library_card, other_card = re.findall(r"<li data-ytID=.*?</li>", body, re.S)
     assert f'data-file-path="{_MIRRORS}"' in library_card
-    assert "search_result_items_enqueue" in library_card
+    assert re.search(r'search_result_items_enqueue">Queue</button>', library_card)
     assert "search_result_items_select" not in library_card
     assert "8:04" in library_card
     assert "JT Channel" in library_card
     assert "data-file-path" not in other_card
-    assert "search_result_items_select" in other_card
+    assert re.search(r'search_result_items_select">Queue…</button>', other_card)
+    assert "search_result_items_enqueue" not in other_card
     assert "duration-badge" not in other_card  # no duration, no badge
     assert "has-text-grey" not in other_card  # no channel, no channel line
     assert "data-index" not in body
