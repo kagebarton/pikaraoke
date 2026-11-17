@@ -105,6 +105,10 @@ differ, the decisions win.
     that opens the dialog reads "Queue…" (`search_official_captions` decision 13, amended
     2026-11-17 in `edd5fa3` on that branch).
 
+16. **The dialog's lyric list is 48 px tall**, as the mockup draws it, level with Queue. Ken ruled
+    this after commit 3 ran (2026-11-17); the Spec had said 44 px (commit 3 item 4 and ui-check
+    item 7), and this decision wins where they differ.
+
 Stated to Ken as assumptions and not objected to (2026-11-17):
 
 - The direct-URL download in Advanced stays as it is: it sends no lyric choice, so a video
@@ -712,7 +716,7 @@ Decisions 7, 8 and 10-15; O4-O7, O16. Files: `search.html`, `pikaraoke/routes/se
 4. The list's arrow (decision 14): delete the `⌄` rule and the rule that hides Bulma's arrow.
    Bulma 1.0.4's own arrow is drawn with borders and sized in `em`, and `bulma-dark.css` already
    colours it `--dark-link`. Give `#lyrics-select-wrap` the list's font size
-   (`--lyrics-dropdown-font-size`), so the box is 44 px and the arrow scales with it, and give
+   (`--lyrics-dropdown-font-size`), so the arrow scales with it (the box is 48 px, decision 16, not 44), and give
    the arrow a 3 px border (mockup).
 5. The list (decision 13), filled by one function from the answer it shows: a "YouTube" group
    holding `__srt__` "YouTube captions (recommended)" when the caption passed; a "Genius.com"
@@ -772,7 +776,7 @@ Decisions 7, 8 and 10-15; O4-O7, O16. Files: `search.html`, `pikaraoke/routes/se
        unchanged, "Nothing found for that search.";
     6. the box ticked: "Queue", then "Queued", `/download` sent `queue: true`; unticked: "Add
        to library", "Added", `queue: false`;
-    7. the list is 44 px tall and its arrow is Bulma's `::after`, with no `::before`.
+    7. the list is 48 px tall (decision 16) and its arrow is Bulma's `::after`, with no `::before`.
 
 ### Stop
 
@@ -808,6 +812,7 @@ files, and one finder angle per Self-Review axis.
 | 1 `feat(search): one yt-dlp lookup answers the dialog's caption check and its preview link` | `142d0c3` | baseline before the branch's code: 3849 passed, 0 failed. After: 3862 passed, 0 failed (+13). `TestCheckCaption` unchanged and passing | pre-commit passed on the 7 files; import smoke of `youtube_dl`, `library_regen`, `routes.search` ok; real-YouTube measurement below (8 videos + the bad-client row); `search.html`'s script not driven in a browser this commit (ui-check is commit 2); no `graphify-out/graph.json`, no update | Run 2026-11-17 on the VM, yt-dlp 2026.10.26, curl_cffi 0.14.0, deno 2.7.7. Client setting put back after the last row; no `no_such_client` left in the tree. `/code-review` due at the stop (plan, Stop section) |
 | 2 `feat(search): the download dialog opens at once on the thumbnail and says what it waits for` | `8a7bcd8` | 3864 passed, 0 failed (+2 over commit 1: the card's length, the dialog's place) | pre-commit passed on the 3 files; import smoke ok; the rendered inline scripts parse (deno, `new Function`); ui-check at 390x844, nine trials of three runs, counts below; Ken's phone checks not done | Deviations from the spec, each small: `#lyrics-loading` and `CAPTION_NOTES.checking` are deleted here (commit 2 supersedes them) rather than in commit 3; a Play tap sets the breathing state whether the link is known or not, so the button breathes while the video buffers; the title and the line under it sit in a `#modal-video-head` wrapper; the page's outer `</div>` now closes after `{% endif %}` (before, it was inside the `{% if search_rows %}` block and unclosed on a page with no results); the download handlers take the id, title and watch link from the dialog's state instead of looking the card up. Typed (custom) searches keep latest-wins through `d.typedSeq`. Trial 5 run 1 failed on my check's lower bound (see below), not on the page |
 | 3 `feat(search): the dialog's lyric choice is one list of lyrics with an (i), and its button reads Queue` | `d332dda` | 3867 passed, 0 failed (+3 over commit 2: the `srt` route test, the `raw` refusal replacing the old `raw` test, and two render tests, net +3) | pre-commit passed on the 6 files; import smoke ok; the rendered inline scripts parse (deno); ui-check at 390x844, eight trials of three runs, counts below; one extra look, not counted: the (i) opens on top of the dialog with exactly the two lines for a sparse caption with Genius hits, inside the viewport. Not done: Ken's phone checks; the by-hand 403-link check from "Done when" (trial 4 of commit 2 used a link that answers 404, commit 1 measured the 403 link only on the server side) | Deviations and readings: Queue is the theme's primary blue (`--dark-primary` `#375a7f`, as the old Download button was); the mockup draws it teal `#00d1b2`. The list is 44 px (spec), the mockup's is 48. The search icon is `icon-search-1` (the font has no `icon-search`). The state's `titleAnswer` became `genius`, since a typed answer replaces the Genius group; a typed answer's preselect is forced to null on the page, whatever the server says. A `sent` flag keeps a late answer from relabelling Queue after a tap, and a dialog closed before `/lyrics_select` answers still sends its `/download` (id, link, title taken at the tap). "Preview unavailable" is markup, so it is not in the script's strings object. The translation catalogs are not regenerated, so every new string shows in English |
+| 3a `fix(search): the dialog's lyric list is 48 px tall, level with Queue` | `2aa02ae` | 3867 passed, 0 failed (unchanged) | pre-commit passed; import smoke ok; ui-check trial 7 now measures 48 px (wrapper and select), 3/3, and trials 2 and 3 rerun 3/3; the other trials were not rerun, since only the list's height changed | Decision 16 (Ken): the list stays at the mockup's 48 px. Done as a CSS custom property on the wrapper (`--bulma-control-height`), which the select inherits. Trial 7's raw line below is commit 3's run at 44 px, before this ruling |
 | manual checks (Ken) | | n/a | | |
 
 ### Commit 1 measurement (raw)
