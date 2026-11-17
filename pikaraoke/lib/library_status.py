@@ -16,7 +16,9 @@ from pikaraoke.lib.joint_match import _tokenise_lines
 from pikaraoke.lib.library_regen import (
     BACKUP_ROOT,
     CUSTOM_ORIGIN,
+    LRC_AUTO_ORIGIN,
     LRC_ORIGIN,
+    LRC_ORIGINS,
     MOVIE_ORIGIN,
     custom_sheet_path,
     is_edited,
@@ -36,7 +38,8 @@ class SongStatus:
     youtube_id: str | None
     category: str  # "current" | "behind" | "no_lyrics" | "not_processed"
     schema_version: int | None
-    origin: str | None  # bundle lyrics.origin: "srt" | "genius" | "custom" | "movie_srt" | "lrclib_srt"
+    # bundle lyrics.origin: "srt" | "genius" | "custom" | "movie_srt" | "lrclib_srt" | "lrclib_auto_srt"
+    origin: str | None
     edited: bool  # the run timed an admin's word edit of its cue sheet (bundle lyrics.source_path)
     sheet_kind: str | None  # custom lyric sheet on disk, the pick whatever the bundle says: a key of SHEETS
     genius: dict | None  # lyrics.genius: {id, title, artist}
@@ -45,6 +48,7 @@ class SongStatus:
     lrclib_reason: str | None  # joint_stats.lrclib_fill.reason, when rejected
     lrclib_filled: int  # lines the LRCLIB fill placed
     lrc_match: dict | None  # the LRC on disk, as lrclib.record_meta; None: missing, skipped or unreadable
+    lrclib_auto: dict | None  # pipeline_decisions.lrclib_auto: the download's check; None: it did not run
     ytasr_used: bool  # lyrics.ytasr present
     method: str | None  # pipeline_decisions.method_used: "joint" | "cue_align"
     line_count: int | None  # output_summary.line_count
@@ -101,6 +105,7 @@ def song_status(song: Path) -> SongStatus:
             lrclib_reason=None,
             lrclib_filled=0,
             lrc_match=lrc_match,
+            lrclib_auto=None,
             ytasr_used=False,
             method=None,
             line_count=None,
@@ -114,7 +119,8 @@ def song_status(song: Path) -> SongStatus:
     lyrics = bundle.get("lyrics") or {}
     summary = bundle.get("output_summary") or {}
     joint = bundle.get("joint_stats") or {}
-    method = (bundle.get("pipeline_decisions") or {}).get("method_used")
+    decisions = bundle.get("pipeline_decisions") or {}
+    method = decisions.get("method_used")
     origin = lyrics.get("origin")
     fill = joint.get("lrclib_fill") or {}
     state = _lrclib_state(lrc, origin, lyrics, fill)
@@ -128,11 +134,13 @@ def song_status(song: Path) -> SongStatus:
         edited=is_edited(lyrics.get("source_path")),
         sheet_kind=kind,
         genius=lyrics.get("genius") or None,
-        lrclib=_lrclib_match(lyrics) or (_lrc_match_on_disk(lrc) if origin == LRC_ORIGIN else None),
+        lrclib=_lrclib_match(lyrics)
+        or (_lrc_match_on_disk(lrc) if origin in LRC_ORIGINS else None),
         lrclib_state=state,
         lrclib_reason=fill.get("reason") if state == "rejected" else None,
         lrclib_filled=len(fill.get("filled_lids") or []),
         lrc_match=lrc_match,
+        lrclib_auto=decisions.get("lrclib_auto") or None,
         ytasr_used=bool(lyrics.get("ytasr")),
         method=method,
         line_count=summary.get("line_count"),
@@ -261,6 +269,7 @@ SONG_LISTS: dict[str, Callable[[SongStatus], bool]] = {
     "caption": lambda s: s.origin == "srt",
     "movie": lambda s: s.origin == MOVIE_ORIGIN,
     "lrc": lambda s: s.origin == LRC_ORIGIN,
+    "lrc_auto": lambda s: s.origin == LRC_AUTO_ORIGIN,
     "genius": lambda s: s.origin == "genius",
     "custom": lambda s: s.origin == CUSTOM_ORIGIN,
     "no_timed_source": lambda s: s.method == "joint" and s.lrc_match is None,

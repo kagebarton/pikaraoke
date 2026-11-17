@@ -48,7 +48,7 @@ def _subline(name: str, status: SongStatus) -> str:
         }
     if name == "no_lyrics":
         return _("Transcribed")
-    if name in ("caption", "movie", "lrc"):
+    if name in ("caption", "movie", "lrc", "lrc_auto"):
         return _("Cue align")
     if name in ("genius", "custom", "no_timed_source"):
         return _joint_subline(status)
@@ -150,6 +150,10 @@ def _run_explanation(mode: str) -> str:
 
 def _now_text(now: dict) -> str:
     """The lyric source a song has today, in words."""
+    if now.get("auto"):  # its own wording: "(auto, edited)" is one bracket, not two
+        if now.get("edited"):
+            return _("Now: LRCLIB timing (auto, edited)")
+        return _("Now: LRCLIB timing (auto)")
     text = _source_text(now)
     return _("%(source)s (edited)") % {"source": text} if now.get("edited") else text
 

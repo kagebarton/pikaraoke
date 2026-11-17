@@ -550,6 +550,13 @@ class TestSourceLists:
     def test_an_lrclib_timed_song(self, tmp_path):
         assert self.lists_of(self.song(tmp_path, "lrclib_srt", "cue_align")) == {"lrc", "all"}
 
+    def test_a_song_the_download_timed_from_lrclib_is_on_its_own_list_not_the_hand_picked_one(
+        self, tmp_path
+    ):
+        video = self.song(tmp_path, "lrclib_auto_srt", "cue_align")
+
+        assert self.lists_of(video) == {"lrc_auto", "all"}
+
     def test_a_genius_song_with_an_lrc_has_a_timed_source(self, tmp_path):
         video = self.song(tmp_path, "genius", "joint", lrc=True)
 
@@ -600,8 +607,9 @@ class TestLrclibTimedMatch:
         lrclib.write_lrc(path, {**self.RECORD, "syncedLyrics": "[00:01.00]one\n"})
         return video
 
-    def test_the_match_is_the_lrcs_header(self, tmp_path):
-        status = library_status.song_status(self.song(tmp_path, "lrclib_srt"))
+    @pytest.mark.parametrize("origin", ["lrclib_srt", "lrclib_auto_srt"])
+    def test_the_match_is_the_lrcs_header(self, tmp_path, origin):
+        status = library_status.song_status(self.song(tmp_path, origin))
 
         assert status.lrclib == {
             "id": 11,
@@ -626,13 +634,41 @@ class TestLrclibTimedMatch:
 
         assert library_status.song_status(video).lrclib is None
 
-    def test_an_lrclib_sheet_is_the_sheet_kind_and_needs_no_bundle(self, tmp_path):
+    @pytest.mark.parametrize(
+        ("suffix", "kind"), [(".lrclib.srt", "lrclib"), (".lrclib-auto.srt", "lrclib_auto")]
+    )
+    def test_an_lrclib_sheet_is_the_sheet_kind_and_needs_no_bundle(self, tmp_path, suffix, kind):
         video = make_video(tmp_path)
-        sheet = tmp_path / "lyrics" / f"{video.stem}.lrclib.srt"
+        sheet = tmp_path / "lyrics" / f"{video.stem}{suffix}"
         sheet.parent.mkdir()
         sheet.write_text("1\n00:00:01,000 --> 00:00:02,000\none\n", encoding="utf-8")
 
-        assert library_status.song_status(video).sheet_kind == "lrclib"
+        assert library_status.song_status(video).sheet_kind == kind
+
+
+class TestLrclibAuto:
+    """The download's LRCLIB check, as the bundle recorded it."""
+
+    CHECK = {"outcome": "no_pick", "query": "invented song", "records": 4, "passing": 0}
+
+    def status(self, tmp_path, **decisions):
+        video = make_video(tmp_path)
+        write_bundle(
+            tmp_path,
+            video.stem,
+            lyrics={"origin": "genius"},
+            pipeline_decisions={"method_used": "joint", **decisions},
+        )
+        return library_status.song_status(video)
+
+    def test_the_check_is_what_the_bundle_recorded(self, tmp_path):
+        assert self.status(tmp_path, lrclib_auto=self.CHECK).lrclib_auto == self.CHECK
+
+    def test_a_bundle_from_before_the_check_has_none(self, tmp_path):
+        assert self.status(tmp_path).lrclib_auto is None
+
+    def test_a_song_with_no_bundle_has_none(self, tmp_path):
+        assert library_status.song_status(make_video(tmp_path)).lrclib_auto is None
 
 
 class TestAsrAndDuration:
@@ -688,6 +724,7 @@ class TestOverview:
             "caption": 0,
             "movie": 0,
             "lrc": 0,
+            "lrc_auto": 0,
             "genius": 0,
             "custom": 0,
             "no_timed_source": 0,
@@ -702,6 +739,7 @@ class TestOverview:
             ("D---ddddddddddd", "genius", "joint"),
             ("E---eeeeeeeeeee", "custom", "joint"),
             ("F---fffffffffff", "lrclib_srt", "cue_align"),
+            ("G---ggggggggggg", "lrclib_auto_srt", "cue_align"),
         ):
             video = make_video(tmp_path, stem)
             write_bundle(
@@ -720,10 +758,11 @@ class TestOverview:
             "caption": 2,
             "movie": 1,
             "lrc": 1,
+            "lrc_auto": 1,
             "genius": 1,
             "custom": 1,
             "no_timed_source": 2,  # neither joint song has an LRC beside it
-            "all": 6,
+            "all": 7,
         }
 
     def test_empty_folder(self, tmp_path):

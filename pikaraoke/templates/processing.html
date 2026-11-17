@@ -129,6 +129,10 @@
         <div class="pr-songs is-hidden"></div>
       </div>
       <div class="pr-list">
+        <button type="button" class="pr-link" data-list="lrc_auto" aria-expanded="false"><span>{% trans %}LRCLIB (auto) · cue align{% endtrans %}</span><span class="pr-link-end"><span class="tag is-light" data-count="lrc_auto">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
+        <div class="pr-songs is-hidden"></div>
+      </div>
+      <div class="pr-list">
         <button type="button" class="pr-link" data-list="genius" aria-expanded="false"><span>{% trans %}Genius · joint{% endtrans %}</span><span class="pr-link-end"><span class="tag is-light" data-count="genius">…</span><i class="icon icon-angle-down pr-chev" aria-hidden="true"></i></span></button>
         <div class="pr-songs is-hidden"></div>
       </div>
@@ -252,6 +256,8 @@ var T = {
   guessed: {{ _('%(guessed)s of %(n)s lines guessed', guessed='{guessed}', n='{n}') | tojson }},
   lyricCaptions: {{ _('YouTube captions') | tojson }},
   lyricGenius: {{ _('Genius') | tojson }},
+  lyricLrclib: 'LRCLIB',
+  lyricLrclibAuto: {{ _('LRCLIB (auto)') | tojson }},
   lyricNone: {{ _('No lyrics') | tojson }},
   lyricFile: {{ _('Lyrics file') | tojson }},
   dbUnfinished: {{ _("Didn't finish processing") | tojson }},
@@ -361,6 +367,8 @@ function fmtAgo(seconds) {
 function lyricLabel(method) {
   if (!method) return '';
   if (method.indexOf('srt') === 0) return T.lyricCaptions;
+  if (method.indexOf('lrclib_auto') === 0) return T.lyricLrclibAuto;
+  if (method.indexOf('lrclib') === 0) return T.lyricLrclib;
   if (method.indexOf('genius') === 0) return T.lyricGenius;
   if (method === 'transcribe' || method.indexOf('none') === 0) return T.lyricNone;
   if (method.indexOf('override') === 0) return T.lyricFile;
