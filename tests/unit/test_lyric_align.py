@@ -1045,6 +1045,17 @@ class TestAutoLrcTiming:
         assert bundle["lyrics"]["source_path"] == f"lyrics/{ctx.song_path.stem}.lrclib-auto.srt"
         assert bundle["transcribe_words"] == self.HEARD
 
+    def test_a_pick_drops_the_auto_caption_the_joint_matcher_would_have_read(
+        self, tmp_path, monkeypatch
+    ):
+        stage, ctx, _worker, _check = self._make(tmp_path, monkeypatch)
+        ctx.artifacts["ytasr"] = {"asr_file": "subtitles/song.en.asr.json3", "n_words": 40}
+
+        stage.run(ctx)
+
+        assert "ytasr" not in ctx.artifacts
+        assert "ytasr" not in _read_bundle(ctx)["lyrics"]
+
     def test_a_pick_shows_the_backing_vocals_the_transcriber_heard_as_a_caption_does(
         self, tmp_path, monkeypatch
     ):
@@ -1101,6 +1112,30 @@ class TestAutoLrcTiming:
         assert bundle["pipeline_decisions"]["method_used"] == "joint"
         assert bundle["pipeline_decisions"]["lrclib_auto"]["outcome"] == outcome
         assert bundle["lyrics"]["origin"] == "genius"
+
+    def test_a_check_with_no_pick_leaves_the_karaoke_as_an_unarmed_run_makes_it(
+        self, tmp_path, monkeypatch
+    ):
+        runs = []
+        for armed in (True, False):
+            run_dir = tmp_path / str(armed)
+            run_dir.mkdir()
+            stage, ctx, worker, _check = self._make(run_dir, monkeypatch, NO_PICK, armed=armed)
+            worker.align_refine.side_effect = None
+            worker.align_refine.return_value = worker.transcribe_words.return_value = [
+                {"word": "hello", "start": 1.0, "end": 1.4},
+                {"word": "world", "start": 1.5, "end": 1.9},
+            ]
+
+            stage.run(ctx)
+
+            bundle = _read_bundle(ctx)
+            bundle["pipeline_decisions"].pop("lrclib_auto", None)
+            del bundle["captured_at"]  # wall clock, to the second
+            ass = ctx.song_path.parent / "karaoke" / f"{ctx.song_path.stem}.ass"
+            runs.append((ass.read_text(encoding="utf-8"), bundle))
+
+        assert runs[0] == runs[1]
 
     @pytest.mark.parametrize(
         "options",

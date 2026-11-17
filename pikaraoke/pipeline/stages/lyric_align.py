@@ -179,6 +179,9 @@ class LyricAlignStage(BaseStage):
                 lyrics_path.write_text(auto_entry.fit.srt, encoding="utf-8")
                 lyrics_lines, align_lines, cue_spans = self._load_lyrics(lyrics_path)
                 ctx.artifacts["lyrics_origin"] = lrc_auto_timing.ORIGIN
+                # The YouTube auto-caption was stashed for the joint matcher, which no longer
+                # runs; left set, the bundle would say the cue route used it.
+                ctx.artifacts.pop("ytasr", None)
 
             if cue_spans:
                 # SRT: cue-anchored windowed align driven by the uploader cues.
