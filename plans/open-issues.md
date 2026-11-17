@@ -81,7 +81,7 @@ that queued them is already closed; 7.1f).
   title** (`library_regen.default_query`). Defying Gravity's search came back
   empty until the box was edited. Fixing it means a new title-cleaning rule.
   Record: web plan, Phase 7 row.~~ Closed 2026-11-16 by `genius_search_accuracy`
-  (`e1ddf4b6`): the pick pass's and Repair's Genius boxes start from
+  (`64b4a0d4`): the pick pass's and Repair's Genius boxes start from
   `genius_query.start_query`, which drops a title's junk tail, and an unchanged
   box runs the title's whole query ladder. Defying Gravity's search was not
   re-run. `default_query` still starts the Repair page's LRCLIB box.
@@ -95,7 +95,8 @@ that queued them is already closed; 7.1f).
   pick pass, Repair and the prompt), each holding `GeniusClient`'s lock. Fix
   shape: `search` tells a failure from an empty answer and the ladder stops on
   a failure. Record: `/code-review` of `eb8d4be0..3743f4f2`, finding 2,
-  logged in `plans/genius-search-spec.md` on that branch, Results row 14.
+  logged in `plans/genius-search-spec.md` on tag `archive/genius_search_accuracy`,
+  Results row 14.
 - **An empty LRCLIB title makes Search do nothing**; a hint would be new
   wording. Record: web plan, 6.1e.
 - **An open bulk run keeps a renamed or deleted song under its old path**;
@@ -148,7 +149,7 @@ that queued them is already closed; 7.1f).
 - **Simplicity leftovers:** `_ActiveJob.kind` is set and never read;
   `prepare_regen_job` accepts plan kinds no caller builds; ~~the int-not-bool
   Genius id check is written three times~~ (one `library_tools.is_whole_number`,
-  `df2d1159` on `genius_search_accuracy`); ~~the watch URL is built in more than
+  `13dbee03`, from `genius_search_accuracy`); ~~the watch URL is built in more than
   one module~~ (one `library_regen.watch_url`, `f4aa97b`). Record: web plan, 3.1i and 8.1f.
 - ~~**`SongStatus` carries two overlapping sheet flags** (`library_status.py`):
   `custom_sheet` is true for either kind of sheet and `movie_sheet` for the
@@ -357,8 +358,8 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
   stands for, with their own noise words, kept apart while that branch rewrites
   `official_rank`'s. Once it lands: one function for the name, each module keeping
   its own list of names that stand for no act (the ranking's short, the Genius
-  module's wide). Not ruled. Record: `plans/genius-search-spec.md` on branch
-  `genius_search_accuracy`, Calls item 3 and "Channel names".
+  module's wide). Not ruled. Record: `plans/genius-search-spec.md` on tag
+  `archive/genius_search_accuracy`, Calls item 3 and "Channel names".
 - **A Genius hit is preselected when it does not account for the whole video title.**
   GATE G found two in 63 preselects, both film or stage: a hit titled `You Will Be
   Found (Reprise)` for a video of the full song, and `Mamma Mia — Meryl Streep` for
@@ -367,7 +368,7 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
   preselect when the hit's title carries a bracket the video's lacks, or a dash part
   went unread, can only withhold; its cost (right preselects withheld) is countable on
   the 500 frozen titles with no network. Not ruled, including whether it needs a new
-  gate. Record: `plans/genius-search-spec.md` on branch `genius_search_accuracy`,
+  gate. Record: `plans/genius-search-spec.md` on tag `archive/genius_search_accuracy`,
   "Ruling on the failed gate" and `plans/genius-search-accuracy/gate_g/verdicts.md`.
 - **For a film or stage video the first Genius hit is wrong about 4 times in 10.**
   GATE G: 18 of 47 on fresh titles, against 6 of 43 on the library titles the order
@@ -432,8 +433,8 @@ Record: `plans/queue-hold.md` on branch `queue_hold`, the manual checks row.
   never queued. The two ticks are kept in sync, so reading
   `#add-to-queue-direct` (always on the page) fixes it. Upstream code, also on
   `master`. A one-line fix was offered on `queue_hold`; not ruled.~~ Fixed
-  2026-11-16 on `genius_search_accuracy` as `62702d65` (Ken took it from that
-  branch's review triage): `downloadSong` reads `#add-to-queue-direct`.
+  2026-11-16 as `58ccd638` (landed from `genius_search_accuracy`, where Ken took it
+  from the review triage): `downloadSong` reads `#add-to-queue-direct`.
 
 ## Edit words (on `dev`)
 
