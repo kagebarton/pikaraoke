@@ -805,7 +805,31 @@ files, and one finder angle per Self-Review axis.
 
 | commit | hash | unit tests | checks | notes |
 | ------ | ---- | ---------- | ------ | ----- |
-| 1 `feat(search): one yt-dlp lookup answers the dialog's caption check and its preview link` | | | | |
+| 1 `feat(search): one yt-dlp lookup answers the dialog's caption check and its preview link` | `142d0c3` | baseline before the branch's code: 3849 passed, 0 failed. After: 3862 passed, 0 failed (+13). `TestCheckCaption` unchanged and passing | pre-commit passed on the 7 files; import smoke of `youtube_dl`, `library_regen`, `routes.search` ok; real-YouTube measurement below (8 videos + the bad-client row); `search.html`'s script not driven in a browser this commit (ui-check is commit 2); no `graphify-out/graph.json`, no update | Run 2026-11-17 on the VM, yt-dlp 2026.10.26, curl_cffi 0.14.0, deno 2.7.7. Client setting put back after the last row; no `no_such_client` left in the tree. `/code-review` due at the stop (plan, Stop section) |
 | 2 `feat(search): the download dialog opens at once on the thumbnail and says what it waits for` | | | | |
 | 3 `feat(search): the dialog's lyric choice is one list of lyrics with an (i), and its button reads Queue` | | | | |
 | manual checks (Ken) | | n/a | | |
+
+### Commit 1 measurement (raw)
+
+Script `measure_lookup.py` in the session scratchpad, not committed. Per video, one
+`download_manual_en_subs` call and one `lookup_video` call, each into its own folder under
+`get_temp_directory()`. Words: `_srt_word_count` of each caption. Length: the lookup's `duration_s`,
+used for both gates (`_measure_caption`). Link: one ranged GET (`bytes=0-1023`), Android Chrome user
+agent, no other headers. "Answer identical" = both functions agree on found, word count and
+passed.
+
+| client setting | video | `download_manual_en_subs`: caption (words) | `lookup_video`: caption (words) | length s | passed old/new | lookup time | link GET | answer identical |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| tv_simply | dQw4w9WgXcQ | yes (352) | yes (352) | 213.0 | True/True | 5.92 s | 206 | yes |
+| tv_simply | fJ9rUzIMcZQ | yes (380) | yes (380) | 359.0 | True/True | 5.89 s | 206 | yes |
+| tv_simply | kJQP7kiw5Fk | yes (519) | yes (519) | 282.0 | True/True | 6.00 s | 206 | yes |
+| tv_simply | 9bZkp7q19f0 | no | no | 252.0 | False/False | 5.50 s | 206 | yes |
+| tv_simply | JGwWNGJdvx8 | yes (603) | yes (603) | 263.0 | True/True | 5.38 s | 206 | yes |
+| tv_simply | hT_nvWreIhg | yes (521) | yes (521) | 283.0 | True/True | 5.74 s | 206 | yes |
+| tv_simply | OPf0YbXqDm0 | yes (632) | yes (632) | 270.0 | True/True | 5.75 s | 206 | yes |
+| tv_simply | RgKAFK5djSk | yes (471) | yes (471) | 237.0 | True/True | 6.13 s | 206 | yes |
+| no_such_client | dQw4w9WgXcQ | yes (352) | yes (352) | 213.0 | True/True | 5.56 s | 403 | yes |
+
+Every call exited 0. No video in the table has a caption that fails the gate; the one sparse case
+(found, below the gate) is covered by the unit tests only.
