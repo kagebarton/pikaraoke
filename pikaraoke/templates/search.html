@@ -1,8 +1,10 @@
 {% extends 'base.html' %}
 {% from 'search_result.html' import result_card %}
+{% from 'info_tip.html' import info_tip %}
 {% block scripts %}
 <link href="{{  url_for('static', filename='selectize.min.css') }}" rel="stylesheet" />
 <script src="{{  url_for('static', filename='selectize-0.12.6.min.js') }}"></script>
+<script src="{{ url_for('static', filename='library-pages.js') }}"></script>
 <style>
 	.optgroup-header {
 		font-weight: bold;
@@ -221,8 +223,6 @@
 /* ── Lyrics picker inside modal ── */
 :root {
   --lyrics-dropdown-font-size: 1.1rem;
-  --lyrics-custom-search-gap: 1.75rem;
-  --lyrics-message-font-size: 1rem;
   --modal-width: 640px;
 }
 #modal-js-example { align-items: flex-start; overflow-y: auto; }
@@ -235,35 +235,27 @@
 }
 #lyrics-dropdown,
 #lyrics-custom-input,
-#lyrics-custom-btn,
-#lyrics-download-btn { font-size: var(--lyrics-dropdown-font-size) !important; }
+#lyrics-custom-btn { font-size: var(--lyrics-dropdown-font-size) !important; }
 #lyrics-custom-input,
 #lyrics-custom-btn { height: 2.5em; line-height: 2.5em; }
 #lyrics-dropdown { max-width: 100%; }
-#lyrics-empty,
-#lyrics-results-label,
-#lyrics-srt-note { font-size: var(--lyrics-message-font-size); }
-#lyrics-results-label,
-#lyrics-empty { margin-bottom: 0.1rem; }
-#lyrics-results-label { color: #aaa; }
-#lyrics-select-wrap:not(.is-hidden) ~ #lyrics-custom-search:not(.is-hidden),
-#lyrics-select-wrap:not(.is-hidden) ~ #lyrics-download-wrap:not(.is-hidden) {
-  margin-top: var(--lyrics-custom-search-gap);
-}
-#lyrics-select-wrap.select::after { display: none !important; }
-#lyrics-select-wrap.select { position: relative; }
-#lyrics-select-wrap.select::before {
-  content: '⌄';
-  position: absolute;
-  right: 0.2em;
-  top: 50%;
-  transform: translateY(-75%);
-  font-size: 6em;
-  color: var(--dark-link);
-  pointer-events: none;
-  z-index: 4;
-}
-#lyrics-section { margin-top: 0.75rem; }
+/* The list is full size. Bulma sizes its box (2.5em, 44px) and draws its arrow with borders, both
+   in em of the wrapper, so the wrapper takes the list's font size and the arrow scales with it. */
+#lyrics-select-wrap { font-size: var(--lyrics-dropdown-font-size); }
+#lyrics-select-wrap::after { border-width: 3px; }
+#lyrics-section { display: flex; flex-direction: column; gap: 12px; margin-top: 0.75rem; }
+/* "Lyrics" and "Lyrics: YouTube captions" are one size; the (i)'s icon sits about 4px after the
+   label (the button keeps its 36px tap area, overlapping the label's end). */
+.lyrics-label-row { display: flex; align-items: center; margin-bottom: 4px; font-size: 15px; color: #dbdee0; }
+.lyrics-label-row strong { color: #fff; }
+#modal-js-example .info-tip-btn { margin: -8px -4px -8px -6px; }
+.lyrics-hint { display: block; margin-bottom: 4px; font-size: 13px; color: #a3b0b2; }
+#lyrics-empty { display: flex; align-items: center; min-height: 44px; margin: 0; font-size: var(--lyrics-dropdown-font-size); color: var(--dark-warning); }
+#lyrics-search-none { margin: 4px 0 0; font-size: 13px; color: var(--dark-warning); }
+#lyrics-search-open { height: 44px; gap: 8px; background: transparent; border: 1px solid #5e6d6f; color: #fff; }
+#lyrics-queue-btn { height: 48px; margin-top: 8px; font-size: var(--lyrics-dropdown-font-size); font-weight: 700; }
+#lyrics-other { display: block; margin: -4px auto 0; min-height: 44px; padding: 0 12px; background: none; border: 0; font-size: 14px; color: #a3b0b2; cursor: pointer; }
+#lyrics-other:hover { color: #fff; }
 /* The wait line sits where the Queue button will appear, 36px below the thumbnail. */
 #lyrics-wait {
   margin: 1.5rem 0 0;
@@ -608,6 +600,12 @@ $("#add-queue-link").trigger("click");
 			});
 		}
 
+		// The box postDownload sends and the dialog's button label reads, so what the button says
+		// and what happens cannot disagree.
+		function queueAfterDownload() {
+			return $("#add-to-queue-search").is(":checked");
+		}
+
 		function postDownload(songUrl, songTitle) {
 			// Fire-and-forget /download POST without touching any button — used
 			// by the modal flow where the button already shows "Added for
@@ -620,7 +618,7 @@ $("#add-queue-link").trigger("click");
 					song_url: songUrl,
 					song_title: songTitle || "",
 					song_added_by: getUserCookie() || "",
-					queue: $("#add-to-queue-search").is(":checked"),
+					queue: queueAfterDownload(),
 				}),
 			});
 		}
@@ -705,19 +703,22 @@ $("#add-queue-link").trigger("click");
 //        the browser can play.
 //      - /lyrics_search: the Genius search for the video (its title, channel and the page's
 //        search term; the server works out what to ask). Its answer is held, not shown.
-//   3. The lookup answers:
+//   3. The lookup answers, and the dialog shows one of two views:
 //      - the caption passed (a manual English caption dense enough to be the lyrics, by the
-//        same words-per-minute gate as a direct download) → the SRT-primary UI (download
-//        button + "More options" link to reveal the list), whether or not Genius has
-//        answered. "More options" shows the held list and does not search again.
-//      - too sparse, couldn't be checked, or no caption → the held Genius list at once, with
-//        Custom Search + Raw Transcription; while Genius has not answered, "Searching Genius
-//        for lyrics…". The server says which hit is safe to preselect; with none, the list
-//        opens on "Choose the lyrics".
-//   4. Play: the thumbnail covers the video until the guest taps Play. The link came with the
-//      lookup, so there is no second request, and a tap before it arrives starts the video
-//      when it does. With no link, or a video that cannot play, the box says "Preview
-//      unavailable"; the caption answer and the download are unaffected.
+//        same words-per-minute gate as a direct download) → "Lyrics: YouTube captions", Queue
+//        and an "Other lyrics…" link, whether or not Genius has answered.
+//      - anything else, or "Other lyrics…" → the list view: "Lyrics" with its (i), one list
+//        (a "YouTube" group only when the caption passed, then the Genius hits), a button to
+//        search for other lyrics, and Queue. The held Genius answer fills it at once; while
+//        Genius has not answered, "Searching Genius for lyrics…". The server says which hit
+//        is safe to preselect; with none, the list opens on "Choose the lyrics" and Queue
+//        stays off. With nothing to offer at all, the search box opens by itself and Queue
+//        stays off.
+//   4. Queue posts the lyric choice, then the download. Play: the thumbnail covers the video
+//      until the guest taps Play. The link came with the lookup, so there is no second
+//      request, and a tap before it arrives starts the video when it does. With no link, or a
+//      video that cannot play, the box says "Preview unavailable"; the caption answer and the
+//      download are unaffected.
 //
 // Every answer is dropped unless the dialog it was asked for is still the open one.
 
@@ -730,25 +731,18 @@ function isCurrent(d) {
   return d.open === _openSeq;
 }
 
-var WAIT_TEXT = {
-  captions: {{ _("Checking YouTube for captions…") | tojson }},
-  genius: {{ _("Searching Genius for lyrics…") | tojson }},
+var TEXT = {
+  checkingCaptions: {{ _("Checking YouTube for captions…") | tojson }},
+  searchingGenius: {{ _("Searching Genius for lyrics…") | tojson }},
+  chooseLyrics: {{ _("Choose the lyrics") | tojson }},
+  groupYouTube: {{ _("YouTube") | tojson }},
+  youtubeCaptions: {{ _("YouTube captions (recommended)") | tojson }},
+  groupGenius: {{ _("Genius.com") | tojson }},
+  queue: {{ _("Queue") | tojson }},
+  addToLibrary: {{ _("Add to library") | tojson }},
+  queued: {{ _("Queued") | tojson }},
+  added: {{ _("Added") | tojson }},
 };
-var CAPTION_NOTES = {
-  sparse: {{ _("This video's caption is too sparse to be lyrics.") | tojson }},
-  failed: {{ _("Could not check the caption.") | tojson }},
-};
-var CHOOSE_LYRICS = {{ _("Choose the lyrics") | tojson }};
-
-function showWait(text) {
-  $("#lyrics-wait").text(text).removeClass("is-hidden");
-}
-
-function hideListWidgets() {
-  $("#lyrics-results-label, #lyrics-select-wrap, #lyrics-empty, #lyrics-custom-search, #lyrics-download-wrap")
-    .addClass("is-hidden");
-  $("#lyrics-dropdown").empty();
-}
 
 // Puts back every element the dialog changes, on open and on close.
 function resetDialog() {
@@ -764,77 +758,104 @@ function resetDialog() {
   $("#modal-preview-unavailable").addClass("is-hidden");
   $("#lyrics-section").addClass("is-hidden");
   $("#lyrics-wait").addClass("is-hidden").text("");
-  $("#lyrics-caption-note").addClass("is-hidden").text("");
-  $("#lyrics-srt-primary").addClass("is-hidden");
-  $("#lyrics-more-options").addClass("is-hidden");
-  hideListWidgets();
+  $("#lyrics-caption-view, #lyrics-list-view, #lyrics-other").addClass("is-hidden");
+  $("#lyrics-select-wrap").removeClass("is-hidden");
+  $("#lyrics-empty, #lyrics-custom-search, #lyrics-search-none").addClass("is-hidden");
+  $("#lyrics-search-open").removeClass("is-hidden");
+  $("#lyrics-dropdown").empty();
   $("#lyrics-custom-input").val("");
-  $("#lyrics-srt-btn, #lyrics-download-btn")
-    .removeClass("is-loading is-success is-danger")
-    .css("min-width", "")
-    .text("{% trans %}Download{% endtrans %}");
-  $("#lyrics-srt-btn").removeAttr("disabled");
-  $("#lyrics-download-btn").attr("disabled", true);
+  $("#modal-js-example .info-tip").removeClass("is-open is-pinned")
+    .find(".info-tip-btn").attr("aria-expanded", "false");
+  $("#lyrics-queue-btn")
+    .addClass("is-hidden")
+    .removeClass("is-success is-danger")
+    .prop("disabled", false)
+    .text(TEXT.queue);
+}
+
+// Whether the list offers anything to pick: the YouTube group (only when the caption passed)
+// or Genius hits.
+function listOffers(d) {
+  return d.caption === "passed" || d.genius.hits.length > 0;
+}
+
+// The list's contents, from the dialog's Genius answer: the YouTube group, the Genius group,
+// and "Choose the lyrics" first when the server found no hit safe to preselect.
+function fillList(d) {
+  var $sel = $("#lyrics-dropdown").empty();
+  if (d.caption === "passed") {
+    $("<optgroup>").attr("label", TEXT.groupYouTube)
+      .append($("<option>").val("__srt__").text(TEXT.youtubeCaptions))
+      .appendTo($sel);
+  }
+  if (d.genius.hits.length) {
+    var $genius = $("<optgroup>").attr("label", TEXT.groupGenius);
+    d.genius.hits.forEach(function (hit) {
+      $genius.append($("<option>").val(hit.id).text(hit.title + " — " + libraryPages.byline(hit)));
+    });
+    $sel.append($genius);
+  }
+  if (!$sel.children().length) return;
+  if (d.genius.preselect === null) {
+    $sel.prepend($("<option>").val("").text(TEXT.chooseLyrics).prop("disabled", true).prop("selected", true));
+  } else {
+    $sel.val(String(d.genius.preselect));
+  }
+}
+
+// The list view from the state. The list itself is filled once per answer, so a redraw never
+// undoes the guest's pick.
+function renderList(d) {
+  if (!d.filled) {
+    fillList(d);
+    d.filled = true;
+  }
+  var offers = listOffers(d);
+  var boxOpen = d.searchOpen || !offers;
+  $("#lyrics-select-wrap").toggleClass("is-hidden", !offers);
+  $("#lyrics-empty").toggleClass("is-hidden", offers);
+  $("#lyrics-custom-search").toggleClass("is-hidden", !boxOpen);
+  $("#lyrics-search-open").toggleClass("is-hidden", boxOpen);
+  $("#lyrics-search-none").toggleClass("is-hidden", !d.searchNone);
+  // The (i) says why this source is offered: the caption's state, then the Genius search's.
+  var shown = {};
+  shown[d.caption] = true;
+  shown[d.genius.source === "typed" ? "typed-hits" : d.genius.hits.length ? "title-hits" : "title-none"] = true;
+  if (!offers) shown.empty = true;
+  $("#lyrics-list-view .info-tip-line").each(function () {
+    $(this).toggleClass("is-hidden", !shown[$(this).data("note")]);
+  });
+}
+
+// Queue's label follows the box postDownload sends; it is off in the list view until something
+// is picked.
+function syncQueue() {
+  var d = _dialog;
+  var captions = d.caption === "passed" && d.view === "captions";
+  $("#lyrics-queue-btn")
+    .text(queueAfterDownload() ? TEXT.queue : TEXT.addToLibrary)
+    .prop("disabled", !captions && !$("#lyrics-dropdown").val());
 }
 
 // Sets the lyric section from the open dialog's state. Called when an answer arrives and when
-// the guest asks for the list, so a call that shows the list fills it once.
+// the guest acts.
 function renderLyrics() {
   var d = _dialog;
-  if (!d) return;
+  if (!d || d.sent) return;
+  var captions = d.caption === "passed" && d.view === "captions";
+  var listReady = d.caption !== "pending" && !captions && d.genius !== null;
+  var waiting = null;
+  if (d.caption === "pending") waiting = TEXT.checkingCaptions;
+  else if (d.searching || (!captions && d.genius === null)) waiting = TEXT.searchingGenius;
+
   $("#lyrics-section").removeClass("is-hidden");
-  $("#lyrics-wait, #lyrics-srt-primary, #lyrics-caption-note").addClass("is-hidden");
-  hideListWidgets();
-
-  if (d.caption === "pending") {
-    showWait(WAIT_TEXT.captions);
-  } else if (d.caption === "passed" && d.view === "captions") {
-    $("#lyrics-srt-primary, #lyrics-more-options").removeClass("is-hidden");
-  } else {
-    var note = CAPTION_NOTES[d.caption];
-    if (note) $("#lyrics-caption-note").text(note).removeClass("is-hidden");
-    if (d.titleAnswer === null) showWait(WAIT_TEXT.genius);
-    else populateLyricsDropdown(d.titleAnswer);
-  }
-}
-
-// found is the route's answer: {hits, preselect}.
-function populateLyricsDropdown(found) {
-  var $sel = $("#lyrics-dropdown").empty();
-
-  if (found.hits.length) {
-    // Nothing safe to preselect: the first option asks for a choice and Download
-    // stays hidden until a hit or another option is chosen.
-    if (found.preselect === null) {
-      $sel.append($("<option>").val("").text(CHOOSE_LYRICS).prop("disabled", true).prop("selected", true));
-    }
-    var $genius = $('<optgroup label="Genius.com Results">');
-    found.hits.forEach(function (item) {
-      var year = item.year ? " (" + item.year + ")" : "";
-      $genius.append($("<option>").val(item.id).text(item.title + " — " + item.artist + year));
-    });
-    $sel.append($genius);
-    $("#lyrics-results-label").removeClass("is-hidden");
-    $("#lyrics-empty").addClass("is-hidden");
-  } else {
-    $("#lyrics-results-label").addClass("is-hidden");
-    $("#lyrics-empty").removeClass("is-hidden");
-  }
-
-  var $other = $('<optgroup label="Other Options">');
-  $other.append($("<option>").val("__custom__").text("🔍 Custom Search..."));
-  if (_dialog.caption === "passed") {
-    $other.append($("<option>").val("__srt__").text("📺 YouTube Captions"));
-  }
-  $other.append($("<option>").val("__raw__").text("📝 Raw Transcription"));
-  $sel.append($other);
-
-  $("#lyrics-select-wrap").removeClass("is-hidden");
-  if (found.preselect !== null) $sel.val(String(found.preselect));
-  // Trigger change so download-button visibility matches the selected option.
-  // With no Genius hits, the first option is "Custom Search..." which the change
-  // handler reveals (and focuses) — matches the previous empty-state UX.
-  $("#lyrics-dropdown").trigger("change");
+  $("#lyrics-caption-view, #lyrics-other").toggleClass("is-hidden", !captions);
+  $("#lyrics-list-view").toggleClass("is-hidden", !listReady);
+  if (listReady) renderList(d);
+  if (waiting) $("#lyrics-wait").text(waiting);
+  $("#lyrics-wait").toggleClass("is-hidden", !waiting);
+  $("#lyrics-queue-btn").toggleClass("is-hidden", !!waiting || !(captions || listReady));
+  syncQueue();
 }
 
 // The one yt-dlp lookup: the caption's answer and the link the video plays from.
@@ -863,7 +884,7 @@ function askCaptionCheck(d) {
 function askTitleLyrics(d) {
   function held(found) {
     if (!isCurrent(d)) return;
-    d.titleAnswer = found;
+    d.genius = { hits: found.hits, preselect: found.preselect, source: "title" };
     renderLyrics();
   }
   $.ajax({
@@ -881,44 +902,50 @@ function askTitleLyrics(d) {
   });
 }
 
-// Lyrics dropdown change handler
+// Queue is off until the list has a pick.
 $(document).on("change.search", "#lyrics-dropdown", function () {
-  var val = $(this).val();
-  if (val === "__custom__") {
-    $("#lyrics-custom-search").removeClass("is-hidden");
-    $("#lyrics-download-wrap").addClass("is-hidden");
-    $("#lyrics-custom-input").focus();
-  } else if (!val) {
-    // "Choose the lyrics": nothing picked yet.
-    $("#lyrics-custom-search").addClass("is-hidden");
-    $("#lyrics-download-wrap").addClass("is-hidden");
-  } else {
-    $("#lyrics-custom-search").addClass("is-hidden");
-    $("#lyrics-download-wrap").removeClass("is-hidden");
-    $("#lyrics-download-btn").removeClass("is-success is-flash").removeAttr("disabled").text("{% trans %}Download{% endtrans %}");
-  }
+  if (_dialog) syncQueue();
 });
 
-// What the guest typed. The latest typed search wins; its answer replaces the list.
+// Searching for other lyrics: the button gives way to the box.
+$(document).on("click.search", "#lyrics-search-open", function () {
+  var d = _dialog;
+  if (!d) return;
+  d.searchOpen = true;
+  renderLyrics();
+  $("#lyrics-custom-input").focus();
+});
+
+// What the guest typed. The latest typed search wins. Hits replace the Genius group and the
+// list opens on "Choose the lyrics", since nothing typed is safe to preselect; none leaves the
+// list and its pick as they were.
 function doCustomLyricsSearch() {
   var d = _dialog;
   var query = $("#lyrics-custom-input").val().trim();
-  if (!d || !query) return;
+  if (!d || d.sent || !query) return;
   var typedSeq = ++d.typedSeq;
-  hideListWidgets();
-  showWait(WAIT_TEXT.genius);
-  function shown(found) {
+  d.searching = true;
+  d.searchOpen = true;
+  d.searchNone = false;
+  renderLyrics();
+  function answered(found) {
     if (!isCurrent(d) || typedSeq !== d.typedSeq) return;
-    $("#lyrics-wait").addClass("is-hidden");
-    populateLyricsDropdown(found);
+    d.searching = false;
+    if (found.hits.length) {
+      d.genius = { hits: found.hits, preselect: null, source: "typed" };
+      d.filled = false;
+    } else {
+      d.searchNone = true;
+    }
+    renderLyrics();
   }
   $.ajax({
     url: "{{ url_for('search.lyrics_search') }}",
     type: "get",
     data: { q: query },
-    success: shown,
+    success: answered,
     error: function () {
-      shown({ hits: [], preselect: null });
+      answered({ hits: [], preselect: null });
     },
   });
 }
@@ -931,81 +958,52 @@ $(document).on("keydown.search", "#lyrics-custom-input", function (e) {
   }
 });
 
-// "More options" link in the SRT-primary view replaces the SRT-primary
-// block with the full Genius/Custom/Raw dropdown. "YouTube Captions"
-// is kept available as one of the dropdown options.
-$(document).on("click.search", "#lyrics-more-options-link", function (e) {
-  e.preventDefault();
+// "Other lyrics…" on the captions view shows the held Genius list, with YouTube captions kept
+// in it. It does not search again.
+$(document).on("click.search", "#lyrics-other", function () {
   if (!_dialog) return;
   _dialog.view = "list";
   renderLyrics();
 });
 
-// SRT-primary "Use YouTube captions" button: write srt-mode choice + download.
-$(document).on("click.search", "#lyrics-srt-btn", function () {
+// Queue: write the lyric choice, then send the download. The video's id, link and title are
+// taken now, so a dialog that closes before the answer still sends what was tapped.
+$(document).on("click.search", "#lyrics-queue-btn", function () {
   var d = _dialog;
   var $btn = $(this);
-  if (!d || $btn.is(":disabled")) return;
+  if (!d || d.sent || $btn.is(":disabled")) return;
+  var captions = d.caption === "passed" && d.view === "captions";
+  var picked = captions ? "__srt__" : $("#lyrics-dropdown").val();
+  if (!picked) return;
+  var id = d.id;
+  var title = d.title;
+  var url = d.url;
+  var choice = picked === "__srt__" ? { mode: "srt" } : { genius_id: parseInt(picked, 10) };
+  d.sent = true;
+  $btn.prop("disabled", true);
   $.ajax({
     url: "{{ url_for('search.lyrics_select') }}",
     type: "POST",
     contentType: "application/json",
-    data: JSON.stringify({ yt_id: d.id, mode: "srt", yt_title: d.title }),
-  });
-  $btn.addClass("is-success is-flash").attr("disabled", true)
-    .html('<i class="icon icon-ok"></i>&nbsp; {% trans %}Added for processing...{% endtrans %}');
-  postDownload(d.url, d.title);
-  fadeOutPreviewModal(d.open, 1000);
-});
-
-// Lyrics download/select button: writes the sidecar choice then triggers download
-$(document).on("click.search", "#lyrics-download-btn", function () {
-  var d = _dialog;
-  var $btn = $(this);
-  if (!d || $btn.is(":disabled")) return;
-  var val = $("#lyrics-dropdown").val();
-  if (val === "__raw__" || val === "__srt__") {
-    var modeValue = val === "__raw__" ? "raw" : "srt";
-    $.ajax({
-      url: "{{ url_for('search.lyrics_select') }}",
-      type: "POST",
-      contentType: "application/json",
-      data: JSON.stringify({ yt_id: d.id, mode: modeValue, yt_title: d.title }),
-    });
-    $btn.addClass("is-success is-flash").attr("disabled", true)
-      .html('<i class="icon icon-ok"></i>&nbsp; {% trans %}Added for processing...{% endtrans %}');
-    postDownload(d.url, d.title);
-    fadeOutPreviewModal(d.open, 1000);
-    return;
-  }
-  if (!val || val === "__custom__") return;
-
-  var originalHtml = $btn.html();
-  $btn.css("min-width", $btn.outerWidth() + "px").addClass("is-loading").attr("disabled", true);
-
-  var songId = parseInt(val, 10);
-
-  function flashError(detail) {
-    console.warn("Lyrics select failed:", detail);
-    $btn.removeClass("is-loading").addClass("is-danger is-flash").text("!");
-    setTimeout(function () {
-      $btn.removeClass("is-danger is-flash").html(originalHtml).removeAttr("disabled").css("min-width", "");
-    }, 3000);
-  }
-
-  $.ajax({
-    url: "{{ url_for('search.lyrics_select') }}",
-    type: "POST",
-    contentType: "application/json",
-    data: JSON.stringify({ yt_id: d.id, genius_id: songId, yt_title: d.title }),
+    data: JSON.stringify($.extend({ yt_id: id, yt_title: title }, choice)),
     success: function () {
-      $btn.removeClass("is-loading").addClass("is-success is-flash")
-        .html('<i class="icon icon-ok"></i>&nbsp; {% trans %}Added for processing...{% endtrans %}');
-      postDownload(d.url, d.title);
+      postDownload(url, title);
+      if (!isCurrent(d)) return;
+      $btn.addClass("is-success").html('<i class="icon icon-ok"></i>')
+        .append(document.createTextNode("  " + (queueAfterDownload() ? TEXT.queued : TEXT.added)));
       fadeOutPreviewModal(d.open, 1000);
     },
     error: function (xhr) {
-      flashError(xhr && xhr.responseText ? xhr.responseText : "network error");
+      console.warn("Lyrics select failed:", xhr && xhr.responseText ? xhr.responseText : "network error");
+      if (!isCurrent(d)) return;
+      $btn.addClass("is-danger").text("!");
+      setTimeout(function () {
+        $btn.removeClass("is-danger");
+        if (isCurrent(d)) {
+          d.sent = false;
+          renderLyrics();
+        }
+      }, 3000);
     },
   });
 });
@@ -1075,8 +1073,13 @@ function openPreviewModal($li) {
     caption: "pending", // pending | passed | sparse | failed | none
     link: null, // null until the lookup answers, then the playable URL, or "" for none
     playWaits: false, // Play was tapped
-    titleAnswer: null, // null until Genius answers, then {hits, preselect}
+    genius: null, // null until Genius answers, then {hits, preselect, source: "title" | "typed"}
+    filled: false, // the list holds the current Genius answer
+    searching: false, // a typed search is running
+    searchOpen: false, // the typed-search box is open
+    searchNone: false, // the last typed search found nothing
     typedSeq: 0, // the latest typed search wins
+    sent: false, // Queue was tapped
     view: "captions", // captions | list: what shows once the caption has passed
   });
   resetDialog();
@@ -1296,35 +1299,50 @@ $(document).on("click.search", ".search_result_items_select", function () {
 				</div>
 			</div>
 			<div id="lyrics-section" class="is-hidden">
-				<p id="lyrics-wait" class="is-hidden"></p>
-				<p id="lyrics-caption-note" class="has-text-grey is-hidden"></p>
-				<div id="lyrics-srt-primary" class="is-hidden">
-					<p id="lyrics-srt-note" class="has-text-grey" style="margin-bottom: 0.4rem;">
-						{% trans %}YouTube captions will be used for lyrics.{% endtrans %}
-					</p>
-					<button id="lyrics-srt-btn" class="button is-primary is-fullwidth">{% trans %}Download{% endtrans %}</button>
-					<p id="lyrics-more-options" class="has-text-centered" style="margin-top: 0.5rem;">
-						<a id="lyrics-more-options-link" class="is-size-7 has-text-grey">{% trans %}More options{% endtrans %}</a>
-					</p>
+				<div id="lyrics-caption-view" class="lyrics-label-row is-hidden">
+					<span>{% trans %}Lyrics: <strong>YouTube captions</strong>{% endtrans %}</span>
+					{% call info_tip() %}
+					<span class="info-tip-line" data-note="passed">{% trans %}This video has its own lyric captions, written for it rather than made by YouTube's speech recognition. They usually give the best timing.{% endtrans %}</span>
+					{% endcall %}
 				</div>
-				<p id="lyrics-results-label" class="is-hidden">Genius.com lyrics search results:</p>
-				<p id="lyrics-empty" class="has-text-grey is-hidden">No lyrics results found. Use custom search below...</p>
-				<div id="lyrics-select-wrap" class="select is-fullwidth is-small is-hidden">
-					<select id="lyrics-dropdown"></select>
-				</div>
-				<div id="lyrics-custom-search" class="is-hidden">
-					<div class="field has-addons">
-						<div class="control is-expanded">
-							<input id="lyrics-custom-input" class="input" type="text" placeholder="Search lyrics..." />
+				<div id="lyrics-list-view" class="is-hidden">
+					<div class="lyrics-label-row">
+						<label for="lyrics-dropdown">{% trans %}Lyrics{% endtrans %}</label>
+						{% call info_tip() %}
+						<span class="info-tip-line" data-note="passed">{% trans %}This video has its own lyric captions, written for it rather than made by YouTube's speech recognition. They usually give the best timing.{% endtrans %}</span>
+						<span class="info-tip-line" data-note="sparse">{% trans %}This video's captions are too sparse to be lyrics.{% endtrans %}</span>
+						<span class="info-tip-line" data-note="failed">{% trans %}Could not check this video's captions.{% endtrans %}</span>
+						<span class="info-tip-line" data-note="none">{% trans %}This video has no captions of its own.{% endtrans %}</span>
+						<span class="info-tip-line" data-note="title-hits">{% trans %}These are Genius lyrics found from the video's title. Wrong song? Pick another, or search for other lyrics.{% endtrans %}</span>
+						<span class="info-tip-line" data-note="title-none">{% trans %}Genius found nothing for the video's title.{% endtrans %}</span>
+						<span class="info-tip-line" data-note="typed-hits">{% trans %}These are Genius lyrics found for what you typed. Pick the one that matches this video.{% endtrans %}</span>
+						<span class="info-tip-line" data-note="empty">{% trans %}A song needs lyrics to become karaoke: search by title and artist, or pick another video.{% endtrans %}</span>
+						{% endcall %}
+					</div>
+					<div id="lyrics-select-wrap" class="select is-fullwidth">
+						<select id="lyrics-dropdown"></select>
+					</div>
+					<p id="lyrics-empty" class="is-hidden">{% trans %}No lyrics found for this video.{% endtrans %}</p>
+					<button id="lyrics-search-open" type="button" class="button is-fullwidth mt-3">
+						<span class="icon"><i class="icon icon-search-1"></i></span>
+						<span>{% trans %}Search for other lyrics…{% endtrans %}</span>
+					</button>
+					<div id="lyrics-custom-search" class="mt-3 is-hidden">
+						<label class="lyrics-hint" for="lyrics-custom-input">{% trans %}Type the song title and artist{% endtrans %}</label>
+						<div class="field has-addons mb-0">
+							<div class="control is-expanded">
+								<input id="lyrics-custom-input" class="input" type="text" />
+							</div>
+							<div class="control">
+								<button id="lyrics-custom-btn" type="button" class="button is-warning">{% trans %}Search{% endtrans %}</button>
+							</div>
 						</div>
-						<div class="control">
-							<button id="lyrics-custom-btn" class="button is-warning">{% trans %}Search{% endtrans %}</button>
-						</div>
+						<p id="lyrics-search-none" class="is-hidden">{% trans %}Nothing found for that search.{% endtrans %}</p>
 					</div>
 				</div>
-				<div id="lyrics-download-wrap" class="is-hidden">
-					<button id="lyrics-download-btn" class="button is-primary is-fullwidth" disabled>{% trans %}Download{% endtrans %}</button>
-				</div>
+				<p id="lyrics-wait" class="is-hidden"></p>
+				<button id="lyrics-queue-btn" type="button" class="button is-primary is-fullwidth is-hidden"></button>
+				<button id="lyrics-other" type="button" class="is-hidden">{% trans %}Other lyrics…{% endtrans %}</button>
 			</div>
 		</div>
 		<button class="modal-close is-large" aria-label="close"></button>

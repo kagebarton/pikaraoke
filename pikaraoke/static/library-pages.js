@@ -1,6 +1,7 @@
 // Helpers the library pages share: Processing, Song Info, Repair lyrics, the run preview,
-// the pick pass and Add playlist. Each page loads this before its own script; the SPA
-// loads it once. The (i) notes' script is info-tip.js, loaded by base.html on every page.
+// the pick pass and Add playlist. The Search page's download dialog loads it too, for the
+// Genius hit's byline. Each page loads this before its own script; the SPA loads it once.
+// The (i) notes' script is info-tip.js, loaded by base.html on every page.
 window.libraryPages = {
   // A translated template's {name} slots filled from vars; an unknown name stays as it is.
   fill: function (template, vars) {

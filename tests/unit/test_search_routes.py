@@ -205,26 +205,33 @@ class TestLyricsSelect:
 
     @patch("pikaraoke.routes.search.write_choice")
     @patch("pikaraoke.routes.search.get_karaoke_instance")
-    def test_raw_mode_writes_sidecar(self, mock_get_k, mock_write, client):
+    def test_srt_mode_writes_sidecar(self, mock_get_k, mock_write, client):
         mock_get_k.return_value = _get_karaoke(client.application)
-        mock_write.return_value = MagicMock()
 
         resp = client.post(
             "/lyrics_select",
-            data=json.dumps(
-                {
-                    "yt_id": "dQw4w9WgXcQ",
-                    "mode": "raw",
-                }
-            ),
+            data=json.dumps({"yt_id": "dQw4w9WgXcQ", "mode": "srt"}),
             content_type="application/json",
         )
 
         assert resp.status_code == 204
-        mock_write.assert_called_once()
-        call_args = mock_write.call_args
-        assert call_args[0][0] == "dQw4w9WgXcQ"
-        assert call_args[0][1]["mode"] == "raw"
+        mock_write.assert_called_once_with("dQw4w9WgXcQ", {"yt_id": "dQw4w9WgXcQ", "mode": "srt"})
+
+    @patch("pikaraoke.routes.search.write_choice")
+    @patch("pikaraoke.routes.search.get_karaoke_instance")
+    def test_raw_mode_is_turned_away_and_writes_nothing(self, mock_get_k, mock_write, client):
+        """The dialog no longer offers Raw Transcription; the library tools write that choice
+        themselves, so nothing sends it here."""
+        mock_get_k.return_value = _get_karaoke(client.application)
+
+        resp = client.post(
+            "/lyrics_select",
+            data=json.dumps({"yt_id": "dQw4w9WgXcQ", "mode": "raw"}),
+            content_type="application/json",
+        )
+
+        assert resp.status_code == 400
+        mock_write.assert_not_called()
 
     @patch("pikaraoke.routes.search.get_karaoke_instance")
     def test_invalid_yt_id_returns_400(self, mock_get_k, client):
