@@ -314,16 +314,13 @@
 
 		setUserCookie(); // Don't reload page after setting cookie
 
-		// Restore checkbox states from cookies
-		restoreCheckboxStates();
-
-		$("#add-to-queue-direct, #add-to-queue-search").change(function () {
-			Cookies.set("add-to-queue-on-download", $(this).is(":checked"), {
-				expires: 365,
-			});
-			// Sync both checkboxes to have the same state
-			var isChecked = $(this).is(":checked");
-			$("#add-to-queue-direct, #add-to-queue-search").prop("checked", isChecked);
+		// "Add to queue after download" starts ticked; an untick lasts until the tab closes. The
+		// SPA re-runs this script on every visit to the page, so this also covers page changes.
+		if (sessionStorage.getItem("pikaraoke_add_to_queue") === "false") {
+			$("#add-to-queue").prop("checked", false);
+		}
+		$("#add-to-queue").on("change", function () {
+			sessionStorage.setItem("pikaraoke_add_to_queue", String($(this).is(":checked")));
 		});
 
 		function downloadSong(songUrl, songTitle, button) {
@@ -339,7 +336,7 @@
 					song_url: songUrl,
 					song_title: songTitle || "",
 					song_added_by: getUserCookie() || "",
-					queue: $("#add-to-queue-direct").is(":checked"),
+					queue: $("#add-to-queue").is(":checked"),
 				}),
 				success: function () {
 					$btn.removeClass("is-loading").addClass("is-success")
@@ -372,7 +369,7 @@
 					song_url: songUrl,
 					song_title: songTitle || "",
 					song_added_by: getUserCookie() || "",
-					queue: $("#add-to-queue-search").is(":checked"),
+					queue: $("#add-to-queue").is(":checked"),
 				}),
 			});
 		}
@@ -821,15 +818,6 @@ $(document).on("click.search", ".search_result_items_select", function () {
 			return false;
 		}
 	}
-
-	function restoreCheckboxStates() {
-		// Restore "Add to queue" checkbox state
-		var addToQueue = Cookies.get("add-to-queue-on-download");
-		if (addToQueue !== undefined) {
-			var shouldCheck = addToQueue === "true";
-			$("#add-to-queue-direct, #add-to-queue-search").prop("checked", shouldCheck);
-		}
-	}
 </script>
 {% endblock %} {% block header %} {# MSG: Title for the search page. #}
 <h1>{% block title %}{% trans %}Search / Add New{% endtrans %}{% endblock %}</h1>
@@ -867,6 +855,13 @@ $(document).on("click.search", ".search_result_items_select", function () {
 
 	<div>
 		<div id="advanced-settings" class="box has-background-black-bis" style="margin-top: 10px; display: none">
+			<div class="field">
+				<label class="checkbox is-flex is-align-items-center">
+					<input type="checkbox" class="checkbox" checked id="add-to-queue" />
+					{# MSG: Checkbox label, in Advanced, for every download started from the search page (a picked result or a typed link): whether the song is added to the queue as part of the download. #} {% trans %}Add to queue after download{% endtrans %}
+				</label>
+			</div>
+			<hr class="my-3" />
 			<div class="control">
 				<div class="label">
 					{# MSG: Label for an input which takes a YouTube url directly instead of searching titles. #} {% trans
@@ -879,13 +874,6 @@ $(document).on("click.search", ".search_result_items_select", function () {
 						type="text"
 						value="https://www.youtube.com/watch?v="
 					/>
-					<div class="field" style="margin-top: 5px">
-						<label class="checkbox is-flex is-align-items-center">
-							<input type="checkbox" class="checkbox" checked id="add-to-queue-direct" />
-							{# MSG: Checkbox label which marks the song to take a place in the queue while it downloads.
-							#} {% trans %}Add to queue{% endtrans %}
-						</label>
-					</div>
 					<div class="has-text-right" style="margin-top: 5px">
 						<button class="button is-rounded is-primary" disabled id="direct-download-button">
 							{# MSG: Button label for the direct download form's submit button. #} {% trans %}Download{%
@@ -915,13 +903,6 @@ $(document).on("click.search", ".search_result_items_select", function () {
 			<small><i>'{{search_string}}'</i></small>
 			{%- endtrans %}
 		</label>
-		<div class="field">
-			<label class="checkbox is-flex is-align-items-center">
-				<input type="checkbox" checked id="add-to-queue-search" class="checkbox" />
-				{# MSG: Checkbox label which marks the song to take a place in the queue while it downloads. #} {%
-				trans %}Add to queue{% endtrans %}
-			</label>
-		</div>
 		<ul id="search-results" class="search_result_items">
 			{% for row in search_rows %}
 			{{ result_card(row) }}
