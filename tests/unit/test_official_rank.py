@@ -124,6 +124,19 @@ _LIFTED = [
     ("be our guest beauty and the beast", ("thebeast",), [], []),
 ]
 
+# query -> another act's videos on a label channel (a film song's second cast), in YouTube's
+# order. They lift after the originals' videos; every other fixture has none.
+_OTHER_ACTS_VIDEOS = {
+    "part of your world": ["kf7Dss2gCe0"],
+    "how far ill go moana": ["_nVJl4-o2XA", "IhZI-a1eiCg"],
+    "circle of life lion king": ["GibiNy4d4gc", "IwH9YvhPN7c"],
+    "youre welcome moana": ["0DLzyvT4eUo"],
+    "hello": ["LnET4RKXx5k"],
+    "under the sea little mermaid": ["Wbv_huklr5E", "Uki_W4nYbr4"],
+    "we dont talk about bruno encanto": ["bvWRMAU6V-c", "-QOSz9G1GnY"],
+    "do you want to build a snowman": ["1APv9t_LyOY"],
+}
+
 # query, id of a row that looks official but must stay where YouTube put it, without a badge
 _STAYS_PUT = [
     pytest.param("bohemian rhapsody", "ojRj2JK5oCI", id="cover-artists-own-video"),
@@ -219,20 +232,21 @@ def _titles(ranked) -> list[str]:
 @pytest.mark.parametrize(
     "query, originals, videos, audio", _LIFTED, ids=[query for query, *_ in _LIFTED]
 )
-def test_lifts_the_originals_official_videos_and_badges_every_official_upload(
+def test_lifts_the_official_videos_and_badges_every_official_upload(
     query, originals, videos, audio
 ):
     results = _load(query)[:_FIRST_PAGE]
+    others = _OTHER_ACTS_VIDEOS.get(query, [])
     acts = read_first_page(results, query)
 
     ranked = official_first(results, query, acts)
 
     assert acts.originals == frozenset(originals)
-    assert acts.has_video == bool(videos)
-    lifted = videos or audio  # audio is lifted only where no video is
+    assert acts.has_video == bool(videos or others)
+    lifted = videos + others or audio  # audio is lifted only where no video is
     assert _ids(ranked)[: len(lifted)] == lifted
     assert {result.id: kind for result, kind in ranked if kind} == {
-        **dict.fromkeys(videos, "video"),
+        **dict.fromkeys(videos + others, "video"),
         **dict.fromkeys(audio, "audio"),
     }
 
@@ -242,7 +256,7 @@ def test_lifts_the_originals_official_videos_and_badges_every_official_upload(
 )
 def test_everything_not_lifted_keeps_youtubes_order(query, originals, videos, audio):
     results = _load(query)[:_FIRST_PAGE]
-    lifted = videos or audio
+    lifted = videos + _OTHER_ACTS_VIDEOS.get(query, []) or audio
 
     ranked = official_first(results, query, read_first_page(results, query))
 
@@ -596,6 +610,85 @@ def test_only_marks_beyond_the_querys_exclude_a_row(query, title, channel, kind)
     vote = (_row(title, channel=channel),) * 2
 
     assert _kind(row, query, vote=vote) == kind
+
+
+# Other acts' videos (rule 11)
+# ---------------------------------------------------------------------------
+
+
+def _another_cast(channel: str = "Gamma Records") -> SearchResult:
+    return _row("Beta - Some Song (Official Video)", channel=channel)
+
+
+def test_another_acts_video_on_a_label_channel_lifts_after_the_originals_videos():
+    original = _row("Alpha - Some Song (Official Video)", channel="Alpha")
+    rows = [_unrelated(), _another_cast(), original, _art("Some Song"), _art("Some Song (Second)")]
+
+    ranked = official_first(rows, "some song", read_first_page(rows, "some song"))
+
+    assert _titles(ranked)[:3] == [original.title, rows[1].title, "Unrelated upload"]
+    assert [kind for _, kind in ranked] == ["video", "video", None, "audio", "audio"]
+
+
+def test_the_originals_audio_keeps_its_place_beside_another_acts_lifted_video():
+    rows = [_unrelated(), _art("Some Song"), _art("Some Song (Second)"), _another_cast()]
+
+    ranked = official_first(rows, "some song", read_first_page(rows, "some song"))
+
+    assert _titles(ranked) == [rows[3].title, "Unrelated upload", "Some Song", "Some Song (Second)"]
+    assert [kind for _, kind in ranked] == ["video", None, "audio", "audio"]
+
+
+@pytest.mark.parametrize(
+    "channel, kind",
+    [
+        pytest.param("Gamma Records", "video", id="label-by-name"),
+        pytest.param("GammaVEVO", "video", id="vevo-label"),
+        pytest.param("Beta", None, id="the-acts-own-channel"),
+        pytest.param("BetaVEVO", None, id="the-acts-own-vevo-channel"),
+        pytest.param("BetaMusic", None, id="the-acts-own-music-channel"),
+    ],
+)
+def test_another_acts_video_lifts_only_from_a_label_channel_that_is_not_the_acts_own(channel, kind):
+    assert _kind(_another_cast(channel)) == kind
+
+
+def test_a_query_that_names_the_original_lifts_no_other_act():
+    assert _kind(_another_cast(), "some song") == "video"
+    assert _kind(_another_cast(), "alpha some song") is None
+
+
+def test_another_acts_video_must_be_the_song_not_another_song_that_names_the_film():
+    other_song = _row("Beta - Other Song (From Some Film) (Official Video)", "Gamma Records")
+
+    assert _kind(other_song, "some film") is None
+
+
+def test_another_acts_audio_on_a_label_channel_is_not_lifted():
+    audio = _row("Beta - Some Song (Official Audio)", channel="Gamma Records")
+
+    assert _kind(audio) is None
+    assert _kind(_art("Some Song", "Beta")) is None
+
+
+def test_a_label_channel_whose_name_cannot_be_read_names_no_act_and_lifts_nothing():
+    """A title that credits no one credits its channel; here the channel reads as nothing."""
+    assert _kind(_row("Some Song", channel="하이브 Records")) is None
+
+
+def test_a_query_the_song_check_cannot_read_lifts_no_other_act_either():
+    query = "idol 夜に駆ける"
+    rows = [
+        _row("YOASOBI「夜に駆ける」Official Music Video", channel="YOASOBI"),
+        _row("YOASOBI「アイドル」Official Music Video", channel="YOASOBI"),
+        _row("YOASOBI - Idol (Official Music Video)", channel="YOASOBI"),
+        _row("Beta - Idol (Official Video)", channel="Gamma Records"),
+    ]
+
+    acts = read_first_page(rows, query)
+
+    assert not acts.has_video
+    assert official_first(rows, query, acts) == [(r, None) for r in rows]
 
 
 # Order (rule 12)
