@@ -183,7 +183,7 @@ def test_the_guest_form_is_not_inside_the_page_container(mock_get, _site, _resul
 
 
 # ---------------------------------------------------------------------------
-# "Already in the library" note: a library copy under another YouTube ID
+# Library songs: cards first, and a copy under another YouTube ID noted on its card
 # ---------------------------------------------------------------------------
 
 _MENA_WNW = (
@@ -209,18 +209,133 @@ def _search_body(client, mock_get, results, karaoke, query="karaoke") -> str:
     return resp.get_data(as_text=True)
 
 
+def _cards(body: str) -> list[str]:
+    return re.findall(r"<li data-ytID=.*?</li>", body, re.S)
+
+
+def _card_ids(body: str) -> list[str]:
+    return [re.search(r'data-ytID="(\w+)"', card).group(1) for card in _cards(body)]
+
+
+_NEVER = "never gonna give you up"
+
+
+def _rick_lyrics(video_id="lyricsaaaaa"):
+    return _result("Rick Astley - Never Gonna Give You Up (Lyrics)", video_id)
+
+
+def _rick_audio():
+    return _result(
+        "Never Gonna Give You Up",
+        "audioaaaaaa",
+        channel="Rick Astley - Topic",
+        description="Provided to YouTube by RCA Records",
+    )
+
+
+def _rick_video():
+    return _result(
+        "Rick Astley - Never Gonna Give You Up (Official Video)",
+        "videoaaaaaa",
+        channel="Rick Astley",
+        channel_verified=True,
+    )
+
+
+def _rick_library(*video_ids: str) -> list[str]:
+    return [f"/songs/Rick Astley - Never Gonna Give You Up---{i}.mp4" for i in video_ids]
+
+
 @patch("pikaraoke.routes.search.get_karaoke_instance")
-def test_note_offers_library_copies_of_a_reuploaded_song(mock_get, client):
-    results = [_result("Aladdin - A Whole New World (Lyrics)", "aaaaaaaaaaa")]
+def test_a_song_in_the_library_comes_above_the_official_video(mock_get, client):
+    results = [_rick_lyrics(), _rick_audio(), _rick_video()]
+    k = _karaoke_with_library(_rick_library("lyricsaaaaa"))
+
+    body = _search_body(client, mock_get, results, k, query=_NEVER)
+
+    assert _card_ids(body) == ["lyricsaaaaa", "videoaaaaaa", "audioaaaaaa"]
+    assert "Official video" in _cards(body)[1]  # the badge stays with the video
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_songs_in_the_library_keep_the_rankings_order_among_themselves(mock_get, client):
+    """YouTube had the lyrics first; the ranking lifts the video, and both are in the library."""
+    other = _result("Unrelated upload", "otheraaaaaa")
+    results = [other, _rick_lyrics(), _rick_audio(), _rick_video()]
+    k = _karaoke_with_library(_rick_library("lyricsaaaaa", "videoaaaaaa"))
+
+    body = _search_body(client, mock_get, results, k, query=_NEVER)
+
+    assert _card_ids(body) == ["videoaaaaaa", "lyricsaaaaa", "otheraaaaaa", "audioaaaaaa"]
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_more_puts_a_second_page_song_in_the_library_first_in_its_batch(mock_get, client):
+    results = (
+        _filler(30)
+        + _filler(10, 30)
+        + [_result("Justin Timberlake - Mirrors", "uuZE_IRwLNI")]
+        + _filler(19, 41)
+    )
+    mock_get.return_value = _karaoke_with_library([_MIRRORS])
+    with patch("pikaraoke.routes.search.get_search_results", return_value=results):
+        body = client.get("/search/more?search_string=mirrors").get_data(as_text=True)
+
+    assert _card_ids(body)[0] == "uuZE_IRwLNI"
+    assert f'data-file-path="{_MIRRORS}"' in _cards(body)[0]
+
+
+_WNW_LYRICS = "Aladdin - A Whole New World (Lyrics)"
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_a_library_copy_is_noted_inside_the_card_it_matched(mock_get, client):
+    results = [
+        _result("Ed Sheeran - Shape of You", "shapeaaaaaa"),
+        _result(_WNW_LYRICS, "aaaaaaaaaaa"),
+    ]
     k = _karaoke_with_library([_MENA_WNW, _ZAYN_WNW, _MIRRORS])
 
     body = _search_body(client, mock_get, results, k)
 
-    assert "Already in the library:" in body
-    assert "Mena Massoud, Naomi Scott - A Whole New World" in body
-    assert f'similar-song-enqueue" data-file-path="{_MENA_WNW}"' in body
-    assert f'similar-song-enqueue" data-file-path="{_ZAYN_WNW}"' in body
+    shape, wnw = _cards(body)
+    assert "In library:" not in shape
+    assert "In library: <strong>Mena Massoud, Naomi Scott - A Whole New World" in wnw
+    assert f'library-copy-enqueue" data-file-path="{_MENA_WNW}"' in wnw
+    assert f'library-copy-enqueue" data-file-path="{_ZAYN_WNW}"' in wnw
     assert "Mirrors" not in body
+    assert "Already in the library" not in body
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_a_copy_matching_several_cards_is_noted_on_the_first_only(mock_get, client):
+    results = [
+        _result(_WNW_LYRICS, "aaaaaaaaaaa"),
+        _result("Aladdin - A Whole New World (Karaoke)", "bbbbbbbbbbb"),
+    ]
+
+    body = _search_body(client, mock_get, results, _karaoke_with_library([_MENA_WNW]))
+
+    first, second = _cards(body)
+    assert f'library-copy-enqueue" data-file-path="{_MENA_WNW}"' in first
+    assert "In library:" not in second
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_a_card_in_the_library_is_skipped_and_the_copy_goes_to_the_next_match(mock_get, client):
+    results = [
+        _result("Aladdin - A Whole New World (Karaoke)", "bbbbbbbbbbb"),
+        _result(_WNW_LYRICS, "aaaaaaaaaaa"),
+    ]
+    own = "/songs/Aladdin - A Whole New World (Lyrics)---aaaaaaaaaaa.mp4"
+
+    body = _search_body(client, mock_get, results, _karaoke_with_library([_MENA_WNW, own]))
+
+    own_card, matched = _cards(body)
+    assert f'data-file-path="{own}"' in own_card
+    assert "In library:" not in own_card
+    assert f'library-copy-enqueue" data-file-path="{_MENA_WNW}"' in matched
+    assert body.count('library-copy-enqueue" data-file-path=') == 1
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
@@ -228,19 +343,22 @@ def test_no_note_when_nothing_in_the_library_looks_like_a_result(mock_get, clien
     results = [_result("Ed Sheeran - Shape of You", "aaaaaaaaaaa")]
     k = _karaoke_with_library([_MENA_WNW, _MIRRORS])
 
-    assert "Already in the library:" not in _search_body(client, mock_get, results, k)
+    assert "In library:" not in _search_body(client, mock_get, results, k)
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
 def test_no_note_for_a_song_a_result_already_matches_by_id(mock_get, client):
-    """That row already says "Add to Queue"; the note would repeat it."""
-    results = [_result("Justin Timberlake - Mirrors (Lyrics)", "uuZE_IRwLNI")]
+    """A result's own card says Queue; another card would repeat that song as a note."""
+    results = [
+        _result("Justin Timberlake - Mirrors (Lyrics)", "uuZE_IRwLNI"),
+        _result("Justin Timberlake - Mirrors (Karaoke)", "bbbbbbbbbbb"),
+    ]
     k = _karaoke_with_library([_MIRRORS])
 
     body = _search_body(client, mock_get, results, k)
 
-    assert "Already in the library:" not in body
-    assert f'data-file-path="{_MIRRORS}"' in body  # the row's own button
+    assert "In library:" not in body
+    assert f'data-file-path="{_MIRRORS}"' in _cards(body)[0]  # the row's own button
 
 
 @pytest.mark.parametrize(
@@ -258,19 +376,30 @@ def test_the_row_not_the_note_offers_a_file_find_by_id_misses(mock_get, client, 
 
     body = _search_body(client, mock_get, results, _karaoke_with_library([path]))
 
-    assert "Already in the library:" not in body
+    assert "In library:" not in body
     assert f'data-file-path="{path}"' in body  # the row's own button
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
-def test_note_lists_at_most_three_library_copies(mock_get, client):
+def test_at_most_three_library_copies_are_noted_on_a_page(mock_get, client):
     titles = ["Rainbow Road", "Silver Lining", "Golden Hour", "Midnight Train"]
     library = [f"/songs/Singer {n} - {t}---{n:0>11}.mp4" for n, t in enumerate(titles)]
     results = [_result(f"{t} (Lyrics)", f"{n:a>11}") for n, t in enumerate(titles)]
 
     body = _search_body(client, mock_get, results, _karaoke_with_library(library))
 
-    assert body.count('similar-song-enqueue" data-file-path=') == 3
+    assert body.count('library-copy-enqueue" data-file-path=') == 3
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_more_notes_no_library_copy(mock_get, client):
+    results = _filler(30) + [_result(_WNW_LYRICS, "aaaaaaaaaab")] + _filler(29, 31)
+    mock_get.return_value = _karaoke_with_library([_MENA_WNW])
+    with patch("pikaraoke.routes.search.get_search_results", return_value=results):
+        body = client.get("/search/more?search_string=whole+new+world").get_data(as_text=True)
+
+    assert "In library:" not in body
+    assert "library-copy" not in body
 
 
 # ---------------------------------------------------------------------------
@@ -544,18 +673,6 @@ def test_more_leaves_second_page_audio_in_place_when_the_first_page_lifted_a_vid
     ids = re.findall(r'<li data-ytID="(\w+)"', body)
     assert ids == [r.id for r in second_page]
     assert "Official audio" in re.findall(r"<li data-ytID=.*?</li>", body, re.S)[-1]
-
-
-@patch("pikaraoke.routes.search.get_karaoke_instance")
-def test_more_marks_a_library_copy_of_a_second_page_result(mock_get, client):
-    results = (
-        _filler(30) + [_result("Justin Timberlake - Mirrors", "uuZE_IRwLNI")] + _filler(29, 31)
-    )
-    mock_get.return_value = _karaoke_with_library([_MIRRORS])
-    with patch("pikaraoke.routes.search.get_search_results", return_value=results):
-        body = client.get("/search/more?search_string=mirrors").get_data(as_text=True)
-
-    assert f'data-file-path="{_MIRRORS}"' in body
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")

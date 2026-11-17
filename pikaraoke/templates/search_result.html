@@ -9,17 +9,25 @@
 			{% if result.duration %}<span class="duration-badge">{{ result.duration }}</span>{% endif %}
 		</div>
 	</div>
-	<div class="search_result_items_meta">
-		<div>
-			{{result.title}}
-			{% if result.channel or row.official %}<div class="is-size-7 has-text-grey">{{ result.channel }}{% if row.official %} <span class="tag is-info is-light">Official {{ row.official }}</span>{% endif %}</div>{% endif %}
-			<a href="{{result.url}}" target="_blank" rel="noopener noreferrer" class="is-size-7 has-text-info">YouTube ↗</a>
+	<div class="search_result_items_body">
+		<div class="search_result_items_meta">
+			<div>
+				{{result.title}}
+				{% if result.channel or row.official %}<div class="is-size-7 has-text-grey">{{ result.channel }}{% if row.official %} <span class="tag is-info is-light">Official {{ row.official }}</span>{% endif %}</div>{% endif %}
+				<a href="{{result.url}}" target="_blank" rel="noopener noreferrer" class="is-size-7 has-text-info">YouTube ↗</a>
+			</div>
+			{% if row.existing_path %}
+			<button class="button is-success search_result_items_enqueue">Add to Queue</button>
+			{% else %}
+			<button class="button search_result_items_select">{% trans %}Select{% endtrans %}</button>
+			{% endif %}
 		</div>
-		{% if row.existing_path %}
-		<button class="button is-success search_result_items_enqueue">Add to Queue</button>
-		{% else %}
-		<button class="button search_result_items_select">{% trans %}Select{% endtrans %}</button>
-		{% endif %}
+		{% for path in row.library_copies %}
+		<div class="notification is-info is-light library-copy">
+			<span>In library: <strong>{{ filename_from_path(path) }}</strong></span>
+			<button class="button is-success is-small library-copy-enqueue" data-file-path="{{ path }}">{% trans %}Queue{% endtrans %}</button>
+		</div>
+		{% endfor %}
 	</div>
 </li>
 {%- endmacro %}

@@ -7,7 +7,7 @@ import logging
 import re
 import subprocess
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import flask_babel
 from flask import (
@@ -39,7 +39,7 @@ _ = flask_babel.gettext
 
 search_bp = Blueprint("search", __name__)
 
-# The search page's one note lists library copies, so a long list would bury the results.
+# Library copies noted on a search page, so a long list would bury the results.
 MAX_SIMILAR_SONGS = 3
 
 # YouTube results fetched for a search.
@@ -74,41 +74,52 @@ class DownloadBody(Schema):
 
 @dataclass(frozen=True)
 class SearchRow:
-    """One result card: the YouTube hit, the library file that already carries its ID, and
-    whether it is badged as an original act's official upload."""
+    """One result card: the YouTube hit, the library file that already carries its ID, whether
+    it is badged as an original act's official upload, and the library songs noted on it."""
 
     result: SearchResult
     existing_path: str | None
     official: OfficialKind | None
+    library_copies: tuple[str, ...] = ()
 
 
-def _library_copies(songs: Iterable[str], results: list[SearchResult]) -> list[str]:
-    """Library songs that look like a result found under another YouTube ID.
+def _note_library_copies(songs: Iterable[str], rows: list[SearchRow]) -> list[SearchRow]:
+    """The rows with each library song that looks like a result under another YouTube ID noted
+    on the first row it matches.
 
-    A song that carries a result's own ID is left out: that row says "Add to
-    Queue" itself.
+    A copy titled like the song matches nearly every upload of it, so noting it on each match
+    would repeat one line down the page. A row already in the library is skipped (its own button
+    queues it), and so is a song carrying any result's ID.
     """
     library = SongIndex.from_songs(songs)
-    result_ids = {result.id for result in results}
-    copies = dict.fromkeys(
-        path
-        for result in results
-        for path in similar_songs(result.title, library)
-        if extract_youtube_id(path) not in result_ids
-    )
-    return list(copies)[:MAX_SIMILAR_SONGS]
+    result_ids = {row.result.id for row in rows}
+    noted: set[str] = set()
+    noted_rows = []
+    for row in rows:
+        copies: tuple[str, ...] = ()
+        if not row.existing_path:
+            copies = tuple(
+                path
+                for path in similar_songs(row.result.title, library)
+                if path not in noted and extract_youtube_id(path) not in result_ids
+            )[: MAX_SIMILAR_SONGS - len(noted)]
+            noted.update(copies)
+        noted_rows.append(replace(row, library_copies=copies))
+    return noted_rows
 
 
 def _search_rows(
     songs: Iterable[str], results: list[SearchResult], query: str, acts: Acts
 ) -> list[SearchRow]:
-    """Result cards in display order: the official uploads first, then YouTube's order."""
+    """Result cards in display order: the songs already in the library, then the official
+    uploads, then YouTube's order."""
     # Read from the song list, not find_by_id, which misses "Title [ID].mp4" and subfolders.
     library_ids = {video_id: path for path in songs if (video_id := extract_youtube_id(path))}
-    return [
+    rows = [
         SearchRow(r, library_ids.get(r.id), official)
         for r, official in official_first(results, query, acts)
     ]
+    return sorted(rows, key=lambda row: row.existing_path is None)
 
 
 @search_bp.route("/search", methods=["GET"])
@@ -120,13 +131,14 @@ def search():
     if search_string:
         results = get_search_results(search_string, PAGE_SIZE)
         acts = read_first_page(results, search_string)
-        search_rows = _search_rows(k.song_manager.songs, results, search_string, acts)
-        library_copies = _library_copies(k.song_manager.songs, results)
+        search_rows = _note_library_copies(
+            k.song_manager.songs,
+            _search_rows(k.song_manager.songs, results, search_string, acts),
+        )
         show_more = len(results) >= PAGE_SIZE
     else:
         search_string = None
         search_rows = None
-        library_copies = []
         show_more = False
     return render_template(
         "search.html",
@@ -135,7 +147,6 @@ def search():
         songs=k.song_manager.songs,
         search_rows=search_rows,
         show_more=show_more,
-        similar_songs=library_copies,
         search_string=search_string,
         genius_client=k.genius_client,
     )
