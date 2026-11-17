@@ -513,7 +513,10 @@ Spec choices (Opus, not ruled by Ken; reopen any of them by asking):
   `#search_result_selector`, `#youtube-link` and `#youtube-thumb`, none of which is on the
   page. Its interval fires a no-op every 2 s for as long as the tab is open.
 
-### What exists (checked 2026-11-17 on `29fa88b`)
+### What exists (checked 2026-11-17 on `dev` at `764df44`)
+
+Line numbers are `dev`'s. The branch has no code of its own before commit 1, and Part 1 rebases
+onto `dev` first, so they hold until Part 1's commits move `routes/search.py`.
 
 - `routes/search.py`: `SearchRow(result, existing_path, official)` (line 75); `_library_copies`
   (line 84) returns up to `MAX_SIMILAR_SONGS` library paths that `similar_songs` matches to any
@@ -529,24 +532,28 @@ Spec choices (Opus, not ruled by Ken; reopen any of them by asking):
     (line 98).
   - Script: the document-wide Enter handler (line 277), which clicks Search from anywhere,
     the direct-URL box included; selectize setup and its `#add-queue-link` enqueue (lines
-    289-464); the dead thumbnail cycling (lines 468-499, `changeImage` at 1015); the checkbox
+    289-464); the dead thumbnail cycling (lines 468-499, `changeImage` at 1034); the checkbox
     cookie `add-to-queue-on-download`, written at line 530 and read by
-    `restoreCheckboxStates` (line 1024); `downloadSong` and `postDownload` both read
-    `#add-to-queue-search`, the direct-URL download too; `.similar-song-enqueue` handler (line
-    627).
+    `restoreCheckboxStates` (line 1042); `.similar-song-enqueue` handler (line 627).
+  - Two synced ticks: `downloadSong` (the direct-URL download) reads `#add-to-queue-direct`,
+    `postDownload` (the dialog's download) reads `#add-to-queue-search`, and the change handler
+    at line 529 keeps them equal. `58ccd63` moved `downloadSong` onto the direct box: the
+    results' tick exists only while results are on screen, so a direct download from a page
+    with no results was never queued.
   - Markup: `#queue-form` with the selectize `<select>`, Search (`#search-link`), "Add to
-    queue" (`#add-queue-link`), hidden `.song_added_by` (lines 1038-1055); help hint
-    `<article class="message">` (lines 1066-1087); `#advanced-settings` with the direct URL
-    and `#add-to-queue-direct` (lines 1092-1120); hidden `#container_search_form` whose
-    `#search_string` input the script fills and submits (lines 1125-1129); the "Already in the
-    library" box (lines 1147-1157); `#add-to-queue-search` above the results (lines
-    1158-1164).
+    queue" (`#add-queue-link`), hidden `.song_added_by` (lines 1056-1073); help hint
+    `<article class="message">` (lines 1084-1105); `#advanced-settings` with the direct URL
+    and `#add-to-queue-direct` (lines 1110-1138); hidden `#container_search_form` whose
+    `#search_string` input the script fills and submits (lines 1143-1147); the "Already in the
+    library" box (lines 1165-1175); `#add-to-queue-search` above the results (lines
+    1176-1182).
   - sessionStorage already holds `pikaraoke_search_results` and `pikaraoke_search_term` (the
-    restore on a return visit, line 398), and the lyrics picker reads the term (line 772).
+    restore on a return visit, line 398), and the lyrics picker sends the term to
+    `/lyrics_search` as `typed` (line 785).
 - `filename_from_path` is a Jinja global (`app.py:208`), so the imported card macro can use it,
   `/search/more` included. Translation catalogs were last regenerated 2026-06-10 (`5780dfce`).
-- `tests/unit/test_search_render.py`: the "Already in the library" tests (lines 142-229) and the
-  card tests (from line 232) assert on `similar-song-enqueue`, `search_result_items_enqueue`
+- `tests/unit/test_search_render.py`: the "Already in the library" tests (lines 142-230) and the
+  card tests (from line 233) assert on `similar-song-enqueue`, `search_result_items_enqueue`
   and `search_result_items_select`.
 
 ### Design
@@ -587,7 +594,7 @@ Spec choices (Opus, not ruled by Ken; reopen any of them by asking):
   disable the button, hide the old results.
 - Enter submits through the form. Delete the document-wide Enter handler, which also stops
   Enter in the direct-URL box from running a search. The lyrics box has its own handler
-  (line 839) and is unaffected.
+  (line 856) and is unaffected.
 - The return-visit restore (line 404) fills the new input from `pikaraoke_search_term`. Clear
   empties the input, removes both keys and the results, as today, minus the selectize call.
 - Delete: the help hint; `#add-queue-link` and its handler; `.song_added_by` and its fill
@@ -601,7 +608,10 @@ Spec choices (Opus, not ruled by Ken; reopen any of them by asking):
   `checked` in the markup, first in `#advanced-settings`, with a rule between it and the
   direct URL (mockup). Delete `#add-to-queue-search` and `#add-to-queue-direct`. Update the
   translator `MSG` comment.
-- `downloadSong` and `postDownload` read `#add-to-queue`.
+- `downloadSong` and `postDownload` read `#add-to-queue`. `#advanced-settings` is hidden but
+  always on the page, so both read a real tick whether or not results are showing (the case
+  `58ccd63` fixed). Keep it that way: the box must not move into anything rendered only with
+  results.
 - sessionStorage key `pikaraoke_add_to_queue`: on change write `"true"` or `"false"`; on load
   untick only when it reads `"false"`. The inline script runs again on every SPA visit, so the
   load step covers moving between pages. Delete `restoreCheckboxStates` and the cookie write.
@@ -660,7 +670,8 @@ Review-due checkpoint for commits 5-8: multi-file and a script rewrite, so it is
       above the results.
 - [ ] Untick it, go to Queue and back: still unticked; a song downloaded now is not queued.
       Close the tab and open the page again: ticked.
-- [ ] A direct-URL download with the box ticked is queued.
+- [ ] A direct-URL download with the box ticked is queued, from a fresh Search page with no
+      results showing.
 - [ ] Show more: a card you own on the second page lands first in the appended batch.
 
 ## Measurements (2026-11-11)
