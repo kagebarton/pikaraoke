@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 import subprocess
@@ -10,14 +9,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 
 import flask_babel
-from flask import (
-    current_app,
-    get_template_attribute,
-    jsonify,
-    render_template,
-    request,
-    url_for,
-)
+from flask import get_template_attribute, jsonify, render_template, request, url_for
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
 
@@ -47,10 +39,6 @@ PAGE_SIZE = 30
 
 # YouTube ID validation: exactly 11 chars of the allowed character set
 _YT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
-
-
-class AutocompleteQuery(Schema):
-    q = fields.String(required=True, metadata={"description": "Search query for autocomplete"})
 
 
 class SearchMoreQuery(Schema):
@@ -171,26 +159,6 @@ def search_more(query):
     rows = _search_rows(k.song_manager.songs, results[PAGE_SIZE:], search_string, acts)
     result_card = get_template_attribute("search_result.html", "result_card")
     return "".join(result_card(row) for row in rows)
-
-
-@search_bp.route("/autocomplete")
-@search_bp.arguments(AutocompleteQuery, location="query")
-def autocomplete(query):
-    """Search available songs for autocomplete."""
-    k = get_karaoke_instance()
-    q = query["q"].lower()
-    result = []
-    for each in k.song_manager.songs:
-        if q in each.lower():
-            result.append(
-                {
-                    "path": each,
-                    "fileName": k.song_manager.filename_from_path(each),
-                    "type": "autocomplete",
-                }
-            )
-    response = current_app.response_class(response=json.dumps(result), mimetype="application/json")
-    return response
 
 
 @search_bp.route("/caption_check")

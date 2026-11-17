@@ -183,6 +183,47 @@ def test_the_guest_form_is_not_inside_the_page_container(mock_get, _site, _resul
 
 
 # ---------------------------------------------------------------------------
+# The search box: a plain GET form
+# ---------------------------------------------------------------------------
+
+
+def _search_input(body: str) -> str:
+    return re.search(r"<input[^>]*name=\"search_string\"[^>]*>", body).group(0)
+
+
+@patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_bare_page_has_a_plain_get_search_form(mock_get, _site, client):
+    mock_get.return_value = _mock_karaoke()
+
+    body = client.get("/search").get_data(as_text=True)
+
+    form = next(tag for tag in re.findall(r"<form[^>]*>", body) if 'action="/search"' in tag)
+    assert 'method="get"' in form
+    box = _search_input(body)
+    assert 'type="text"' in box
+    assert 'autocomplete="off"' in box  # no past-searches list for a guest to tap by accident
+    assert 'value=""' in box
+    assert "selectize" not in body.lower()
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_a_results_page_fills_the_box_with_the_query(mock_get, client):
+    query = 'say "hi" <b>'
+
+    body = _search_body(client, mock_get, _RESULTS, _karaoke_with_library([]), query=query)
+
+    assert 'value="say &#34;hi&#34; &lt;b&gt;"' in _search_input(body)
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_library_autocomplete_route_is_gone(mock_get, client):
+    mock_get.return_value = _mock_karaoke()
+
+    assert client.get("/autocomplete?q=mirrors").status_code == 404
+
+
+# ---------------------------------------------------------------------------
 # Library songs: cards first, and a copy under another YouTube ID noted on its card
 # ---------------------------------------------------------------------------
 
