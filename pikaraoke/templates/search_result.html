@@ -2,7 +2,7 @@
    per-card binding. #}
 {% macro result_card(row) -%}
 {% set result = row.result -%}
-<li data-ytID="{{result.id}}" data-ytTitle="{{result.title}}" data-ytChannel="{{result.channel}}" value="{{result.url}}"{% if row.existing_path %} data-file-path="{{row.existing_path}}"{% endif %}>
+<li data-ytID="{{result.id}}" data-ytTitle="{{result.title}}" data-ytChannel="{{result.channel}}" data-ytDuration="{{result.duration}}" value="{{result.url}}"{% if row.existing_path %} data-file-path="{{row.existing_path}}"{% endif %}>
 	<div class="img-wrapper" data-url="{{result.url}}">
 		<div class="img-frame">
 			<img loading="lazy" src="https://img.youtube.com/vi/{{result.id}}/mqdefault.jpg" />

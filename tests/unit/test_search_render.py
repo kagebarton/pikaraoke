@@ -12,6 +12,7 @@ import json
 import os
 import re
 import subprocess
+from html.parser import HTMLParser
 from unittest.mock import MagicMock, patch
 from urllib.parse import quote
 
@@ -277,6 +278,65 @@ def test_a_show_more_card_carries_its_channel_too(mock_get, client):
     resp, _ = _more_body(client, mock_get, results)
 
     assert 'data-ytChannel="Late Channel"' in resp.get_data(as_text=True)
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_a_card_carries_its_length_for_the_dialog(mock_get, client):
+    """The dialog opens from the card alone, so the length rides on it; none stays empty."""
+    results = [
+        _result("Some Song", "aaaaaaaaaaa", duration="4:55"),
+        _result("Other Song", "bbbbbbbbbbb", duration=""),
+    ]
+
+    body = _search_body(client, mock_get, results, _karaoke_with_library([]))
+
+    first, second = re.findall(r"<li data-ytID=[^>]*>", body)
+    assert 'data-ytDuration="4:55"' in first
+    assert 'data-ytDuration=""' in second
+
+
+class _Ancestors(HTMLParser):
+    """The ids of the elements an element with the given id sits inside."""
+
+    VOID = {"img", "input", "br", "hr", "meta", "link"}
+
+    def __init__(self, target_id: str):
+        super().__init__()
+        self.target_id = target_id
+        self.stack: list[str | None] = []
+        self.ancestors: list[str] | None = None
+
+    def handle_starttag(self, tag, attrs):
+        element_id = dict(attrs).get("id")
+        if element_id == self.target_id:
+            self.ancestors = [i for i in self.stack if i]
+        if tag not in self.VOID:
+            self.stack.append(element_id)
+
+    def handle_endtag(self, tag):
+        if tag not in self.VOID and self.stack:
+            self.stack.pop()
+
+
+def _ancestor_ids(body: str, element_id: str) -> list[str] | None:
+    parser = _Ancestors(element_id)
+    parser.feed(body)
+    return parser.ancestors
+
+
+@patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_dialog_is_on_every_page_and_outside_the_results_a_visit_saves(mock_get, _site, client):
+    """Show more saves #container_search_result for a return visit; a saved copy that held the
+    dialog would put a second one on the page, and a page with no results would have none."""
+    bare = client.get("/search")
+    assert bare.status_code == 200
+    assert _ancestor_ids(bare.get_data(as_text=True), "modal-js-example") is not None
+
+    body = _search_body(client, mock_get, _RESULTS, _karaoke_with_library([]))
+
+    assert "container_search_result" not in _ancestor_ids(body, "modal-js-example")
+    assert body.count('id="modal-js-example"') == 1
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")

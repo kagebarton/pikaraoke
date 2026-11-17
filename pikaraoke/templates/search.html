@@ -163,25 +163,47 @@
 		width: 100%;
 		height: 100%;
 	}
-	#video-loading-overlay {
+	/* The thumbnail covers the video until its "playing" event, so the box never goes black. */
+	#modal-thumb-layer {
 		position: absolute;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.65);
+		z-index: 2;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		z-index: 10;
+		background: #343c3d;
 	}
-	#video-loading-overlay.is-hidden { display: none; }
-	.video-spinner {
-		width: 48px;
-		height: 48px;
-		border: 4px solid rgba(255, 255, 255, 0.25);
-		border-top-color: white;
+	#modal-thumb {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	#modal-play {
+		position: relative;
+		width: 64px;
+		height: 64px;
+		padding: 0;
+		border: none;
 		border-radius: 50%;
-		animation: video-spin 0.8s linear infinite;
+		background: rgba(0, 0, 0, 0.6);
+		color: #fff;
+		font-size: 1.6rem;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
-	@keyframes video-spin { to { transform: rotate(360deg); } }
+	#modal-preview-unavailable {
+		position: relative;
+		padding: 0.4rem 0.9rem;
+		border-radius: 4px;
+		background: rgba(0, 0, 0, 0.6);
+		color: #fff;
+	}
+	@keyframes breathe { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+	#modal-play.is-waiting { animation: breathe 2.4s ease-in-out infinite; }
 
 	.duration-badge {
 		position: absolute;
@@ -218,7 +240,6 @@
 #lyrics-custom-input,
 #lyrics-custom-btn { height: 2.5em; line-height: 2.5em; }
 #lyrics-dropdown { max-width: 100%; }
-#lyrics-loading,
 #lyrics-empty,
 #lyrics-results-label,
 #lyrics-srt-note { font-size: var(--lyrics-message-font-size); }
@@ -243,13 +264,29 @@
   z-index: 4;
 }
 #lyrics-section { margin-top: 0.75rem; }
+/* The wait line sits where the Queue button will appear, 36px below the thumbnail. */
+#lyrics-wait {
+  margin: 1.5rem 0 0;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #fff;
+  animation: breathe 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  #lyrics-wait { animation: none; opacity: 1; }
+  #modal-play.is-waiting { animation: none; opacity: 0.5; }
+}
+#modal-video-head { margin-bottom: 0.5rem; }
 #modal-video-title {
   color: #fff;
   font-size: 1.1rem;
   font-weight: 600;
-  margin: 0 0 0.5rem 0;
+  margin: 0;
   word-break: break-word;
 }
+#modal-video-meta { margin: 0; font-size: 13px; color: #a3b0b2; }
 #modal-js-example.is-fading-out { transition: opacity 2s; opacity: 0; pointer-events: none; }
 </style>
 <script>
@@ -403,7 +440,11 @@ $("#add-queue-link").trigger("click");
 		} else {
 			const savedResults = sessionStorage.getItem("pikaraoke_search_results");
 			if (savedResults) {
-				$("#searching_loader").after(savedResults);
+				// A copy saved before the dialog moved out of the results holds its own dialog,
+				// with the page's ids: drop it, so the page's own is the only one.
+				var $saved = $("<div>").html(savedResults);
+				$saved.find("#modal-js-example").remove();
+				$("#searching_loader").after($saved.children());
 				const savedTerm = sessionStorage.getItem("pikaraoke_search_term");
 				if (savedTerm) {
 					$("#song_to_add-selectized").val(savedTerm);
@@ -659,66 +700,109 @@ $("#add-queue-link").trigger("click");
 // ── Lyrics picker state & functions ──────────────────────────────────────
 //
 // Flow:
-//   1. Modal opens → one request, /caption_check: a single yt-dlp lookup answers
-//      the caption check and returns a link the browser can play. A link starts
-//      the video.
-//   2. The caption answer:
-//      - passed (a manual English caption dense enough to be the lyrics, by the
-//        same words-per-minute gate as a direct download) → show SRT-primary UI
-//        (download button + "More options" link to reveal Custom Search / Raw
-//        Transcription). No Genius search is performed.
-//      - too sparse, couldn't be checked, or no caption → run the Genius search
-//        for the video (its title, channel and the page's search term; the
-//        server works out what to ask) and populate dropdown with Genius results
-//        + Custom Search + Raw Transcription. The server says which hit is safe
-//        to preselect; with none, the dropdown opens on "Choose the lyrics".
+//   1. A card opens the dialog at once, from the card alone: its thumbnail, title, channel
+//      and length, and "Checking YouTube for captions…". No request is waited on.
+//   2. Two requests start together:
+//      - /caption_check: one yt-dlp lookup that answers the caption check and returns a link
+//        the browser can play.
+//      - /lyrics_search: the Genius search for the video (its title, channel and the page's
+//        search term; the server works out what to ask). Its answer is held, not shown.
+//   3. The lookup answers:
+//      - the caption passed (a manual English caption dense enough to be the lyrics, by the
+//        same words-per-minute gate as a direct download) → the SRT-primary UI (download
+//        button + "More options" link to reveal the list), whether or not Genius has
+//        answered. "More options" shows the held list and does not search again.
+//      - too sparse, couldn't be checked, or no caption → the held Genius list at once, with
+//        Custom Search + Raw Transcription; while Genius has not answered, "Searching Genius
+//        for lyrics…". The server says which hit is safe to preselect; with none, the list
+//        opens on "Choose the lyrics".
+//   4. Play: the thumbnail covers the video until the guest taps Play. The link came with the
+//      lookup, so there is no second request, and a tap before it arrives starts the video
+//      when it does. With no link, or a video that cannot play, the box says "Preview
+//      unavailable"; the caption answer and the download are unaffected.
+//
+// Every answer is dropped unless the dialog it was asked for is still the open one.
 
-var _activeYtTitle = "";
-var _activeYtChannel = "";
-var _activeYtId = "";
-var _activeSrtAvailable = false;
+// The open dialog's state, made anew by each open; null while no dialog is open.
+var _dialog = null;
+// Bumped by every open and every close. A slow answer must not fill a closed dialog or the
+// next card's, so an answer is shown only while its dialog's number is still this one.
+var _openSeq = 0;
+function isCurrent(d) {
+  return d.open === _openSeq;
+}
+
+var WAIT_TEXT = {
+  captions: {{ _("Checking YouTube for captions…") | tojson }},
+  genius: {{ _("Searching Genius for lyrics…") | tojson }},
+};
 var CAPTION_NOTES = {
-  checking: {{ _("Checking the caption…") | tojson }},
   sparse: {{ _("This video's caption is too sparse to be lyrics.") | tojson }},
   failed: {{ _("Could not check the caption.") | tojson }},
 };
 var CHOOSE_LYRICS = {{ _("Choose the lyrics") | tojson }};
-// Bumped by each lyrics search and each reset, so only the latest search's answer is shown:
-// a slow answer for a video already closed must not fill the next video's dropdown.
-var _lyricsSeq = 0;
 
-function resetLyricsSection() {
-  _lyricsSeq++;
-  $("#lyrics-section").addClass("is-hidden");
-  $("#lyrics-caption-note").addClass("is-hidden").text("");
-  $("#lyrics-loading").addClass("is-hidden");
-  $("#lyrics-results-label").addClass("is-hidden");
-  $("#lyrics-select-wrap").addClass("is-hidden");
-  $("#lyrics-empty").addClass("is-hidden");
-  $("#lyrics-custom-search").addClass("is-hidden");
-  $("#lyrics-download-wrap").addClass("is-hidden");
-  $("#lyrics-srt-primary").addClass("is-hidden");
-  $("#lyrics-more-options").addClass("is-hidden");
-  $("#lyrics-custom-input").val("");
-  $("#lyrics-dropdown").empty();
-  $("#lyrics-srt-btn")
-    .removeClass("is-loading is-success is-danger")
-    .removeAttr("disabled")
-    .text("{% trans %}Download{% endtrans %}");
-  _activeSrtAvailable = false;
+function showWait(text) {
+  $("#lyrics-wait").text(text).removeClass("is-hidden");
 }
 
-function showSrtPrimary() {
+function hideListWidgets() {
+  $("#lyrics-results-label, #lyrics-select-wrap, #lyrics-empty, #lyrics-custom-search, #lyrics-download-wrap")
+    .addClass("is-hidden");
+  $("#lyrics-dropdown").empty();
+}
+
+// Puts back every element the dialog changes, on open and on close.
+function resetDialog() {
+  var video = document.getElementById("modal-video");
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+  $("#modal-video-title").text("");
+  $("#modal-video-meta").text("").addClass("is-hidden");
+  $("#modal-thumb").removeAttr("src");
+  $("#modal-thumb-layer").removeClass("is-hidden");
+  $("#modal-play").removeClass("is-hidden is-waiting");
+  $("#modal-preview-unavailable").addClass("is-hidden");
+  $("#lyrics-section").addClass("is-hidden");
+  $("#lyrics-wait").addClass("is-hidden").text("");
+  $("#lyrics-caption-note").addClass("is-hidden").text("");
+  $("#lyrics-srt-primary").addClass("is-hidden");
+  $("#lyrics-more-options").addClass("is-hidden");
+  hideListWidgets();
+  $("#lyrics-custom-input").val("");
+  $("#lyrics-srt-btn, #lyrics-download-btn")
+    .removeClass("is-loading is-success is-danger")
+    .css("min-width", "")
+    .text("{% trans %}Download{% endtrans %}");
+  $("#lyrics-srt-btn").removeAttr("disabled");
+  $("#lyrics-download-btn").attr("disabled", true);
+}
+
+// Sets the lyric section from the open dialog's state. Called when an answer arrives and when
+// the guest asks for the list, so a call that shows the list fills it once.
+function renderLyrics() {
+  var d = _dialog;
+  if (!d) return;
   $("#lyrics-section").removeClass("is-hidden");
-  $("#lyrics-loading").addClass("is-hidden");
-  $("#lyrics-srt-primary").removeClass("is-hidden");
-  $("#lyrics-more-options").removeClass("is-hidden");
+  $("#lyrics-wait, #lyrics-srt-primary, #lyrics-caption-note").addClass("is-hidden");
+  hideListWidgets();
+
+  if (d.caption === "pending") {
+    showWait(WAIT_TEXT.captions);
+  } else if (d.caption === "passed" && d.view === "captions") {
+    $("#lyrics-srt-primary, #lyrics-more-options").removeClass("is-hidden");
+  } else {
+    var note = CAPTION_NOTES[d.caption];
+    if (note) $("#lyrics-caption-note").text(note).removeClass("is-hidden");
+    if (d.titleAnswer === null) showWait(WAIT_TEXT.genius);
+    else populateLyricsDropdown(d.titleAnswer);
+  }
 }
 
 // found is the route's answer: {hits, preselect}.
 function populateLyricsDropdown(found) {
   var $sel = $("#lyrics-dropdown").empty();
-  $("#lyrics-loading").addClass("is-hidden");
 
   if (found.hits.length) {
     // Nothing safe to preselect: the first option asks for a choice and Download
@@ -741,7 +825,7 @@ function populateLyricsDropdown(found) {
 
   var $other = $('<optgroup label="Other Options">');
   $other.append($("<option>").val("__custom__").text("🔍 Custom Search..."));
-  if (_activeSrtAvailable) {
+  if (_dialog.caption === "passed") {
     $other.append($("<option>").val("__srt__").text("📺 YouTube Captions"));
   }
   $other.append($("<option>").val("__raw__").text("📝 Raw Transcription"));
@@ -755,34 +839,47 @@ function populateLyricsDropdown(found) {
   $("#lyrics-dropdown").trigger("change");
 }
 
-// params is {title, channel, typed} for the video, or {q} for what was typed.
-function runLyricsSearch(params) {
-  var seq = ++_lyricsSeq;
-  $("#lyrics-section").removeClass("is-hidden");
-  $("#lyrics-loading").removeClass("is-hidden");
-  $("#lyrics-select-wrap").addClass("is-hidden");
-  $("#lyrics-empty").addClass("is-hidden");
-  $("#lyrics-custom-search").addClass("is-hidden");
-  $("#lyrics-dropdown").empty();
+// The one yt-dlp lookup: the caption's answer and the link the video plays from.
+function askCaptionCheck(d) {
+  function answered(check) {
+    if (!isCurrent(d)) return;
+    d.caption = check.passed ? "passed" : check.failed ? "failed" : check.found ? "sparse" : "none";
+    d.link = check.stream_url || "";
+    if (!d.link) showPreviewUnavailable();
+    else if (d.playWaits) startVideo(d);
+    renderLyrics();
+  }
   $.ajax({
-    url: "{{ url_for('search.lyrics_search') }}",
+    url: "{{ url_for('search.caption_check') }}",
     type: "get",
-    data: params,
-    success: function (found) {
-      if (seq === _lyricsSeq) populateLyricsDropdown(found);
-    },
+    data: { yt_id: d.id },
+    success: answered,
     error: function () {
-      if (seq === _lyricsSeq) populateLyricsDropdown({ hits: [], preselect: null });
+      answered({ failed: true });
     },
   });
 }
 
-// The channel is always sent, even empty: it is how the server knows this is the search page.
-function searchLyricsForActiveVideo() {
-  runLyricsSearch({
-    title: _activeYtTitle,
-    channel: _activeYtChannel,
-    typed: sessionStorage.getItem("pikaraoke_search_term") || "",
+// The Genius search for the video, held until the list is wanted. The channel is always sent,
+// even empty: it is how the server knows this is the search page.
+function askTitleLyrics(d) {
+  function held(found) {
+    if (!isCurrent(d)) return;
+    d.titleAnswer = found;
+    renderLyrics();
+  }
+  $.ajax({
+    url: "{{ url_for('search.lyrics_search') }}",
+    type: "get",
+    data: {
+      title: d.title,
+      channel: d.channel,
+      typed: sessionStorage.getItem("pikaraoke_search_term") || "",
+    },
+    success: held,
+    error: function () {
+      held({ hits: [], preselect: null });
+    },
   });
 }
 
@@ -804,10 +901,28 @@ $(document).on("change.search", "#lyrics-dropdown", function () {
   }
 });
 
+// What the guest typed. The latest typed search wins; its answer replaces the list.
 function doCustomLyricsSearch() {
+  var d = _dialog;
   var query = $("#lyrics-custom-input").val().trim();
-  if (!query) return;
-  runLyricsSearch({ q: query });
+  if (!d || !query) return;
+  var typedSeq = ++d.typedSeq;
+  hideListWidgets();
+  showWait(WAIT_TEXT.genius);
+  function shown(found) {
+    if (!isCurrent(d) || typedSeq !== d.typedSeq) return;
+    $("#lyrics-wait").addClass("is-hidden");
+    populateLyricsDropdown(found);
+  }
+  $.ajax({
+    url: "{{ url_for('search.lyrics_search') }}",
+    type: "get",
+    data: { q: query },
+    success: shown,
+    error: function () {
+      shown({ hits: [], preselect: null });
+    },
+  });
 }
 
 $(document).on("click.search", "#lyrics-custom-btn", doCustomLyricsSearch);
@@ -823,31 +938,33 @@ $(document).on("keydown.search", "#lyrics-custom-input", function (e) {
 // is kept available as one of the dropdown options.
 $(document).on("click.search", "#lyrics-more-options-link", function (e) {
   e.preventDefault();
-  $("#lyrics-srt-primary").addClass("is-hidden");
-  searchLyricsForActiveVideo();
+  if (!_dialog) return;
+  _dialog.view = "list";
+  renderLyrics();
 });
 
 // SRT-primary "Use YouTube captions" button: write srt-mode choice + download.
 $(document).on("click.search", "#lyrics-srt-btn", function () {
+  var d = _dialog;
   var $btn = $(this);
-  if ($btn.is(":disabled")) return;
+  if (!d || $btn.is(":disabled")) return;
   $.ajax({
     url: "{{ url_for('search.lyrics_select') }}",
     type: "POST",
     contentType: "application/json",
-    data: JSON.stringify({ yt_id: _activeYtId, mode: "srt", yt_title: _activeYtTitle }),
+    data: JSON.stringify({ yt_id: d.id, mode: "srt", yt_title: d.title }),
   });
   $btn.addClass("is-success").attr("disabled", true)
     .html('<i class="icon icon-ok"></i>&nbsp; {% trans %}Added for processing...{% endtrans %}');
-  var $li = $("#search-results li[data-ytid='" + _activeYtId + "']");
-  postDownload($li.attr("value"), $li.attr("data-yttitle"));
-  fadeOutPreviewModal(1000);
+  postDownload(d.url, d.title);
+  fadeOutPreviewModal(d.open, 1000);
 });
 
 // Lyrics download/select button: writes the sidecar choice then triggers download
 $(document).on("click.search", "#lyrics-download-btn", function () {
+  var d = _dialog;
   var $btn = $(this);
-  if ($btn.is(":disabled")) return;
+  if (!d || $btn.is(":disabled")) return;
   var val = $("#lyrics-dropdown").val();
   if (val === "__raw__" || val === "__srt__") {
     var modeValue = val === "__raw__" ? "raw" : "srt";
@@ -855,13 +972,12 @@ $(document).on("click.search", "#lyrics-download-btn", function () {
       url: "{{ url_for('search.lyrics_select') }}",
       type: "POST",
       contentType: "application/json",
-      data: JSON.stringify({ yt_id: _activeYtId, mode: modeValue, yt_title: _activeYtTitle }),
+      data: JSON.stringify({ yt_id: d.id, mode: modeValue, yt_title: d.title }),
     });
     $btn.addClass("is-success").attr("disabled", true)
       .html('<i class="icon icon-ok"></i>&nbsp; {% trans %}Added for processing...{% endtrans %}');
-    var $li = $("#search-results li[data-ytid='" + _activeYtId + "']");
-    postDownload($li.attr("value"), $li.attr("data-yttitle"));
-    fadeOutPreviewModal(1000);
+    postDownload(d.url, d.title);
+    fadeOutPreviewModal(d.open, 1000);
     return;
   }
   if (!val || val === "__custom__") return;
@@ -883,13 +999,12 @@ $(document).on("click.search", "#lyrics-download-btn", function () {
     url: "{{ url_for('search.lyrics_select') }}",
     type: "POST",
     contentType: "application/json",
-    data: JSON.stringify({ yt_id: _activeYtId, genius_id: songId, yt_title: _activeYtTitle }),
+    data: JSON.stringify({ yt_id: d.id, genius_id: songId, yt_title: d.title }),
     success: function () {
       $btn.removeClass("is-loading").addClass("is-success")
         .html('<i class="icon icon-ok"></i>&nbsp; {% trans %}Added for processing...{% endtrans %}');
-      var $li = $("#search-results li[data-ytid='" + _activeYtId + "']");
-      postDownload($li.attr("value"), $li.attr("data-yttitle"));
-      fadeOutPreviewModal(1000);
+      postDownload(d.url, d.title);
+      fadeOutPreviewModal(d.open, 1000);
     },
     error: function (xhr) {
       flashError(xhr && xhr.responseText ? xhr.responseText : "network error");
@@ -897,98 +1012,93 @@ $(document).on("click.search", "#lyrics-download-btn", function () {
   });
 });
 
-// ── Preview modal (refactored from inline handler) ───────────────────────
+// ── Preview modal ────────────────────────────────────────────────────────
 
 function closePreviewModal() {
-  const modal = document.getElementById("modal-js-example");
-  const modalVideo = document.getElementById("modal-video");
-  modal.classList.remove("is-active", "is-fading-out");
-  modalVideo.pause();
-  modalVideo.removeAttribute("src");
-  modalVideo.load();
-  document.getElementById("video-loading-overlay").classList.remove("is-hidden");
-  resetLyricsSection();
+  _openSeq++;
+  _dialog = null;
+  document.getElementById("modal-js-example").classList.remove("is-active", "is-fading-out");
+  resetDialog();
 }
 
-function fadeOutPreviewModal(delay) {
+// Fades out the dialog with this open number; a dialog closed or replaced since is left alone.
+function fadeOutPreviewModal(open, delay) {
   setTimeout(function () {
-    const modal = document.getElementById("modal-js-example");
-    modal.classList.add("is-fading-out");
-    setTimeout(closePreviewModal, 2000);
+    if (open !== _openSeq) return;
+    document.getElementById("modal-js-example").classList.add("is-fading-out");
+    setTimeout(function () {
+      if (open === _openSeq) closePreviewModal();
+    }, 2000);
   }, delay || 0);
 }
 
+function startVideo(d) {
+  var video = document.getElementById("modal-video");
+  video.src = d.link;
+  video.load();
+  video.play().catch(function () {});
+}
+
+function showPreviewUnavailable() {
+  $("#modal-thumb-layer").removeClass("is-hidden");
+  $("#modal-play").addClass("is-hidden").removeClass("is-waiting");
+  $("#modal-preview-unavailable").removeClass("is-hidden");
+}
+
+// Bound once, not per open: the layer goes when the video plays, and comes back with the
+// notice when a video that was given a source cannot play.
+var modalVideo = document.getElementById("modal-video");
+modalVideo.addEventListener("playing", function () {
+  $("#modal-thumb-layer").addClass("is-hidden");
+});
+modalVideo.addEventListener("error", function () {
+  if (_dialog && modalVideo.hasAttribute("src")) showPreviewUnavailable();
+});
+
+// Play: only a tap may start the video, and iOS Safari ties .play() to the tap itself, so a
+// tap before the link arrives plays the empty video once to keep that permission.
+$(document).on("click.search", "#modal-play", function () {
+  var d = _dialog;
+  if (!d || d.playWaits) return;
+  d.playWaits = true;
+  $("#modal-play").addClass("is-waiting");
+  if (d.link) startVideo(d);
+  else modalVideo.play().then(function () { modalVideo.pause(); }).catch(function () {});
+});
+
 function openPreviewModal($li) {
-  const modal = document.getElementById("modal-js-example");
-  const modalVideo = document.getElementById("modal-video");
+  var modal = document.getElementById("modal-js-example");
+  var d = (_dialog = {
+    open: ++_openSeq,
+    id: $li.attr("data-ytid") || "",
+    title: $li.attr("data-yttitle") || "",
+    channel: $li.attr("data-ytchannel") || "",
+    url: $li.attr("value") || "",
+    caption: "pending", // pending | passed | sparse | failed | none
+    link: null, // null until the lookup answers, then the playable URL, or "" for none
+    playWaits: false, // Play was tapped
+    titleAnswer: null, // null until Genius answers, then {hits, preselect}
+    typedSeq: 0, // the latest typed search wins
+    view: "captions", // captions | list: what shows once the caption has passed
+  });
+  resetDialog();
 
-  _activeYtTitle = $li.attr("data-yttitle") || "";
-  _activeYtChannel = $li.attr("data-ytchannel") || "";
-  _activeYtId = $li.attr("data-ytid") || "";
-  const ytId = _activeYtId;
+  // The top comes from the card: nothing here waits on the network.
+  document.getElementById("modal-video-title").textContent = d.title;
+  var meta = [d.channel, $li.attr("data-ytduration") || ""].filter(Boolean).join(" · ");
+  $("#modal-video-meta").text(meta).toggleClass("is-hidden", !meta);
+  $("#modal-thumb").attr("src", $li.find(".img-frame img").attr("src"));
 
-  document.getElementById("modal-video-title").textContent = _activeYtTitle;
-
+  modal.classList.remove("is-fading-out");
   modal.classList.add("is-active");
-
-  // Unlock autoplay on iOS/mobile: briefly play the empty video element
-  // synchronously inside the click handler so Safari associates it with
-  // a user gesture. Without this, the async AJAX callback's .play() is blocked.
-  modalVideo.play().then(function () { modalVideo.pause(); }).catch(function () {});
-
-  const closeButton = modal.querySelector(".modal-close");
+  var closeButton = modal.querySelector(".modal-close");
   closeButton.focus();
   closeButton.onclick = closePreviewModal;
   modal.querySelector(".modal-background").onclick = closePreviewModal;
 
-  modalVideo.addEventListener("playing", function () {
-    document.getElementById("video-loading-overlay").classList.add("is-hidden");
-  }, { once: true });
-
-  resetLyricsSection();
-
-  // Offer the video's caption only once it passes the length gate; a sparse
-  // caption, or a check with no answer, goes to the Genius search with a note.
-  var $note = $("#lyrics-caption-note");
-  $("#lyrics-section").removeClass("is-hidden");
-  $note.text(CAPTION_NOTES.checking).removeClass("is-hidden");
-
-  function stillShowing() {
-    return modal.classList.contains("is-active") && ytId === _activeYtId;
-  }
-  function searchInstead(note) {
-    if (note) $note.text(note);
-    else $note.addClass("is-hidden");
-    searchLyricsForActiveVideo();
-  }
-
-  $.ajax({
-    url: "{{ url_for('search.caption_check') }}",
-    type: "get",
-    data: { yt_id: ytId },
-    success: function (check) {
-      if (!stillShowing()) return;
-      if (check.stream_url) {
-        modalVideo.src = check.stream_url;
-        modalVideo.load();
-        modalVideo.play().catch(function () {});
-      }
-      if (check.passed) {
-        $note.addClass("is-hidden");
-        _activeSrtAvailable = true;
-        showSrtPrimary();
-      } else if (check.failed) {
-        searchInstead(CAPTION_NOTES.failed);
-      } else {
-        // No caption after all reads like a video without one: no note.
-        searchInstead(check.found ? CAPTION_NOTES.sparse : null);
-      }
-    },
-    error: function () {
-      if (!stillShowing()) return;
-      searchInstead(CAPTION_NOTES.failed);
-    },
-  });
+  renderLyrics();
+  askCaptionCheck(d);
+  askTitleLyrics(d);
 }
 
 // Both thumbnail and Select button open the preview modal
@@ -1165,48 +1275,61 @@ $(document).on("click.search", ".search_result_items_select", function () {
 			{% if show_more %}
 			<button id="show-more" class="button is-fullwidth mt-3" data-search-string="{{ search_string }}">Show more</button>
 			{% endif %}
-		<div id="modal-js-example" class="modal">
-			<div class="modal-background"></div>
-      <div class="modal-content">
-        <p id="modal-video-title"></p>
-        <div class="video-container">
-          <div id="video-loading-overlay"><div class="video-spinner"></div></div>
-          <video id="modal-video" controls playsinline muted preload="metadata"></video>
-        </div>
-        <div id="lyrics-section" class="is-hidden">
-          <p id="lyrics-caption-note" class="has-text-grey is-hidden"></p>
-          <p id="lyrics-loading" class="has-text-grey is-hidden">Searching lyrics...</p>
-          <div id="lyrics-srt-primary" class="is-hidden">
-            <p id="lyrics-srt-note" class="has-text-grey" style="margin-bottom: 0.4rem;">
-              {% trans %}YouTube captions will be used for lyrics.{% endtrans %}
-            </p>
-            <button id="lyrics-srt-btn" class="button is-primary is-fullwidth">{% trans %}Download{% endtrans %}</button>
-            <p id="lyrics-more-options" class="has-text-centered" style="margin-top: 0.5rem;">
-              <a id="lyrics-more-options-link" class="is-size-7 has-text-grey">{% trans %}More options{% endtrans %}</a>
-            </p>
-          </div>
-          <p id="lyrics-results-label" class="is-hidden">Genius.com lyrics search results:</p>
-          <p id="lyrics-empty" class="has-text-grey is-hidden">No lyrics results found. Use custom search below...</p>
-          <div id="lyrics-select-wrap" class="select is-fullwidth is-small is-hidden">
-            <select id="lyrics-dropdown"></select>
-          </div>
-          <div id="lyrics-custom-search" class="is-hidden">
-            <div class="field has-addons">
-              <div class="control is-expanded">
-                <input id="lyrics-custom-input" class="input" type="text" placeholder="Search lyrics..." />
-              </div>
-              <div class="control">
-                <button id="lyrics-custom-btn" class="button is-warning">{% trans %}Search{% endtrans %}</button>
-              </div>
-            </div>
-          </div>
-          <div id="lyrics-download-wrap" class="is-hidden">
-            <button id="lyrics-download-btn" class="button is-primary is-fullwidth" disabled>{% trans %}Download{% endtrans %}</button>
-          </div>
-        </div>
-      </div>
-			<button class="modal-close is-large" aria-label="close"></button>
+	</div>
+	{% endif %}
+
+	{# Outside #container_search_result: Show more saves that element's copy for a return visit, and a
+	saved copy must not carry the dialog. #}
+	<div id="modal-js-example" class="modal">
+		<div class="modal-background"></div>
+		<div class="modal-content">
+			<div id="modal-video-head">
+				<p id="modal-video-title"></p>
+				<p id="modal-video-meta" class="is-hidden"></p>
+			</div>
+			<div class="video-container">
+				<video id="modal-video" controls playsinline muted preload="metadata"></video>
+				<div id="modal-thumb-layer">
+					<img id="modal-thumb" alt="" />
+					<button id="modal-play" type="button" aria-label="{{ _('Play preview') }}">
+						<i class="icon icon-play"></i>
+					</button>
+					<p id="modal-preview-unavailable" class="is-hidden">{% trans %}Preview unavailable{% endtrans %}</p>
+				</div>
+			</div>
+			<div id="lyrics-section" class="is-hidden">
+				<p id="lyrics-wait" class="is-hidden"></p>
+				<p id="lyrics-caption-note" class="has-text-grey is-hidden"></p>
+				<div id="lyrics-srt-primary" class="is-hidden">
+					<p id="lyrics-srt-note" class="has-text-grey" style="margin-bottom: 0.4rem;">
+						{% trans %}YouTube captions will be used for lyrics.{% endtrans %}
+					</p>
+					<button id="lyrics-srt-btn" class="button is-primary is-fullwidth">{% trans %}Download{% endtrans %}</button>
+					<p id="lyrics-more-options" class="has-text-centered" style="margin-top: 0.5rem;">
+						<a id="lyrics-more-options-link" class="is-size-7 has-text-grey">{% trans %}More options{% endtrans %}</a>
+					</p>
+				</div>
+				<p id="lyrics-results-label" class="is-hidden">Genius.com lyrics search results:</p>
+				<p id="lyrics-empty" class="has-text-grey is-hidden">No lyrics results found. Use custom search below...</p>
+				<div id="lyrics-select-wrap" class="select is-fullwidth is-small is-hidden">
+					<select id="lyrics-dropdown"></select>
+				</div>
+				<div id="lyrics-custom-search" class="is-hidden">
+					<div class="field has-addons">
+						<div class="control is-expanded">
+							<input id="lyrics-custom-input" class="input" type="text" placeholder="Search lyrics..." />
+						</div>
+						<div class="control">
+							<button id="lyrics-custom-btn" class="button is-warning">{% trans %}Search{% endtrans %}</button>
+						</div>
+					</div>
+				</div>
+				<div id="lyrics-download-wrap" class="is-hidden">
+					<button id="lyrics-download-btn" class="button is-primary is-fullwidth" disabled>{% trans %}Download{% endtrans %}</button>
+				</div>
+			</div>
 		</div>
+		<button class="modal-close is-large" aria-label="close"></button>
 	</div>
 </div>
-{% else %} {% endif %} {% endblock %}
+{% endblock %}
