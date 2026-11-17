@@ -17,9 +17,9 @@
 				<a href="{{result.url}}" target="_blank" rel="noopener noreferrer" class="is-size-7 has-text-info">YouTube ↗</a>
 			</div>
 			{% if row.existing_path %}
-			<button class="button is-success search_result_items_enqueue">Add to Queue</button>
+			<button class="button is-success search_result_items_enqueue">{% trans %}Queue{% endtrans %}</button>
 			{% else %}
-			<button class="button search_result_items_select">{% trans %}Select{% endtrans %}</button>
+			<button class="button search_result_items_select">{% trans %}Queue…{% endtrans %}</button>
 			{% endif %}
 		</div>
 		{% for path in row.library_copies %}
