@@ -657,19 +657,19 @@ $("#add-queue-link").trigger("click");
 // ── Lyrics picker state & functions ──────────────────────────────────────
 //
 // Flow:
-//   1. Modal opens → entire #lyrics-section hidden, preview probe runs.
-//   2. Probe responds:
-//      - srt_available=true  → check the caption is dense enough to be the
-//        lyrics (the same words-per-minute gate as a direct download):
-//        - passes → show SRT-primary UI (download button + "More options"
-//          link to reveal Custom Search / Raw Transcription). No Genius
-//          search is performed.
-//        - too sparse, or the check couldn't run → say so, then as below.
-//      - srt_available=false → run the Genius search for the video (its title,
-//        channel and the page's search term; the server works out what to ask)
-//        and populate dropdown with Genius results + Custom Search + Raw
-//        Transcription. The server says which hit is safe to preselect; with
-//        none, the dropdown opens on "Choose the lyrics".
+//   1. Modal opens → one request, /caption_check: a single yt-dlp lookup answers
+//      the caption check and returns a link the browser can play. A link starts
+//      the video.
+//   2. The caption answer:
+//      - passed (a manual English caption dense enough to be the lyrics, by the
+//        same words-per-minute gate as a direct download) → show SRT-primary UI
+//        (download button + "More options" link to reveal Custom Search / Raw
+//        Transcription). No Genius search is performed.
+//      - too sparse, couldn't be checked, or no caption → run the Genius search
+//        for the video (its title, channel and the page's search term; the
+//        server works out what to ask) and populate dropdown with Genius results
+//        + Custom Search + Raw Transcription. The server says which hit is safe
+//        to preselect; with none, the dropdown opens on "Choose the lyrics".
 
 var _activeYtTitle = "";
 var _activeYtChannel = "";
@@ -781,48 +781,6 @@ function searchLyricsForActiveVideo() {
     title: _activeYtTitle,
     channel: _activeYtChannel,
     typed: sessionStorage.getItem("pikaraoke_search_term") || "",
-  });
-}
-
-// Offer the video's caption only once it passes the length gate; a sparse
-// caption, or a check with no answer, goes to the Genius search with a note.
-function checkCaption(duration) {
-  var ytId = _activeYtId;
-  var modal = document.getElementById("modal-js-example");
-  var $note = $("#lyrics-caption-note");
-  $("#lyrics-section").removeClass("is-hidden");
-  $note.text(CAPTION_NOTES.checking).removeClass("is-hidden");
-
-  function stillShowing() {
-    return modal.classList.contains("is-active") && ytId === _activeYtId;
-  }
-  function searchInstead(note) {
-    if (note) $note.text(note);
-    else $note.addClass("is-hidden");
-    searchLyricsForActiveVideo();
-  }
-
-  $.ajax({
-    url: "{{ url_for('search.caption_check') }}",
-    type: "get",
-    data: { yt_id: ytId, duration: duration },
-    success: function (check) {
-      if (!stillShowing()) return;
-      if (check.passed) {
-        $note.addClass("is-hidden");
-        _activeSrtAvailable = true;
-        showSrtPrimary();
-      } else if (check.failed) {
-        searchInstead(CAPTION_NOTES.failed);
-      } else {
-        // No caption after all reads like a video without one: no note.
-        searchInstead(check.found ? CAPTION_NOTES.sparse : null);
-      }
-    },
-    error: function () {
-      if (!stillShowing()) return;
-      searchInstead(CAPTION_NOTES.failed);
-    },
   });
 }
 
@@ -961,11 +919,11 @@ function fadeOutPreviewModal(delay) {
 function openPreviewModal($li) {
   const modal = document.getElementById("modal-js-example");
   const modalVideo = document.getElementById("modal-video");
-  const videoUrl = $li.attr("value") || $li.find(".img-wrapper").data("url");
 
   _activeYtTitle = $li.attr("data-yttitle") || "";
   _activeYtChannel = $li.attr("data-ytchannel") || "";
   _activeYtId = $li.attr("data-ytid") || "";
+  const ytId = _activeYtId;
 
   document.getElementById("modal-video-title").textContent = _activeYtTitle;
 
@@ -987,27 +945,46 @@ function openPreviewModal($li) {
 
   resetLyricsSection();
 
+  // Offer the video's caption only once it passes the length gate; a sparse
+  // caption, or a check with no answer, goes to the Genius search with a note.
+  var $note = $("#lyrics-caption-note");
+  $("#lyrics-section").removeClass("is-hidden");
+  $note.text(CAPTION_NOTES.checking).removeClass("is-hidden");
+
+  function stillShowing() {
+    return modal.classList.contains("is-active") && ytId === _activeYtId;
+  }
+  function searchInstead(note) {
+    if (note) $note.text(note);
+    else $note.addClass("is-hidden");
+    searchLyricsForActiveVideo();
+  }
+
   $.ajax({
-    url: "{{ url_for('search.preview') }}" + "?url=" + encodeURIComponent(videoUrl),
+    url: "{{ url_for('search.caption_check') }}",
     type: "get",
-    success: function (data) {
-      if (!modal.classList.contains("is-active")) return;
-      if (data.stream_url) {
-        modalVideo.src = data.stream_url;
+    data: { yt_id: ytId },
+    success: function (check) {
+      if (!stillShowing()) return;
+      if (check.stream_url) {
+        modalVideo.src = check.stream_url;
         modalVideo.load();
         modalVideo.play().catch(function () {});
       }
-      if (data.srt_available) {
-        checkCaption(data.duration);
+      if (check.passed) {
+        $note.addClass("is-hidden");
+        _activeSrtAvailable = true;
+        showSrtPrimary();
+      } else if (check.failed) {
+        searchInstead(CAPTION_NOTES.failed);
       } else {
-        searchLyricsForActiveVideo();
+        // No caption after all reads like a video without one: no note.
+        searchInstead(check.found ? CAPTION_NOTES.sparse : null);
       }
     },
     error: function () {
-      // Preview probe failed — fall back to the Genius search flow so
-      // the user still has a way to pick lyrics.
-      if (!modal.classList.contains("is-active")) return;
-      searchLyricsForActiveVideo();
+      if (!stillShowing()) return;
+      searchInstead(CAPTION_NOTES.failed);
     },
   });
 }

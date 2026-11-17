@@ -28,7 +28,7 @@ from pikaraoke.lib.library_regen import check_video_caption
 from pikaraoke.lib.metadata_parser import extract_youtube_id
 from pikaraoke.lib.official_rank import OfficialKind, official_first, pick_artist
 from pikaraoke.lib.song_match import SongIndex, similar_songs
-from pikaraoke.lib.youtube_dl import SearchResult, get_preview_info, get_search_results
+from pikaraoke.lib.youtube_dl import SearchResult, get_search_results
 
 _ = flask_babel.gettext
 
@@ -52,10 +52,6 @@ class SearchMoreQuery(Schema):
     search_string = fields.String(
         required=True, metadata={"description": "The search to fetch the next results of"}
     )
-
-
-class PreviewQuery(Schema):
-    url = fields.String(required=True, metadata={"description": "YouTube video URL to preview"})
 
 
 class DownloadBody(Schema):
@@ -181,30 +177,27 @@ def autocomplete(query):
     return response
 
 
-@search_bp.route("/preview")
-@search_bp.arguments(PreviewQuery, location="query")
-def preview(query):
-    """Get a direct stream URL, SRT availability and duration for a YouTube video."""
-    stream_url, srt_available, duration = get_preview_info(query["url"])
-    if stream_url is None:
-        return jsonify({"error": "Could not fetch stream URL"}), 500
-    return jsonify({"stream_url": stream_url, "srt_available": srt_available, "duration": duration})
-
-
 @search_bp.route("/caption_check")
 def caption_check():
-    """GET ``?yt_id=<id>&duration=<s>`` -> ``{found, passed, failed}``.
+    """GET ``?yt_id=<id>`` -> ``{found, passed, failed, stream_url}``.
 
-    Whether the video's manual English caption is dense enough to be the
-    lyrics, so the picker offers "Use YouTube captions" only when it is. One
-    yt-dlp call; nothing is written. ``duration`` is the preview's YouTube
-    length; without it the caption can't be measured and passes.
+    Whether the video's manual English caption is dense enough to be the lyrics, so the
+    dialog offers it only when it is. One yt-dlp call, which also returns a link the browser
+    can play (``stream_url``, null when there is none); nothing is written. A missing link
+    leaves the caption answer as it was.
     """
     yt_id = request.args.get("yt_id", "")
     if not _YT_ID_RE.match(yt_id):
         return jsonify({"error": "Invalid yt_id"}), 400
-    check = check_video_caption(yt_id, request.args.get("duration", type=float))
-    return jsonify({"found": check.found, "passed": check.passed, "failed": check.failed})
+    check, stream_url = check_video_caption(yt_id)
+    return jsonify(
+        {
+            "found": check.found,
+            "passed": check.passed,
+            "failed": check.failed,
+            "stream_url": stream_url,
+        }
+    )
 
 
 @search_bp.route("/download", methods=["POST"])

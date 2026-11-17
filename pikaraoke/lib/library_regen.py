@@ -11,7 +11,8 @@ import logging
 import os
 import shutil
 import tempfile
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,6 +39,7 @@ from pikaraoke.lib.youtube_dl import (
     ASR_JSON3_SUFFIX,
     CaptionDownloadFailed,
     download_manual_en_subs,
+    lookup_video,
 )
 from pikaraoke.pipeline.config import PipelineConfig
 from pikaraoke.pipeline.context import StageContext
@@ -617,6 +619,30 @@ class CaptionCheck:
     failed: bool = False  # the check couldn't run, so found says nothing
 
 
+_COULD_NOT_CHECK = CaptionCheck(found=False, wpm=None, passed=False, failed=True)
+
+
+@contextmanager
+def _caption_scratch() -> Iterator[Path]:
+    """A throwaway folder for one caption check, removed on exit."""
+    scratch = Path(tempfile.mkdtemp(prefix="caption_check_", dir=get_temp_directory()))
+    try:
+        yield scratch
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _measure_caption(
+    srt_path: str | None, duration: Callable[[], float | None], name: str
+) -> CaptionCheck:
+    """Gate a downloaded caption (None: the video has none); ``duration`` is read only for a
+    readable one."""
+    if srt_path is None:
+        return CaptionCheck(found=False, wpm=None, passed=False)
+    wpm = _wpm(Path(srt_path), duration, name)
+    return CaptionCheck(found=True, wpm=wpm, passed=_caption_passes(wpm))
+
+
 def check_caption(job: SongJob) -> CaptionCheck:
     """Download the manual English caption into a throwaway folder and measure it.
 
@@ -624,34 +650,31 @@ def check_caption(job: SongJob) -> CaptionCheck:
     The song must have a YouTube id.
     """
     song = job.song_path
-    video_id = extract_youtube_id(str(song))
-    return _check_caption(video_id, song.stem, lambda: media_duration(job), song.name)
-
-
-def check_video_caption(video_id: str, duration_s: float | None) -> CaptionCheck:
-    """:func:`check_caption` for a video not downloaded yet (the search page's picker).
-
-    ``duration_s`` is YouTube's length for the video, standing in for the file's.
-    """
-    return _check_caption(video_id, video_id, lambda: duration_s, video_id)
-
-
-def _check_caption(
-    video_id: str | None, stem: str, duration: Callable[[], float | None], name: str
-) -> CaptionCheck:
-    scratch = Path(tempfile.mkdtemp(prefix="caption_check_", dir=get_temp_directory()))
-    try:
+    url = watch_url(extract_youtube_id(str(song)))
+    with _caption_scratch() as scratch:
         try:
-            result = download_manual_en_subs(watch_url(video_id), str(scratch), stem)
+            srt_path = download_manual_en_subs(url, str(scratch), song.stem)
         except CaptionDownloadFailed as e:
-            logger.warning("Caption check of %s couldn't run: %s", name, e)
-            return CaptionCheck(found=False, wpm=None, passed=False, failed=True)
-        if result is None:
-            return CaptionCheck(found=False, wpm=None, passed=False)
-        wpm = _wpm(Path(result), duration, name)
-        return CaptionCheck(found=True, wpm=wpm, passed=_caption_passes(wpm))
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
+            logger.warning("Caption check of %s couldn't run: %s", song.name, e)
+            return _COULD_NOT_CHECK
+        return _measure_caption(srt_path, lambda: media_duration(job), song.name)
+
+
+def check_video_caption(video_id: str) -> tuple[CaptionCheck, str | None]:
+    """:func:`check_caption` for a video not downloaded yet (the search page's dialog).
+
+    The same single yt-dlp call returns YouTube's length for the video, which stands in for the
+    file's, and a link the browser can play (None when there is none, and when the check
+    couldn't run).
+    """
+    with _caption_scratch() as scratch:
+        try:
+            lookup = lookup_video(watch_url(video_id), str(scratch), video_id)
+        except CaptionDownloadFailed as e:
+            logger.warning("Caption check of %s couldn't run: %s", video_id, e)
+            return _COULD_NOT_CHECK, None
+        check = _measure_caption(lookup.srt_path, lambda: lookup.duration_s, video_id)
+        return check, lookup.stream_url
 
 
 def gate_on_disk_caption(job: SongJob) -> bool:

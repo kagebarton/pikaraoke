@@ -8,18 +8,20 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 
 from pikaraoke.lib.youtube_dl import (
+    _MANUAL_EN_SUB_ARGS,
     CaptionDownloadFailed,
     SearchResult,
+    VideoLookup,
     _parse_search_line,
     _select_asr_track,
     _select_en_srt,
     build_ytdl_download_command,
     download_auto_en_subs,
     download_manual_en_subs,
-    get_preview_info,
     get_search_results,
     get_youtube_id_from_url,
     get_youtubedl_version,
+    lookup_video,
     upgrade_youtubedl,
 )
 
@@ -485,32 +487,88 @@ class TestGetSearchResults:
                 get_search_results("q", 10)
 
 
-class TestGetPreviewInfo:
-    def test_asks_tv_simply_for_the_combined_format_and_reads_captions(self):
+class TestLookupVideo:
+    """One yt-dlp call answers the dialog's caption and its preview link."""
+
+    LINK = "https://example.test/v.mp4"
+
+    @staticmethod
+    def _lookup(tmp_path, stdout=b"https://example.test/v.mp4\n213\n", caption=True):
+        """Run ``lookup_video`` with yt-dlp mocked; returns ``(result, mock_run, dest)``."""
+        dest = tmp_path / "scratch"
+
+        def fake_run(cmd, **kwargs):
+            if caption:
+                dest.mkdir(parents=True, exist_ok=True)
+                (dest / "abc.en.srt").write_text("1\n", encoding="utf-8")
+            return MagicMock(returncode=0, stdout=stdout, stderr=b"")
+
+        with _default_patches()[0], _default_patches()[1], patch(
+            "subprocess.run", side_effect=fake_run
+        ) as mock_run:
+            result = lookup_video("https://yt/watch?v=abc", str(dest), "abc")
+        return result, mock_run, dest
+
+    def test_one_command_asks_for_the_caption_the_length_and_the_link(self, tmp_path):
+        _, mock_run, dest = self._lookup(tmp_path)
+
+        assert mock_run.call_count == 1
+        cmd = mock_run.call_args[0][0]
+        # --print alone implies a simulation, which writes no caption.
+        assert "--skip-download" in cmd and "--no-simulate" in cmd
+        # A video with no playable format must still answer its caption.
+        assert "--ignore-no-formats-error" in cmd
+        assert cmd[cmd.index("-f") + 1] == "18/worst[ext=mp4][protocol*=http]/worst[protocol*=http]"
+        assert [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "--print"] == ["url", "duration"]
+        assert cmd[cmd.index("-o") + 1] == str(dest / "abc.%(ext)s")
         # Other clients' format-18 links often 403 in the browser, which
         # shows as "no video with supported format and MIME type".
-        stdout = b'https://example.test/v.mp4\n{"en-abc": [], "fr": []}\n213\n'
-        with patch(
-            "subprocess.run", return_value=MagicMock(returncode=0, stdout=stdout, stderr=b"")
-        ) as mock_run:
-            assert get_preview_info("https://youtu.be/x") == (
-                "https://example.test/v.mp4",
-                True,
-                213.0,
-            )
-        cmd = mock_run.call_args[0][0]
         assert cmd[cmd.index("--extractor-args") + 1] == "youtube:player_client=tv_simply,default"
+        assert cmd[-1] == "https://yt/watch?v=abc"
 
-    def test_a_video_with_no_length_has_no_duration(self):
-        stdout = b"https://example.test/v.mp4\nNA\nNA\n"
-        with patch(
-            "subprocess.run", return_value=MagicMock(returncode=0, stdout=stdout, stderr=b"")
-        ):
-            assert get_preview_info("https://youtu.be/x") == (
-                "https://example.test/v.mp4",
-                False,
-                None,
-            )
+    def test_gives_up_after_thirty_seconds(self, tmp_path):
+        _, mock_run, _ = self._lookup(tmp_path)
+
+        assert mock_run.call_args[1]["timeout"] == 30
+
+    def test_the_link_the_length_and_the_caption_come_back_together(self, tmp_path):
+        result, _, dest = self._lookup(tmp_path)
+
+        assert result == VideoLookup(
+            srt_path=str(dest / "abc.en.srt"), duration_s=213.0, stream_url=self.LINK
+        )
+
+    def test_no_format_leaves_the_caption_found(self, tmp_path):
+        result, _, dest = self._lookup(tmp_path, stdout=b"NA\n213\n")
+
+        assert result.stream_url is None
+        assert result.srt_path == str(dest / "abc.en.srt")
+
+    def test_no_caption_written_keeps_the_link(self, tmp_path):
+        result, _, _ = self._lookup(tmp_path, caption=False)
+
+        assert result.srt_path is None
+        assert result.stream_url == self.LINK
+
+    def test_a_video_with_no_length_has_no_duration(self, tmp_path):
+        result, _, _ = self._lookup(tmp_path, stdout=b"https://example.test/v.mp4\nNA\n")
+
+        assert result.duration_s is None
+        assert result.stream_url == self.LINK
+
+    @pytest.mark.parametrize(
+        "run, reason",
+        [
+            ({"return_value": MagicMock(returncode=1, stdout=b"", stderr=b"boom")}, "boom"),
+            ({"side_effect": subprocess.TimeoutExpired("yt-dlp", 30)}, "timed out"),
+            ({"side_effect": FileNotFoundError("yt-dlp")}, "Could not run yt-dlp"),
+        ],
+        ids=["error exit", "timeout", "missing yt-dlp"],
+    )
+    def test_a_lookup_that_fails_raises_with_the_reason(self, tmp_path, run, reason):
+        with _default_patches()[0], _default_patches()[1], patch("subprocess.run", **run):
+            with pytest.raises(CaptionDownloadFailed, match=reason):
+                lookup_video("https://yt/watch?v=abc", str(tmp_path / "scratch"), "abc")
 
 
 class TestSelectEnSrt:
@@ -579,6 +637,38 @@ class TestDownloadManualEnSubs:
         with _default_patches()[0], _default_patches()[1], patch("subprocess.run", **run):
             with pytest.raises(CaptionDownloadFailed, match=reason):
                 download_manual_en_subs("https://yt/watch?v=x", str(dest), "Song")
+
+
+class TestManualSubArgsAreShared:
+    """The download and both caption fetches ask for the same subtitles, from one list."""
+
+    @staticmethod
+    def _download(tmp_path):
+        return build_ytdl_download_command("https://yt/watch?v=abc", str(tmp_path))
+
+    @staticmethod
+    def _download_manual(tmp_path):
+        return TestManualSubArgsAreShared._command_of(download_manual_en_subs, tmp_path)
+
+    @staticmethod
+    def _lookup(tmp_path):
+        return TestManualSubArgsAreShared._command_of(lookup_video, tmp_path)
+
+    @staticmethod
+    def _command_of(fetch, tmp_path):
+        with patch(
+            "subprocess.run", return_value=MagicMock(returncode=0, stdout=b"", stderr=b"")
+        ) as mock_run:
+            fetch("https://yt/watch?v=abc", str(tmp_path / "scratch"), "abc")
+        return mock_run.call_args[0][0]
+
+    @pytest.mark.parametrize("build", ["_download", "_download_manual", "_lookup"])
+    def test_each_command_carries_the_subtitle_options_as_one_run(self, tmp_path, build):
+        with _default_patches()[0], _default_patches()[1]:
+            cmd = getattr(self, build)(tmp_path)
+
+        n = len(_MANUAL_EN_SUB_ARGS)
+        assert any(cmd[i : i + n] == _MANUAL_EN_SUB_ARGS for i in range(len(cmd) - n + 1))
 
 
 class TestSelectAsrTrack:
