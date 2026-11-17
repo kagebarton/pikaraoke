@@ -1,7 +1,8 @@
 # Search: lift the videos most likely to have captions, and stop lifting the wrong ones
 
 Model: Claude Sonnet 5.5 (spec by Claude Fable 5.2, 2026-11-11; rules revised 2026-11-16 after
-the held-out check, see Measurements)
+the held-out check, see Measurements; Part 2, the search page layout, spec by Claude Opus 5.5,
+2026-11-17)
 
 Branch `search_official_captions` off `dev` at `1016e20`, worktree
 `.claude/worktrees/search_official_captions` (inside the main checkout, gitignored via
@@ -435,6 +436,8 @@ log row in a separate plan-only commit, so landing can drop it cleanly. This fil
 
 **Stop after commit 4** (and its Results row). Don't land, push or retire anything. Report a
 Review-due checkpoint per CLAUDE.md for commits 1-4: multi-file, new algorithm, so it is due.
+Part 2 (below) runs in a later session, after that review and its fixes. Ken's manual checks
+run once, after Part 2.
 If a fixture row disagrees with the tables above, stop and report it rather than editing the
 table: the tables come from the prototype, so a mismatch means the module and the prototype
 differ.
@@ -462,6 +465,203 @@ instance can run at a time; stop the main one first. Live results differ from th
       "Official audio" card has its badge and is not pulled above unbadged videos.
 - [ ] "dont stop believin" (no official video on the page): the "Official audio" card is first.
 - [ ] Show more still appends about 30 cards with no duplicates.
+
+These run after Part 2, whose library lift puts a card you already own above everything. Read
+"X is first" above as "X is first after the cards already in your library".
+
+## Part 2: search page layout
+
+Starts after commit 4 and its review fixes. Same branch, same per-commit routine as Part 1
+(pre-commit, unit tests, import smoke, `git diff --cached` read, CLAUDE.md self-review,
+Results row in a separate plan-only commit).
+
+Mockup (private to Ken): https://claude.ai/artifact/1Q8jEkXEy5v5ZZeBvP7mCA. Three phone
+screens for the search "adele hello": today, after, and after with Advanced opened. It
+carries decisions 7-13. Where this section and the mockup differ, this section wins.
+
+### Decisions (Ken, 2026-11-17)
+
+7. A card whose YouTube ID is already a library file goes above every other card, official
+   ones included. Among themselves they keep the ranking's order. Show more lifts its own
+   in-library cards to the top of the batch it appends.
+8. The "Already in the library" box goes. A library song under another YouTube ID becomes a
+   note on the card that matched it, "In library: <name>" with its own Queue button. That card
+   keeps its own button, so its version can still be downloaded.
+9. The help hint under the search box goes.
+10. The library autofill dropdown goes: guests tap its options by accident. The search box is
+    a plain text box.
+11. One "Add to queue after download" checkbox, in Advanced, for search picks and direct URLs
+    alike, ticked by default. An untick lasts until the browser tab closes (not an app
+    restart, not a page change).
+12. The in-library button reads "Queue" (was "Add to Queue").
+13. "Select" reads "Add…": the dialog with the preview and the lyrics choice still opens
+    first, and the ellipsis says so.
+
+Spec choices (Opus, not ruled by Ken; reopen any of them by asking):
+
+- S1. Each library copy is noted once, on the first card in display order that matches it and
+  is not itself in the library, and at most `MAX_SIMILAR_SONGS` (3) copies are noted per page,
+  as the box had. A copy titled like the song matches nearly every upload of it, so noting it
+  on every match would repeat one line down the whole page.
+- S2. Notes are on the first page only, as the box was. Show more's cards get the library lift
+  (decision 7) but no notes. Noting them would need the second page to know which copies the
+  first page already noted.
+- S3. The search box also turns off the browser's own past-searches list
+  (`autocomplete="off"`): it is the same accidental tap as decision 10.
+- S4. The search page is the only user of the selectize files and of `/autocomplete`, so both
+  are deleted. So is dead upstream code in the same script: thumbnail cycling for
+  `#search_result_selector`, `#youtube-link` and `#youtube-thumb`, none of which is on the
+  page. Its interval fires a no-op every 2 s for as long as the tab is open.
+
+### What exists (checked 2026-11-17 on `29fa88b`)
+
+- `routes/search.py`: `SearchRow(result, existing_path, official)` (line 75); `_library_copies`
+  (line 84) returns up to `MAX_SIMILAR_SONGS` library paths that `similar_songs` matches to any
+  result's title, deduplicated, leaving out a path whose YouTube ID is any result's own;
+  `/search` passes it as `similar_songs`; `/search/more` computes none. `/autocomplete` (line
+  164) and `AutocompleteQuery` (line 47) serve only the selectize dropdown.
+- `templates/search_result.html`: the card macro; `existing_path` gives a green "Add to Queue"
+  button (`search_result_items_enqueue`), else `{% trans %}Select{% endtrans %}`
+  (`search_result_items_select`), which opens the preview dialog.
+- `templates/search.html`:
+  - Head: selectize `<link>`/`<script>` (lines 4-5) and their CSS (`.optgroup-header`,
+    `.row`, `.col-icon`, `.col-text`, `.selectize-input`, lines 7-29); `.similar-song` CSS
+    (line 98).
+  - Script: the document-wide Enter handler (line 277), which clicks Search from anywhere,
+    the direct-URL box included; selectize setup and its `#add-queue-link` enqueue (lines
+    289-464); the dead thumbnail cycling (lines 468-499, `changeImage` at 1015); the checkbox
+    cookie `add-to-queue-on-download`, written at line 530 and read by
+    `restoreCheckboxStates` (line 1024); `downloadSong` and `postDownload` both read
+    `#add-to-queue-search`, the direct-URL download too; `.similar-song-enqueue` handler (line
+    627).
+  - Markup: `#queue-form` with the selectize `<select>`, Search (`#search-link`), "Add to
+    queue" (`#add-queue-link`), hidden `.song_added_by` (lines 1038-1055); help hint
+    `<article class="message">` (lines 1066-1087); `#advanced-settings` with the direct URL
+    and `#add-to-queue-direct` (lines 1092-1120); hidden `#container_search_form` whose
+    `#search_string` input the script fills and submits (lines 1125-1129); the "Already in the
+    library" box (lines 1147-1157); `#add-to-queue-search` above the results (lines
+    1158-1164).
+  - sessionStorage already holds `pikaraoke_search_results` and `pikaraoke_search_term` (the
+    restore on a return visit, line 398), and the lyrics picker reads the term (line 772).
+- `filename_from_path` is a Jinja global (`app.py:208`), so the imported card macro can use it,
+  `/search/more` included. Translation catalogs were last regenerated 2026-06-10 (`5780dfce`).
+- `tests/unit/test_search_render.py`: the "Already in the library" tests (lines 142-229) and the
+  card tests (from line 232) assert on `similar-song-enqueue`, `search_result_items_enqueue`
+  and `search_result_items_select`.
+
+### Design
+
+**Order and notes (`routes/search.py`).**
+
+- `SearchRow` gains `library_copies: tuple[str, ...] = ()`, the library songs noted on this
+  card.
+- `_search_rows` (Part 1's signature): after `official_first`, a stable sort puts rows with an
+  `existing_path` first. Both routes go through it, so Show more lifts within its batch. Badges
+  don't change.
+- `_library_copies` becomes the note step, on `/search` only. It takes the rows in display
+  order and returns them with `library_copies` filled (`dataclasses.replace`). It walks the
+  rows; it skips a row with an `existing_path`; for each other row it notes the
+  `similar_songs(row.result.title, library)` paths that are not yet noted and whose YouTube ID
+  is not any result's own; it stops once `MAX_SIMILAR_SONGS` paths are noted. The docstring
+  gives S1's reason in a line. `/search` stops passing `similar_songs` to the template.
+
+**Card (`search_result.html`).**
+
+- When `row.library_copies` is set: one line per copy, "In library: <strong>{{
+  filename_from_path(path) }}</strong>", with a small green button
+  `{% trans %}Queue{% endtrans %}`, class `library-copy-enqueue`, `data-file-path` the copy.
+  Light info tint, as the box had (Bulma `is-info is-light`), no left border. On a phone it
+  runs full width under the title row (mockup). On desktop, where the card is a row, it stays
+  in the text column, not a third column beside it.
+- Buttons: in-library `{% trans %}Queue{% endtrans %}`; otherwise
+  `{% trans %}Add…{% endtrans %}` (U+2026, one character). Class names stay. The catalogs are
+  not regenerated; "Add…" shows in English until they are.
+
+**Search box (`search.html`).**
+
+- `#queue-form` and `#container_search_form` become one GET form to `search.search`: a text
+  input `name="search_string"`, `autocomplete="off"` (S3), `enterkeyhint="search"`, its
+  `value` the query from the server (`{{ search_string or '' }}`; replaces the URL-param
+  JS at line 384); and the Search button as the submit. A submit handler keeps today's
+  behaviour: a blank query does nothing; otherwise show `#searching_loader` with the term,
+  disable the button, hide the old results.
+- Enter submits through the form. Delete the document-wide Enter handler, which also stops
+  Enter in the direct-URL box from running a search. The lyrics box has its own handler
+  (line 839) and is unaffected.
+- The return-visit restore (line 404) fills the new input from `pikaraoke_search_term`. Clear
+  empties the input, removes both keys and the results, as today, minus the selectize call.
+- Delete: the help hint; `#add-queue-link` and its handler; `.song_added_by` and its fill
+  (line 524); the selectize includes, setup and CSS (check `.row` is used nowhere else on the
+  page before removing it); `static/selectize-0.12.6.min.js`, `static/selectize.min.css`;
+  `/autocomplete` and `AutocompleteQuery`; the dead thumbnail cycling and its `i` global (S4).
+
+**Add-to-queue box (`search.html`).**
+
+- One checkbox `#add-to-queue`, labelled `{% trans %}Add to queue after download{% endtrans %}`,
+  `checked` in the markup, first in `#advanced-settings`, with a rule between it and the
+  direct URL (mockup). Delete `#add-to-queue-search` and `#add-to-queue-direct`. Update the
+  translator `MSG` comment.
+- `downloadSong` and `postDownload` read `#add-to-queue`.
+- sessionStorage key `pikaraoke_add_to_queue`: on change write `"true"` or `"false"`; on load
+  untick only when it reads `"false"`. The inline script runs again on every SPA visit, so the
+  load step covers moving between pages. Delete `restoreCheckboxStates` and the cookie write.
+  Nothing reads the old cookie; it is left to expire.
+
+### Not doing
+
+- Notes on Show more's cards (S2).
+- Searching the library by its own song names on this page. A library song YouTube doesn't
+  return for that search, or one with no YouTube ID in its name, is queued from Browse.
+- A label on in-library cards beyond the top place and the green Queue button.
+- Regenerating the translation catalogs.
+- The open issue "A restored search page can show a stuck card".
+
+### Commits
+
+5. **`feat(search): songs already in the library come first, and a library copy is noted on
+   its card`.** `routes/search.py`, `search_result.html` (note line; its button already
+   "Queue"), `search.html` (delete the box and `.similar-song` CSS; the handler becomes
+   `.library-copy-enqueue`), tests. Rewrite the "Already in the library" tests for the note,
+   through the route as today:
+   - an in-library card the ranking put below an official video comes first; two in-library
+     cards keep their ranking order; badges are unchanged;
+   - `/search/more`: a second-page in-library card is first in the returned batch;
+   - a copy is noted inside the `<li>` of the card it matched; a copy matching several cards
+     is noted on the first only; a card that is itself in the library is skipped and the copy
+     goes to the next match; at most three copies on the page; no note when nothing matches;
+     no note for a copy whose ID is a result's own; Show more's cards carry none.
+6. **`feat(search): the search box drops the library dropdown and the help hint`.**
+   `search.html`, the two static files, `routes/search.py`. Tests: the bare page has a GET form
+   to `/search` with a `search_string` text input marked `autocomplete="off"`, and no
+   "selectize" anywhere; a results page fills the input with the query, a query with `"` and
+   `<` escaped in the attribute; `/autocomplete` is gone (404).
+   `test_the_saved_search_term_is_a_script_string_of_the_query` must keep passing.
+7. **`feat(search): one "Add to queue after download" box in Advanced`.** `search.html`. Test:
+   exactly one `id="add-to-queue"`, checked, inside `#advanced-settings`; neither old id is on
+   the page. If the `ui-check` skill can drive it, also check: untick, SPA to Queue and back,
+   still unticked; a download POST then sends `queue: false`; a fresh browser context starts
+   ticked. Otherwise leave it to Ken's checks and say so in the Results row.
+8. **`feat(search): result buttons read Queue and Add…`.** `search_result.html`; test
+   assertions on button text follow.
+
+**Stop after commit 8** (and its Results row). Don't land, push or retire anything. Report a
+Review-due checkpoint for commits 5-8: multi-file and a script rewrite, so it is due.
+
+### Manual checks, Part 2 (Ken, on a phone)
+
+- [ ] A song you own by its exact video: that card is first, above the official one, with a
+      green Queue button that queues it.
+- [ ] A song you own under another upload: the first card matching it shows "In library:
+      <name>" with Queue; no "Already in the library" box; that card's Add… opens the dialog.
+- [ ] Typing in the search box opens no list (neither library songs nor past searches); Enter
+      and Search both run it; Clear empties it.
+- [ ] No help hint under the search box.
+- [ ] Advanced: "Add to queue after download" is ticked, above the direct URL; nothing sits
+      above the results.
+- [ ] Untick it, go to Queue and back: still unticked; a song downloaded now is not queued.
+      Close the tab and open the page again: ticked.
+- [ ] A direct-URL download with the box ticked is queued.
+- [ ] Show more: a card you own on the second page lands first in the appended batch.
 
 ## Measurements (2026-11-11)
 
@@ -609,4 +809,8 @@ fixtures).
 | 2 `feat(official_rank): label uploads and alternate videos lift, live sessions and re-uploads do not` | | | |
 | 3 `feat(official_rank): a label channel's other cast of the song lifts after the original's` | | | |
 | 4 `docs(plans): open issues follows the search ranking changes` | | | |
-| manual checks | | n/a | |
+| 5 `feat(search): songs already in the library come first, and a library copy is noted on its card` | | | |
+| 6 `feat(search): the search box drops the library dropdown and the help hint` | | | |
+| 7 `feat(search): one "Add to queue after download" box in Advanced` | | | |
+| 8 `feat(search): result buttons read Queue and Add…` | | | |
+| manual checks (Part 1 and Part 2) | | n/a | |
