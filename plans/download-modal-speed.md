@@ -1,16 +1,18 @@
 # Download modal: open at once, one YouTube lookup
 
 Model: Claude Opus 5.5 writes the step-by-step spec for Claude Sonnet 5.5 from this brief
-(brief by Claude Fable 5.2, 2026-11-11)
+(brief by Claude Fable 5.2, 2026-11-11; decisions 7-15 on the dialog's layout added by Claude
+Opus 5.5, 2026-11-17)
 
-Branch `download_modal_speed` off `dev` at `1016e20`, worktree
+Branch `download_modal_speed`, rebased onto `dev` at `764df44` on 2026-11-17 (first cut from
+`1016e20`), worktree
 `.claude/worktrees/download_modal_speed` (inside the main checkout, gitignored via `.claude/`;
 `models/` is symlinked in). Work and run everything from the worktree. If `dev` has moved,
 rebase onto it before the first code commit.
 
 This is a brief, not a spec: it fixes what Ken decided, what was measured, and what must hold.
-The function shapes, the route shape, the wording of each status line and the commit split are
-Opus's to write (see "For Opus to settle").
+The function shapes, the route shape, the exact wording of each (i) note and the commit split
+are Opus's to write (see "For Opus to settle").
 
 ## Goal
 
@@ -22,6 +24,10 @@ on screen says what the wait is for. Guests get confused and tap away.
 After this change the modal shows the video's thumbnail and details at once, says what it is
 waiting for, and runs one yt-dlp lookup per open. The download button appears after the time of
 one lookup.
+
+The same change redesigns the dialog's lyric choice (decisions 7-15): Raw Transcription goes,
+explanations move behind an (i), searching for other lyrics gets its own button, the list's
+arrow is fixed on Android Chrome, and the button reads Queue.
 
 ## Decisions (Ken, 2026-11-11)
 
@@ -54,7 +60,59 @@ Stated to Ken as assumptions and not objected to:
   the lyric source for the user; that is a different feature.
 - Nothing is remembered between opens. Reopening the same card runs the lookup again.
 
-## What exists (checked 2026-11-11, `dev` at `1016e20`)
+## Decisions (Ken, 2026-11-17): the dialog's layout
+
+Mockup (private to Ken), approved 2026-11-17: https://claude.ai/artifact/Bx2pwN8RgLPcFjN4hawcSQ.
+Top row: the dialog today (four phone screens). Bottom row: after, six screens (waiting; caption
+passed; caption too sparse with the Genius list; search box opened; nothing found; the list
+opened). Three blank artboards on the canvas are strays. Where these decisions and the mockup
+differ, the decisions win.
+
+7. **Raw Transcription leaves the download dialog.** It is not good enough for karaoke and no
+   guest should pick it. Song Repair ("No lyrics (transcribe)"), the pick pass's Transcribe
+   button and library runs keep it, so the pipeline's `mode: raw` stays.
+8. **No lyrics, no queueing from the dialog.** A video with no passing caption and no Genius
+   hit, even after a search for other lyrics, cannot be sent from the dialog: the Queue button
+   stays disabled, the search box opens by itself, and the (i) says why (search by title and
+   artist, or pick another video). No pasted-lyrics fallback.
+9. **Breathing text, not a spinner, for every wait.** A large line below the thumbnail fades in
+   and out and says what the wait is for: "Checking YouTube for captions…" while the lookup
+   runs, then "Searching Genius for lyrics…" only if Genius has not answered when the lookup
+   does (and while a search for other lyrics runs). It sits where the Queue button will
+   appear, not over the thumbnail, so Play stays usable.
+10. **Explanations move behind an (i)** beside the "Lyrics" label: today's "YouTube captions
+    will be used for lyrics.", the three `CAPTION_NOTES`, "Genius.com lyrics search results:"
+    and "No lyrics results found…". The (i)'s note says why this source is offered: the caption
+    passed, it was too sparse, it could not be checked, a Genius match, or nothing found. The
+    icon sits about 4 px from its label; its full tap area stays, overlapping the label's end.
+11. **The caption-passed screen stays separate and the least cluttered:** "Lyrics: YouTube
+    captions" with its (i), at the same size as the "Lyrics" label on the other screens; the
+    Queue button; an "Other lyrics…" link (was "More options"). No search button on it.
+12. **Every other outcome uses one layout:** "Lyrics" (i), the list, a "Search for other
+    lyrics…" button, then Queue. "Other lyrics…" opens this layout too. The search button swaps
+    in a search box in its place: the label "Type the song title and artist", the input and a
+    Search button.
+13. **The list holds only lyrics:** a "YouTube" group with "YouTube captions (recommended)",
+    present only when the caption passed (so only after "Other lyrics…"), then the "Genius.com"
+    group. The "Other Options" group (Custom Search, Raw Transcription) goes. "Choose the
+    lyrics" stays as the disabled first line when no hit is safe to preselect.
+14. **The list is full size and its arrow is drawn in CSS.** Today it is `is-small` and its
+    arrow is the `⌄` character scaled six times and nudged by a fixed offset; how large it is
+    and where it lands depend on the phone's font, so it lands wrong on Android Chrome.
+15. **The dialog's button reads "Queue"** while "Add to queue after download" is ticked: queue
+    hold puts the song in the queue the moment it is tapped. Unticked, it reads "Add to
+    library". After a tap: "Queued" or "Added", then the fade-out as today. The card's button
+    that opens the dialog reads "Queue…" (`search_official_captions` decision 13, amended
+    2026-11-17 in `edd5fa3` on that branch).
+
+Stated to Ken as assumptions and not objected to (2026-11-17):
+
+- The direct-URL download in Advanced stays as it is: it sends no lyric choice, so a video
+  with no caption is still transcribed there.
+- The card reads "Queue…" even when "Add to queue after download" is unticked; the dialog then
+  says "Add to library". The box is an admin setting and rarely unticked.
+
+## What exists (checked 2026-11-11; line numbers rechecked 2026-11-17 on `764df44`)
 
 - `pikaraoke/lib/youtube_dl.py:263` `get_preview_info(video_url)`: the video-link lookup. Asks
   for format 18 with `--extractor-args youtube:player_client=tv_simply,default`, prints the
@@ -62,24 +120,55 @@ Stated to Ken as assumptions and not objected to:
 - `pikaraoke/lib/youtube_dl.py:365` `download_manual_en_subs(video_url, dest_dir, stem)`: the
   caption lookup. Writes `<stem>.en.srt` (manual English only, converted to SRT), 60 s timeout,
   raises `CaptionDownloadFailed` when yt-dlp could not
-  answer. Also used by the library tools (`library_regen.py:550`, `fetch_caption`), so it stays.
-- `pikaraoke/lib/library_regen.py:595` `_check_caption`: downloads the caption into a scratch
-  folder under `get_temp_directory()`, measures it with `_wpm` (line 485) and `_caption_passes`
-  (line 497), returns `CaptionCheck(found, wpm, passed, failed)`. Two entry points:
-  `check_caption(job)` (line 576, library tools) and `check_video_caption(video_id, duration_s)`
-  (line 587, whose only caller is the search route).
+  answer. Also used by the library tools (`library_regen.py:554`, `fetch_caption`), so it stays.
+- `pikaraoke/lib/library_regen.py:610` `_check_caption`: downloads the caption into a scratch
+  folder under `get_temp_directory()`, measures it with `_wpm` (line 500) and `_caption_passes`
+  (line 512), returns `CaptionCheck(found, wpm, passed, failed)`. Two entry points:
+  `check_caption(job)` (line 591, library tools) and `check_video_caption(video_id, duration_s)`
+  (line 602, whose only caller is the search route).
 - `pikaraoke/routes/search.py`: `/preview` (line 184) returns the stream link, whether a manual
   English caption exists, and the duration. `/caption_check` (line 194) takes `yt_id` and
   `duration` and returns `found`, `passed` and `failed`.
-- `pikaraoke/templates/search.html`: the flow is described in the comment at lines 659-672.
-  `openPreviewModal` (line 946) calls `/preview`, then `checkCaption` (line 778) calls
-  `/caption_check`, then `searchLyricsForActiveVideo` (line 771) calls `/lyrics_search`. Modal
-  markup is at lines 1173-1213. Lines 958-961 play the empty `<video>` inside the click so iOS
+- `pikaraoke/templates/search.html`: the flow is described in the comment at lines 659-674.
+  `openPreviewModal` (line 963) calls `/preview`, then `checkCaption` (line 791) calls
+  `/caption_check`, then `searchLyricsForActiveVideo` (line 781) calls `/lyrics_search`. Modal
+  markup is at lines 1191-1231. Lines 976-979 play the empty `<video>` inside the click so iOS
   Safari allows a later `.play()` from an AJAX callback.
+- `search.html`, the parts decisions 7-15 change:
+  - CSS: the video spinner (lines 166-184); the list's arrow, Bulma's own hidden and a `⌄`
+    drawn at `font-size: 6em` with `translateY(-75%)` (lines 232-244).
+  - `CAPTION_NOTES` (line 680); `resetLyricsSection` (line 690) resets the button text to
+    "Download" (line 707).
+  - `populateLyricsDropdown` (line 719): the "Genius.com Results" group, then "Other Options"
+    (lines 742-748) with "Custom Search...", "YouTube Captions" (only when the caption passed)
+    and "Raw Transcription", each with an emoji in front.
+  - The list's change handler (line 832) opens the custom search box on `__custom__`;
+    `doCustomLyricsSearch` (line 849); the "More options" handler (line 866).
+  - `#lyrics-srt-btn` handler (line 873) and `#lyrics-download-btn` handler (line 890, its
+    `__raw__`/`__srt__` branch at line 894) post `/lyrics_select`, set "Added for
+    processing..." (lines 883, 903, 931) and call `postDownload`, which reads
+    `#add-to-queue-search` (line 584).
+  - Markup: "Searching lyrics..." (line 1201), the caption note and its "Download" button
+    (lines 1203-1206), "More options" (line 1208), "Genius.com lyrics search results:" (line
+    1211), "No lyrics results found. Use custom search below..." (line 1212), the list's
+    wrapper `select is-fullwidth is-small` (line 1213), the custom search box (line 1216), the
+    list's "Download" button (line 1227).
+- `pikaraoke/routes/search.py:261` `/lyrics_select` accepts `genius_id`, or `mode` `raw` or
+  `srt` (line 297). Its only callers are the three posts in `search.html` (lines 877, 897,
+  925), so after decision 7 nothing sends `raw`. The library tools write their transcribe
+  choice straight to the choice file (`library_tools.py:1244`, through `write_choice`), so the
+  pipeline's `raw` branch (`pipeline/stages/lyrics_fetch.py:105`) is still reached.
+- The (i): `templates/info_tip.html` (the `info_tip` macro), styled by
+  `static/library-pages.css` (lines 1-16) and opened and placed by `static/library-pages.js`.
+  Only the library pages load those two files (`library_run.html`, `pick_pass.html`,
+  `playlist.html`, `processing.html` and others); `search.html` does not.
+- Queue hold: `pikaraoke/lib/queue_hold.py`. A download sent with `queue: true` holds its
+  queue slot from the moment it is sent, until it can play.
 - `pikaraoke/templates/search_result.html`: each card already carries the thumbnail
   (`https://img.youtube.com/vi/<id>/mqdefault.jpg`), the title, the channel and the duration
-  badge. The `<li>` has `data-ytid`, `data-yttitle` and `value` (the URL) only; the channel and
-  duration are in the card's markup, not in data attributes.
+  badge. The `<li>` has `data-ytid`, `data-yttitle`, `data-ytchannel` and `value` (the URL);
+  the duration is only in the badge's markup. The button that opens the dialog reads "Select"
+  (line 21) until `search_official_captions` commit 8.
 - Tests: `tests/unit/test_youtube_dl.py`, `tests/unit/test_search_routes.py`,
   `tests/unit/test_library_regen.py`.
 
@@ -110,20 +199,24 @@ caption answer. The real command is built from the existing helpers (`yt_dlp_cmd
 **Modal.**
 
 - On open, with no network wait: the card's thumbnail with a Play button over it, the title,
-  the channel and the length, and a status line saying it is checking for YouTube captions.
+  the channel and the length, and the breathing line "Checking YouTube for captions…"
+  (decision 9).
 - On open, two requests start together: the combined lookup, and the Genius search (title
   first, then the page's search term, as `runLyricsSearch` does today). The Genius answer is
   held, not shown.
-- When the lookup answers: a caption that passes shows the "Use YouTube captions" block as
-  today. Otherwise the held Genius list shows at once, with today's note for a sparse caption
-  or a check that could not run. If Genius has not answered yet, its own loading line shows.
-- "More options" under the caption block shows the held Genius list without searching again.
+- When the lookup answers: a caption that passes shows the caption-passed screen (decision 11).
+  Otherwise the held Genius list shows at once in the list layout (decision 12), with the
+  reason (sparse, could not check, none) in its (i). If Genius has not answered yet, the
+  breathing line says "Searching Genius for lyrics…".
+- "Other lyrics…" on the caption-passed screen shows the held Genius list without searching
+  again, with YouTube captions kept in the list (decision 13).
 - Play: with the link in hand, the video replaces the thumbnail and plays. Tapped before the
   lookup has answered, the thumbnail shows a spinner and the video starts when the link
   arrives. With no link, or when the video element reports an error, the modal says the preview
   is unavailable; the caption answer and the download are unaffected.
-- The download buttons, the sidecar choice written by `/lyrics_select`, and the fade-out stay
-  as they are.
+- The sidecar choice written by `/lyrics_select` and the fade-out stay as they are; the
+  button's labels follow decision 15.
+- The rest of the layout: decisions 7-14 and the mockup.
 
 ## Constraints
 
@@ -137,10 +230,16 @@ caption answer. The real command is built from the existing helpers (`yt_dlp_cmd
 - Scratch files go under `get_temp_directory()` and are removed in a `finally`, as
   `_check_caption` does.
 - The stale-answer guards stay: an answer for a modal that has closed, or for another video, is
-  dropped (`stillShowing`, `search.html:785`).
+  dropped (`stillShowing`, `search.html:798`).
+- `/lyrics_select` stops accepting `mode: raw` (no caller is left after decision 7), and its
+  `raw` test goes with it. The pipeline's `raw` branch and the library tools' transcribe
+  choice stay.
+- The button's label (Queue or Add to library) reads the same checkbox `postDownload` sends,
+  so what the button says and what happens cannot disagree.
+- The (i) is the existing `info_tip` macro with its own script and styles, not a second copy.
 - New user-facing strings go through `_()` / `{% trans %}`.
 - iOS Safari only allows `.play()` tied to a tap. A Play tap that arrives before the link must
-  keep that permission (the trick at `search.html:958-961` belongs with the Play tap now, not
+  keep that permission (the trick at `search.html:976-979` belongs with the Play tap now, not
   with opening the modal).
 
 ## Measurements (2026-11-11, this box, yt-dlp 2026.10.26, curl_cffi 0.14.0, deno)
@@ -204,17 +303,25 @@ Where one lookup's time goes (`-v`, video 9bZkp7q19f0, seconds from process star
   60 s; the modal now waits on one number.
 - The route: extend `/caption_check` or rename it. Its `duration` parameter is no longer needed,
   since the lookup returns the length.
-- The wording of the status line in each state, and what becomes of today's three
-  `CAPTION_NOTES` strings.
-- Where the modal reads the channel and length from (the card's markup today; data attributes
-  on the `<li>` would be the cleaner source).
+- The exact (i) note for each state, starting from the mockup's. The waiting lines and the
+  home of today's `CAPTION_NOTES` are settled by decisions 9 and 10.
+- How `search.html` gets the (i): load `library-pages.css` and `library-pages.js` there, or move
+  the (i)'s parts into files of their own that both load. One copy either way.
+- What "Other lyrics…" preselects. The mockup's screen 6 shows the Genius preselect, with
+  YouTube captions above it.
+- What a search for other lyrics that finds nothing shows; the mockup's screen 5 covers only
+  the video's own title finding nothing.
+- Whether the breathing line holds still under `prefers-reduced-motion`.
+- Where the modal reads the length from: the channel is now a data attribute on the `<li>`
+  (`data-ytchannel`), the length is still only the badge's text.
 - Whether closing the modal stops the running lookup. Today it does not; the process runs to
   its timeout and its answer is dropped.
 - `plans/open-issues.md`, "Search results": "A restored search page can show a stuck card"
   mentions the modal's saved contents. Say whether the reorder makes it a few-line fix; if not,
   leave it.
-- The commit split. Two looks natural: the single lookup with its route and tests, then the
-  modal.
+- The commit split. Three look natural: the single lookup with its route and tests; the
+  modal's open, wait and Play (decisions 1-3 and 9); the lyric layout (decisions 7, 8 and
+  10-15).
 
 ## Out of scope
 
@@ -226,28 +333,48 @@ Where one lookup's time goes (`-v`, video 9bZkp7q19f0, seconds from process star
 - A download button that is usable before the caption check answers.
 - yt-dlp options that skip parts of the lookup (`player_skip`, `skip`). They are the kind of
   setting decision 5 rules out.
+- Transcription on Song Repair, the pick pass and library runs (decision 7).
+- Pasted lyrics in the dialog (decision 8).
+- The direct-URL download in Advanced, which still sends no lyric choice.
+- The card's button: its rename is `search_official_captions` commit 8, and it does not follow
+  the "Add to queue after download" box.
 
 ## Done when
 
-- The modal shows the thumbnail, title, channel, length and status line with no network wait.
+- The modal shows the thumbnail, title, channel, length and the breathing line with no network
+  wait.
 - A unit test with the subprocess mocked shows one yt-dlp call for a modal open, returning the
   caption answer and the link together; no route remains that fetches a link on its own.
 - A lookup whose link is missing still answers the caption correctly (unit test), and by hand:
   with the client setting pointed at a name yt-dlp does not have, captions and download work
   and Play says the preview is unavailable.
-- On a video with a good manual caption, "Use YouTube captions" appears after one lookup. On a
-  video without one, the Genius list appears as soon as the lookup answers, with no second
+- On a video with a good manual caption, the caption-passed screen appears after one lookup. On
+  a video without one, the Genius list appears as soon as the lookup answers, with no second
   wait.
+- The dialog offers no Raw Transcription and no "Other Options" group; `/lyrics_select` turns
+  away `mode: raw` (unit test).
+- With no caption and no Genius hit, Queue stays disabled and the search box is open.
+- The button reads "Queue" with "Add to queue after download" ticked and "Add to library" with
+  it unticked, and the download is sent with the matching `queue` value.
+- Ken's check on a phone: each screen matches the mockup, and the list's arrow sits right on
+  Android Chrome.
 - Ken's live check on an iPhone (Safari) and an Android phone (Chrome): Play works when tapped
   before the lookup answers and when tapped after.
 
 ## Overlap with `search_official_captions`
 
-That branch (plan committed, code not started, Sonnet due the week of 2026-11-16) edits the
-search command at `youtube_dl.py:249`, the `/search` and `/search/more` routes, and
-`official_rank.py`. This one edits the preview and caption functions further down
-`youtube_dl.py`, the `/preview` and `/caption_check` routes, and the modal half of
-`search.html`. No function is touched by both. Whichever lands second rebases.
+That branch's Part 1 (commits 1-4, done 2026-11-17, not landed) edits the search command at
+`youtube_dl.py:249`, the `/search` and `/search/more` routes, and `official_rank.py`. This one
+edits the preview and caption functions further down `youtube_dl.py`, the `/preview`,
+`/caption_check` and `/lyrics_select` routes, and the modal half of `search.html`. No function
+is touched by both.
+
+Its Part 2 (commits 5-8, not started) edits the search half of `search.html`: the library box,
+the search box, and one "Add to queue after download" box `#add-to-queue` in place of
+`#add-to-queue-search` and `#add-to-queue-direct` (commit 7). This branch's button label reads
+the same box `postDownload` sends (Constraints), and commit 7 repoints `postDownload`, so
+whichever lands second points the label at the surviving box. Its commit 8 renames the card's
+button to "Queue…" in `search_result.html`. Whichever lands second rebases.
 
 ## Results log
 
