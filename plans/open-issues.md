@@ -761,6 +761,35 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   caption reads "YouTube captions"). Fix shape: the pipeline records the edit in the
   job's method or row, and the page qualifies it. Not ruled. Record: review of
   `dc17c08e~1..7b5eec48`, finding 2.
+- **SexyBack's repeated lines come out early and overlapping in three places.** Ken
+  listened (2026-11-18): at 1:25, 2:31 and 3:20 "all the lines are there, just overlapping
+  and early", the same repeated lines each time; he ruled "ship and log". The bundle marks
+  lines 19-25, 45-51 and 65, 69-71, 74-75 as re-paced (timed from their cue spans, not from
+  heard words; 21 of its 79 lines are re-paced), and the line before each block ends 1.05-3.18 s
+  after the block's first line starts. Not the pick order (a video-matching record's fit puts
+  every line at the same clip time to within about a second) and not the aligner's `NoneType`
+  failure (see "A failed re-align cannot be told from a refused one"): SexyBack's one failure
+  was line 78. Why these blocks were re-paced instead of placed from the singing is not shown;
+  same family as "A re-paced line can start before the previous line's end". Not ruled beyond
+  shipping. Record: `plans/lrclib-fit-pick.md` on branch `lrclib_fit_pick`, Results rows 21-24.
+- **A line the record stamps late stays late (Who You Are, 1:49).** Ken (2026-11-18): "1:48
+  late line, otherwise good". Line 21 ("'Cause everything inside me screams") is shown at
+  109.6 s, the record's own stamp (01:49.54); the transcriber hears its first word at 106.1 s
+  and its last at 109.7 s. The pick passes: the fit calls a line mistimed only past 5 s, and
+  this is one line, under the shift run's limit of two. Cue align tried to aim the line from the
+  heard words (`heard_aimed_line_ids` holds 21) and did not keep the move
+  (`heard_aimed_kept_line_ids` is empty); why is not read. One of the song's two re-paced
+  lines (21 and 38). Not ruled. Record: Results row 24.
+- **Echo lines beside the lead overlap it on screen (Rolling in the Deep).** Ken
+  (2026-11-18): the echoes overlap the main lines and are "more or less correct"; he asks
+  whether the aligner handles overlapping lines badly. Its bundle: 45 backing groups, 32 kept,
+  of those 20 by consistency alone (timed from where the same text was heard earlier), 9 heard
+  and 3 vocable. An echo sung over the lead is mostly not among the transcriber's words, so its
+  time is inferred, not heard; that is the likely reason, not measured. It is the keep rule as
+  ruled (Decision 36 shows an automatic pick's backing vocals like a manual pick's), not new to
+  the automatic pick. A pair that overlaps on screen is also listed under "Backing vocal lines"
+  ("An echo on its cue can show over the next line's early first word"). Not ruled; no echo
+  seen placed wrong. Record: Results row 24 and row 23's disk read.
 
 ## Test suite (Windows box)
 
