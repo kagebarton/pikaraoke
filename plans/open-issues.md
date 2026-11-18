@@ -272,7 +272,10 @@ From the `library_tools` real-world run, 2026-10-20. Record: `library-tools.md`.
   (most lines take transcribe timings, and edge snap owns line starts). On the
   cue route it moves many words about 0.4 s later, the direction of whisper's
   early-onset bias, but no reference on hand can say whether that is right.
-  Not ruled; next is an A/B listen on 2-3 cue songs. Record:
+  Ruled since (Ken): cue refine stays on after the blind listen (2026-11-14, on
+  tighter on 3 of 4 songs); joint refine-off closed no-go, untested
+  (2026-11-16). Open: a coarser `precision` (fewer positions tried per word),
+  reopened 2026-11-16, untested, not scheduled. Record:
   `plans/refine-ablation.md` on branch `refine_ablation` (probe, report script
   and raw results under `scripts/`).
 
@@ -499,10 +502,12 @@ Independent of the phone order:
   onset-loud-start's, already on `dev` (`archive/onset_loud_start`). Nothing to land; retire
   when done.
 
-To retire as archive tags (work already on `dev`, or closed): `movie_split` (origin only,
-`67248de`; all five code commits on `dev`), `refine_ablation` (origin only, `c713bec`; repoint
-the "Whisper's refine pass may not earn its cost" entry first, since the branch records the
-blind listen as done), `queue_hold` (`5b64e5e`), `search_caption_check` (`025b756`).
+- `refine_ablation` (origin only, `c713bec`): research; one open item, decision 3 (a coarser
+  `precision`), unscheduled. Stays until that is run or dropped (its "Next step").
+
+To retire as archive tags (every code commit patch-equal to one on `dev`, checked
+2026-11-18; the rest only plan records): `movie_split` (origin only, `67248de`),
+`queue_hold` (`5b64e5e`), `search_caption_check` (`025b756`).
 
 Not ruled (Ken's calls):
 
