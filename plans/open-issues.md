@@ -461,9 +461,12 @@ Stage 1, can run now, side by side:
   grey and disabled looks arrive with the theme; no build dependency on `singer_defaults`.
 - `search_official_captions` Parts 1-2 (`5f1b446`): commit 9 (L11), the review of commits 5-8,
   Ken's manual checks.
-- `queue_phone` (`09ea061`): its spec ("nothing blocks them now", its Pending list). Code waits
-  for stage 3.
-- `browse_phone` (`c49e3bb`): Phase 0 (name-source test, offline) and GATE N.
+- `queue_phone` (`81f4de1`): spec and phases written 2026-11-18. Its Phase 1 (server only:
+  the failed row, the pause route, song and artist on queue rows) needs nothing from
+  `singer_defaults` and can run now; Phases 2-3 wait for stage 3.
+- `browse_phone` (`8b0e06d`): Phase 0 (name-source test, offline) and GATE N. Queue's row
+  names use the file-name split until GATE N rules (`plans/queue-phone.md`, "Names on the
+  rows").
 
 Stage 2, landing:
 
@@ -565,6 +568,11 @@ queues, dashed slots for a state.
   solid blue Queue button on Browse but a dashed grey slot on Queue and Processing;
   the chevron opens a menu on Browse and expands the row on Processing (Queue uses a
   gear); the 13 px sub-line grey `#b5bfc0` is not a `bulma-dark.css` token yet.
+  **Ruled 2026-11-18** (`plans/queue-phone.md` on `queue_phone` `81f4de1`, S1-S4): the
+  slot is 60 px everywhere; solid means a tap and dashed a state, so Browse's green
+  button and the dashed slots both stay; a gear opens a menu and a chevron expands a
+  row, so Browse's admin button becomes a gear (`browse_phone` `8b0e06d`); `#b5bfc0`
+  becomes a token on `queue_phone`.
 
 Ruled by Ken, 2026-11-18. Each item names the branch that owes it. Written into each
 owner's plan as L1-L16, no code yet: `singer_defaults` `fafc262` (its Phase 5),
@@ -637,7 +645,7 @@ Buttons, every page (Ken, 2026-11-18, drawn on the canvas; owner `singer_default
     strength), a `#8c9b9d` label, no opacity fade. A white label always means a tap
     works.
 
-Not ruled: the "Small gaps inside the v2 group" above (for Queue's shared stylesheet).
+The "Small gaps inside the v2 group" above were ruled 2026-11-18 (S1-S4 in `plans/queue-phone.md`).
 
 ## Edit words (on `dev`)
 
