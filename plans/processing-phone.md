@@ -21,6 +21,27 @@ file and the mockup differ, this file wins.
    each chip stretching to share the row), but **allowed to wrap** to a second row rather than
    squeeze or clip.
 
+## Phone pages: one look (Ken, 2026-11-18)
+
+From the style review across the seven phone-page branches (`plans/open-issues.md` on `dev`,
+"Phone pages: one look"; numbers are that list's, prefixed L). Visual reference: the canvas
+https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL (private to Ken), boards "Processing: Jobs",
+"Processing: a failed job opened", "Processing: Library tools" and "Reference palette". Its
+rows, Now card and step strip are still draft 1 (below, not ruled); only its colours and chips
+are settled. For those it wins over this branch's mockup; this file wins over both.
+
+- **L10. Buttons are neutral grey.** Retry, Preview and Check playlist are a row's main action:
+  filled grey with a `#5e6d6f` border and bold white text (L4), the fill `#434d4e` (L15). Song
+  info and Repair are a grey outline. Red outline stays for delete. Info blue `#3298dc` stays
+  only for the running job's spinner and step bar.
+- **L14. Processing is the admin's only.** Its nav icon is hidden from guests (the page still
+  opens by its address), and nothing a guest sees links here. This branch's guest view is
+  dropped. A guest's own failed song shows on Queue instead, as a red "failed" row with Dismiss.
+  The failed row and the nav change are both `queue_phone`'s.
+- L1 (one green, one amber), L15 and L16 (disabled: no fill, a faded border, a `#8c9b9d` label,
+  no opacity fade; the canvas draws a disabled Check playlist so) land in `bulma-dark.css` on
+  `singer_defaults`, its Phase 5. This branch takes them from `dev` once that lands.
+
 ## Drafted, not yet ruled
 
 Draft 1 shows these; Ken has not accepted or rejected them.
@@ -36,20 +57,22 @@ Draft 1 shows these; Ken has not accepted or rejected them.
   5 more songs": the running job is in the Now card). Another chip shows just its group.
 - The running job is Queue v2's Now card plus a four-step strip (Download, Audio, Vocals, Lyrics)
   and a large line saying what it is doing and for how long.
-- Rows open from the chevron. The error shows in a dark box; buttons Retry (blue), Song info,
-  Dismiss, Delete song (red outline). Cancel confirms in place (Cancel job / Keep it).
+- Rows open from the chevron. The error shows in a dark box; buttons Retry (blue; grey since
+  L10), Song info, Dismiss, Delete song (red outline). Cancel confirms in place (Cancel job /
+  Keep it).
 - Jobs / Library tools becomes Browse v2's By artist / By song toggle.
 - Library tools: each list is a row with its count in the slot (red dashed Looks poor, amber
   dashed Behind); explanations move into (i) tips; Regenerate rows each with a Preview button.
 - Guest: Queue v2's guest look. Own songs tinted green, red delete button on own songs still
-  getting ready (asks first), green Queue on ready ones.
+  getting ready (asks first), green Queue on ready ones. Dropped by L14.
 
 ## Open questions (on the mockup's yellow note)
 
 1. Group order under All: Attention first (what the host must act on) or Active first (today's
    order)? Drawn Attention first.
 2. Under All, keep the small group headings, or one flat list like today?
-3. Do guests still see other people's failed songs, or only their own?
+3. Do guests still see other people's failed songs, or only their own? Moot since L14: guests
+   get no Processing view.
 4. Is the four-step strip right? It groups the real phases (download, extract, loudnorm,
    stem_separation, transcode, align, transcribe) into four.
 
@@ -58,6 +81,7 @@ Draft 1 shows these; Ken has not accepted or rejected them.
 - A failed download shows as Failed for the host; `statusOf()` in `processing.html` only checks
   `processing_status === 'error'`.
 - Guests get a cancel button on every own song still getting ready, including the running one.
+  Moot since L14.
 
 ## Results log
 
