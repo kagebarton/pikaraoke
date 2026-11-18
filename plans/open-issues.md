@@ -136,9 +136,9 @@ that queued them is already closed; 7.1f).
 - **Custom-sheet review leftovers**: `_custom_repair_plan`
   normalizes the sheet text twice; ~~`routes/song_info._typed` repeats
   `library_tools._pick_text` without its length cap, so the POST LRCLIB search
-  sends title and artist uncapped~~ (both LRCLIB search routes cap their query with
-  `library_tools.pick_text`, `182905e5` on `lrclib_fit_pick`; strike on `dev` when it
-  lands). Record: `plans/custom-lyrics-sheet.md`, Code review rows 7-8.
+  sends title and artist uncapped~~ (`_typed` is gone and both LRCLIB search routes cap
+  their query with `library_tools.pick_text`, `56903467`, from `lrclib_fit_pick`'s
+  `182905e5`). Record: `plans/custom-lyrics-sheet.md`, Code review rows 7-8.
 - **`add_songs --folder` defaults to `~\pikaraoke-songs`** (`get_default_dl_dir`)
   instead of `config.ini`'s `download_path`; `regen_alignment_bundles.py` on
   `dev` has the same default. The status report has no title column. Record:
