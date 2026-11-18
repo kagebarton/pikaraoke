@@ -373,6 +373,19 @@ def test_the_dialog_offers_lyrics_only_and_no_raw_transcription(mock_get, client
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_dialogs_queue_button_takes_its_colour_from_the_box_not_the_markup(mock_get, client):
+    """Green means a tap that queues (decision 17): the script sets is-success beside the label
+    from the box, on every render and on the answer, so the markup carries no colour of its own
+    (is-primary would stay on when the box is unticked and the button should be plain)."""
+    body = _search_body(client, mock_get, _RESULTS, _karaoke_with_library([]))
+
+    button = re.search(r'<button id="lyrics-queue-btn"[^>]*>', body).group(0)
+    assert not re.search(r"is-(primary|success|info|link|warning|danger)", button)
+    assert body.count('.toggleClass("is-success", queued)') == 2  # syncQueue and the answer
+    assert body.count("var queued = queueAfterDownload();") == 2
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
 def test_the_artists_official_video_and_audio_come_first_with_a_badge(mock_get, client):
     lyrics = _result("Rick Astley - Never Gonna Give You Up (Lyrics)", "lyricsaaaaa")
     audio = _result(

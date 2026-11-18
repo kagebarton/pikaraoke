@@ -831,13 +831,15 @@ function renderList(d) {
   });
 }
 
-// Queue's label follows the box postDownload sends; it is off in the list view until something
-// is picked.
+// Queue's label and colour follow the box postDownload sends: green while the tap queues, a plain
+// button when it only adds to the library. It is off in the list view until something is picked.
 function syncQueue() {
   var d = _dialog;
   var captions = d.caption === "passed" && d.view === "captions";
+  var queued = queueAfterDownload();
   $("#lyrics-queue-btn")
-    .text(queueAfterDownload() ? TEXT.queue : TEXT.addToLibrary)
+    .text(queued ? TEXT.queue : TEXT.addToLibrary)
+    .toggleClass("is-success", queued)
     .prop("disabled", !captions && !$("#lyrics-dropdown").val());
 }
 
@@ -993,8 +995,9 @@ $(document).on("click.search", "#lyrics-queue-btn", function () {
     success: function () {
       postDownload(url, title);
       if (!isCurrent(d)) return;
-      $btn.addClass("is-success").html('<i class="icon icon-ok"></i>')
-        .append(document.createTextNode("  " + (queueAfterDownload() ? TEXT.queued : TEXT.added)));
+      var queued = queueAfterDownload();
+      $btn.toggleClass("is-success", queued).html('<i class="icon icon-ok"></i>')
+        .append(document.createTextNode("  " + (queued ? TEXT.queued : TEXT.added)));
       fadeOutPreviewModal(d.open, 1000);
     },
     error: function (xhr) {
@@ -1345,7 +1348,7 @@ $(document).on("click.search", ".search_result_items_select", function () {
 					</div>
 				</div>
 				<p id="lyrics-wait" class="is-hidden"></p>
-				<button id="lyrics-queue-btn" type="button" class="button is-primary is-fullwidth is-hidden"></button>
+				<button id="lyrics-queue-btn" type="button" class="button is-fullwidth is-hidden"></button>
 				<button id="lyrics-other" type="button" class="is-hidden">{% trans %}Other lyrics…{% endtrans %}</button>
 			</div>
 		</div>
