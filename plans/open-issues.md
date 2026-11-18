@@ -995,6 +995,13 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   whose bundle also keeps `lyrics.genius` would read "Genius · <artist>". Going by
   origin first changes what a custom version that keeps a Genius identity reads,
   so not done blind. Record: review of `bac42182~1..0bde9554`, finding 10.
+- **A Processing job row never says "edited".** The row names its source from the
+  origin in the job's `lyric_method` (`<origin>+<route>`), which doesn't say whether
+  the run read an edited sheet, so a regen from `.lrclib-auto-edited.srt` reads
+  "LRCLIB (auto)" where Song Info reads "LRCLIB (auto, edited)" (and an edited
+  caption reads "YouTube captions"). Fix shape: the pipeline records the edit in the
+  job's method or row, and the page qualifies it. Not ruled. Record: review of
+  `dc17c08e~1..7b5eec48`, finding 2.
 
 ## Test suite (Windows box)
 
