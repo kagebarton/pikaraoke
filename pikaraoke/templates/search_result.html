@@ -19,7 +19,7 @@
 			{% if row.existing_path %}
 			<button class="button is-success search_result_items_enqueue">{% trans %}Queue{% endtrans %}</button>
 			{% else %}
-			<button class="button search_result_items_select">{% trans %}Queue…{% endtrans %}</button>
+			<button class="button is-success search_result_items_select">{% trans %}Queue…{% endtrans %}</button>
 			{% endif %}
 		</div>
 		{% for path in row.library_copies %}
