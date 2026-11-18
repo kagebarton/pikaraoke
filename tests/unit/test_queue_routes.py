@@ -66,6 +66,37 @@ class TestQueueApiContract:
         assert "paused" in item
 
     @patch("pikaraoke.routes.queue.get_karaoke_instance")
+    def test_get_queue_adds_the_song_and_the_artist_to_each_item(self, mock_get_instance, client):
+        """The page shows song and artist from the server; it never splits a title itself."""
+        mock_karaoke = MagicMock()
+        mock_karaoke.queue_manager.queue = [
+            {"user": "A", "file": "/songs/a.mp4", "title": "Queen - Bohemian Rhapsody"},
+            {"user": "B", "file": "/songs/b.mp4", "title": "Bohemian Rhapsody"},
+        ]
+        mock_get_instance.return_value = mock_karaoke
+
+        data = json.loads(client.get("/get_queue").data)
+
+        assert [(i["artist"], i["song"]) for i in data] == [
+            ("Queen", "Bohemian Rhapsody"),
+            ("", "Bohemian Rhapsody"),
+        ]
+        assert data[0]["title"] == "Queen - Bohemian Rhapsody"
+        assert data[0]["user"] == "A"
+
+    @patch("pikaraoke.routes.queue.get_karaoke_instance")
+    def test_get_queue_leaves_the_live_queue_as_it_was(self, mock_get_instance, client):
+        mock_karaoke = MagicMock()
+        item = {"user": "A", "file": "/songs/a.mp4", "title": "Queen - Bohemian Rhapsody"}
+        mock_karaoke.queue_manager.queue = [item]
+        mock_get_instance.return_value = mock_karaoke
+
+        client.get("/get_queue")
+
+        assert item == {"user": "A", "file": "/songs/a.mp4", "title": "Queen - Bohemian Rhapsody"}
+        assert mock_karaoke.queue_manager.queue == [item]
+
+    @patch("pikaraoke.routes.queue.get_karaoke_instance")
     def test_get_queue_empty_returns_empty_array(self, mock_get_instance, client):
         """GET /get_queue must return empty array when queue is empty."""
         mock_karaoke = MagicMock()
