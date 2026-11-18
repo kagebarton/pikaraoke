@@ -22,8 +22,8 @@ file wins.
    artist and song shows as one plain line and is filed under its first letter in both modes.
 4. **No line numbers.**
 5. **Queue button with text**, left of the title, 60 px wide.
-6. **Guests see no edit or info controls.** Admins get one square button with only a chevron,
-   which opens a menu with Edit song and Song info. Edit all songs stays at the top right.
+6. **Guests see no edit or info controls.** Admins get one square button with only a gear
+   (a chevron until S3, below), which opens a menu with Edit song and Song info. Edit all songs stays at the top right.
 7. **Three states, shown in the Queue button's place:**
    - Ready: green Queue.
    - Processing: blue (green since L8, below) Queue with "processing" in small text under it.
@@ -47,16 +47,21 @@ and buttons it wins over this branch's mockup; this file wins over both.
   `#3298dc`: the song can be queued now and plays when ready. Changes decision 7's Processing
   state.
 - Every page (L2, L3): blue `#375a7f` only for a chosen option (the sort toggle, the letter),
-  teal `#1abc9c` only for links and the current nav icon. The canvas draws the admin's chevron
-  as a grey square, `#434d4e` with a `#5e6d6f` border (L15).
+  teal `#1abc9c` only for links and the current nav icon. The canvas draws the admin's button
+  as a grey square, `#434d4e` with a `#5e6d6f` border (L15), still with a chevron (S3 makes it
+  a gear).
 - L1 (one green, one amber), L15 (grey fill `#434d4e`) and L16 (disabled: no fill, a faded
   border, a `#8c9b9d` label, no opacity fade) land in `bulma-dark.css` on `singer_defaults`, its
   Phase 5. This branch takes them from `dev` once that lands.
 - **Empty letters take L16's disabled look** (Ken, 2026-11-18): no fill, a faded border
   (`#5e6d6f` at half strength), a `#8c9b9d` label, no opacity fade. The canvas's dimmer pill
   (`#2b3131`, label `#6b7a7c`) is not followed.
-- Not ruled, for Queue's shared stylesheet to settle: this page's 60 px slot against Queue's
-  52 px, and the chevron (a menu here, a row expand on Processing, a gear on Queue).
+- **Ruled for the shared stylesheet** (Ken, 2026-11-18; `plans/queue-phone.md` on
+  `queue_phone`, S1-S4): S1, the state slot is 60 px on every page, so this page's stays. S2,
+  solid means a tap and dashed a state, so the green "Queue / processing" button stays a
+  button here. S3, a gear opens a menu and a chevron expands a row, so the admin's button is a
+  gear (decision 6). Take the row, slot and button styles from Queue's stylesheet once it is
+  on `dev`.
 
 ## Where the names come from (open until GATE N)
 
