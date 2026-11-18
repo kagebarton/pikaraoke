@@ -356,11 +356,10 @@ window.closeUserSongOptions = function() {
 };
 
 window.executeUserAction = function(action) {
-  var endpoint = action === 'delete' ? '/queue/user/delete' : '/queue/user/pause';
-  $.post(endpoint, {
-    song: window.currentUserSong.file,
-    user: currentUser
-  }).done(function(resp) {
+  var isDelete = action === 'delete';
+  var data = { user: currentUser };
+  if (isDelete) data.song = window.currentUserSong.file;
+  $.post(isDelete ? '/queue/user/delete' : '/queue/user/pause', data).done(function(resp) {
     var result = JSON.parse(resp);
     if (!result.success) console.error('User queue action failed:', result.error);
   }).fail(function(xhr) {

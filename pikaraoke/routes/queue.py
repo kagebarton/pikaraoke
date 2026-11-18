@@ -221,9 +221,12 @@ def enqueue_form(form):
     return _do_enqueue(form["song_to_add"], form["song_added_by"])
 
 
-class UserQueueActionForm(Schema):
-    song = fields.String(required=True)
+class UserForm(Schema):
     user = fields.String(required=True)
+
+
+class UserQueueActionForm(UserForm):
+    song = fields.String(required=True)
 
 
 def _verify_ownership(queue, song_path, user):
@@ -248,7 +251,7 @@ def user_delete(form):
 
 
 @queue_bp.route("/queue/user/pause", methods=["POST"])
-@queue_bp.arguments(UserQueueActionForm, location="form")
+@queue_bp.arguments(UserForm, location="form")
 def user_pause(form):
     """Toggle pause on all of a user's queued songs (step-away mode)."""
     k = get_karaoke_instance()

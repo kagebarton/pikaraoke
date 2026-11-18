@@ -303,14 +303,14 @@ class TestUserQueueEndpoints:
 
     @patch("pikaraoke.routes.queue.get_karaoke_instance")
     def test_user_pause_own_song_succeeds(self, mock_get_instance, client_with_session, queue_env):
-        """User can pause their own queued song."""
+        """Pausing takes the singer only, no song: it toggles all of that user's songs."""
         qm, mock_karaoke = queue_env
         qm.enqueue("/songs/song1---abc.mp4", "User1")
         mock_get_instance.return_value = mock_karaoke
 
         response = client_with_session.post(
             "/queue/user/pause",
-            data={"song": "/songs/song1---abc.mp4", "user": "User1"},
+            data={"user": "User1"},
         )
 
         assert response.status_code == 200
@@ -330,7 +330,7 @@ class TestUserQueueEndpoints:
         # User2 has no songs — returns success=False but does not touch User1's songs
         response = client_with_session.post(
             "/queue/user/pause",
-            data={"song": "/songs/song1---abc.mp4", "user": "User2"},
+            data={"user": "User2"},
         )
 
         assert response.status_code == 200
@@ -350,7 +350,7 @@ class TestUserQueueEndpoints:
 
         response = client_with_session.post(
             "/queue/user/pause",
-            data={"song": "/songs/song1---abc.mp4", "user": "User1"},
+            data={"user": "User1"},
         )
 
         assert response.status_code == 200
