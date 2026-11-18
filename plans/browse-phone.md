@@ -63,7 +63,7 @@ and buttons it wins over this branch's mockup; this file wins over both.
   gear (decision 6). Take the row, slot and button styles from Queue's stylesheet once it is
   on `dev`.
 
-## Where the names come from (open until GATE N)
+## Where the names come from (ruled at GATE N, below)
 
 The library on disk was renamed by hand to `Artist - Title`, so splitting the file name at the
 first " - " works for it. Songs downloaded during a session keep their raw YouTube title, which may
@@ -121,9 +121,28 @@ Ken picks the name source: (a), (b), or (c) with its fallback. If (c) shows no w
 clearly fewer one-line rows than (a) or (b), it earns Phase 2; otherwise Browse uses (a) or (b)
 and Phase 2 is dropped.
 
+**Ruled (Ken, 2026-11-18): (a), with (b) for a name (a) can't split.** Split the file name at the
+first " - ". When that gives no split, take `parse()`'s artist and song, but only when it finds
+both; otherwise the row is one line, the whole name. Phase 2 is dropped. The judge's read is
+`plans/browse-phone-phase0/judge.md`.
+
+- (c) failed both checks: c1 showed the two known wrong preselects; c2 saved no one-line rows
+  over its fallback.
+- (b) alone doesn't fit Browse, which reads the file name and has no channel: on the hand-made
+  names it puts every film-named song on one line and strips what Ken added (year,
+  "(Sing-Along)", the English title after a Chinese one).
+- The fallback leaves every split name as it is. On the names it touches it reads 7 of the
+  library's 17 one-line names and about a third of the one-line downloads, and swaps about one
+  in five ("What Is This Feeling / Wicked"); it never names a different song. The guard keeps
+  a parse that finds only the singer from replacing a line that still holds the song.
+
 ## Phase 1: Browse page (after GATE N)
 
 To be specified after GATE N. Known scope from today's code:
+
+- Names (GATE N): the rule goes into `split_title` (`song_manager.py`, made by `queue_phone`
+  Phase 1, `b80647d4`), so Queue and Now Playing get it too. No usable split: `parse(title)`
+  with no channel, its artist and title when both are non-empty, else `("", title)`.
 
 - `routes/files.py` `browse()`: drop `flask_paginate`, `sort=date` and `page`; keep `letter`
   (`numeric` stands for `#`) and add the artist/song mode. Default letter: the first non-empty one.
@@ -133,11 +152,9 @@ To be specified after GATE N. Known scope from today's code:
 - States: today's tags (`is_active`, tracker `waiting`/`pending`/`active`, pipeline
   `pending`/`failed`) map onto decision 7's three.
 
-## Phase 2: stored names (only if GATE N picks (c))
+## Phase 2: stored names
 
-To be specified after GATE N: fill `songs.artist` and `songs.title` from the Genius match at
-download (and after a lyrics repair), with the agreement check; backfill the library from the
-debug bundles.
+Dropped at GATE N.
 
 ## Not in this plan
 
@@ -147,3 +164,5 @@ debug bundles.
 
 | Date | Phase | Commit | Note |
 |---|---|---|---|
+| 2026-11-18 | 0 | `9cd61fce` | Executed (Sonnet): `probe.py`, `set_g.md/.json`, `set_l.md/.json` in `plans/browse-phone-phase0/`. Set L is 205 of 249 files; the 44 split film clips have no raw title. Judged (Opus, read-only over the JSON, `probe.py` not rerun): Set G marks in `set_g.md`'s judge column; tallies, Set L wrong rows, and (b) on the current file names with no channel (not in Phase 0) in `judge.md`, reproduced by `judge.py`. |
+| 2026-11-18 | GATE N | `9cd61fce` | Ken: (a), with (b) for a name (a) can't split, taken only when the parse finds both artist and song. Phase 2 dropped. |
