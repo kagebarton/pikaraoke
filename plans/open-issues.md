@@ -149,7 +149,7 @@ that queued them is already closed; 7.1f).
   `da11a06b`); `prepare_regen_job` accepts plan kinds no caller builds; ~~the
   int-not-bool Genius id check is written three times~~ (the route checks share
   `library_tools.is_whole_number`, `13dbee03`, from `genius_search_accuracy`;
-  `_PickEntry.genius_id` still checks `isinstance(..., int)` and lets `true`
+  `_Entry.genius_id` still checks `isinstance(..., int)` and lets `true`
   through); ~~the watch URL is built in more than one module~~ (one
   `library_regen.watch_url`, `f4aa97b`). Record: web plan, 3.1i and 8.1f.
 - ~~**`SongStatus` carries two overlapping sheet flags** (`library_status.py`):
