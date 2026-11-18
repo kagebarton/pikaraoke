@@ -11,6 +11,7 @@ from flask_smorest import Blueprint
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name, is_admin
 from pikaraoke.lib.library_regen import RegenError
 from pikaraoke.lib.library_status import SONG_LISTS, SongStatus
+from pikaraoke.lib.source_names import qualified_name
 
 _ = flask_babel.gettext
 ngettext = flask_babel.ngettext
@@ -150,12 +151,9 @@ def _run_explanation(mode: str) -> str:
 
 def _now_text(now: dict) -> str:
     """The lyric source a song has today, in words."""
-    if now.get("auto"):  # its own wording: "(auto, edited)" is one bracket, not two
-        if now.get("edited"):
-            return _("Now: LRCLIB timing (auto, edited)")
-        return _("Now: LRCLIB timing (auto)")
-    text = _source_text(now)
-    return _("%(source)s (edited)") % {"source": text} if now.get("edited") else text
+    return qualified_name(
+        _source_text(now), auto=now.get("auto", False), edited=now.get("edited", False)
+    )
 
 
 def _source_text(now: dict) -> str:

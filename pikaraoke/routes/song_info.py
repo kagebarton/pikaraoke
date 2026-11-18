@@ -36,6 +36,7 @@ from pikaraoke.lib.library_tools import (
     is_whole_number,
 )
 from pikaraoke.lib.lrclib import LrclibUnavailable
+from pikaraoke.lib.source_names import qualified_name
 from pikaraoke.lib.srt_slice_fit import (
     DISAGREE,
     FITS,
@@ -198,14 +199,10 @@ def _rejected_texts(reason: str | None) -> tuple[str, str]:
     return _("not checked"), _("Not checked on the last run.")
 
 
-def _edited_name(name: str) -> str:
-    """``name`` as the source of lyrics whose words an admin edited: "LRCLIB (edited)"."""
-    return _("%(source)s (edited)") % {"source": name}
-
-
 def _source_name(status: SongStatus) -> str:
-    name = _origin_name(status)
-    return _edited_name(name) if status.edited else name
+    return qualified_name(
+        _origin_name(status), auto=status.origin == LRC_AUTO_ORIGIN, edited=status.edited
+    )
 
 
 def _name_of_origin(origin: str | None) -> str | None:
@@ -225,8 +222,10 @@ def _name_of_origin(origin: str | None) -> str | None:
 
 def _sheet_source_name(sheet: WordSheet) -> str:
     """The source of the cue sheet an Edit words page shows, which a bundle may not agree with."""
-    name = _name_of_origin(SHEETS[sheet.kind].origin) or "—"
-    return _edited_name(name) if sheet.edited else name
+    origin = SHEETS[sheet.kind].origin
+    return qualified_name(
+        _name_of_origin(origin) or "—", auto=origin == LRC_AUTO_ORIGIN, edited=sheet.edited
+    )
 
 
 def _origin_name(status: SongStatus) -> str:
@@ -472,11 +471,8 @@ def _versions(history: list[HistoryEntry]) -> list[Version]:
         older = history[i + 1] if i + 1 < len(history) else None
         lrclib_id = (entry.lrclib or {}).get("id")
         # Before the Genius test: an automatic pick's bundle keeps that identity.
-        if entry.origin == LRC_AUTO_ORIGIN:
-            genius_text = (
-                _("LRCLIB timing (auto, edited)") if entry.edited else _("LRCLIB timing (auto)")
-            )
-            lrclib_text = None
+        if entry.origin in LRC_ORIGINS:
+            genius_text, lrclib_text = _("LRCLIB timing"), None
         elif entry.genius:
             genius_text = _("Genius · %(artist)s") % {"artist": entry.genius.get("artist", "")}
             lrclib_text = _lrclib_label(entry.lrclib)
@@ -484,12 +480,11 @@ def _versions(history: list[HistoryEntry]) -> list[Version]:
             genius_text, lrclib_text = _("Custom lyrics"), _lrclib_label(entry.lrclib)
         elif entry.origin == MOVIE_ORIGIN:
             genius_text, lrclib_text = _("Movie subtitles"), None
-        elif entry.origin == LRC_ORIGIN:
-            genius_text, lrclib_text = _("LRCLIB timing"), None
         else:
             genius_text, lrclib_text = _("YouTube captions"), None
-        if entry.edited and entry.origin != LRC_AUTO_ORIGIN:  # the automatic name says it itself
-            genius_text = _edited_name(genius_text)
+        genius_text = qualified_name(
+            genius_text, auto=entry.origin == LRC_AUTO_ORIGIN, edited=entry.edited
+        )
         older_lrclib = (older.lrclib or {}).get("id") if older else lrclib_id
         lrclib_changed = lrclib_text is not None and lrclib_id != older_lrclib
         if lrclib_changed and lrclib_id is not None:
