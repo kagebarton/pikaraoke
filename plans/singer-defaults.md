@@ -7,7 +7,9 @@ Phase 3.2 added by Claude Opus 5.5 on 2026-11-06 from the `/code-review` of Phas
 marked (3.2). Phase 3.3 added by Claude Opus 5.5 on 2026-11-06 from the `/code-review` of Phase
 3.2's step 1, marked (3.3). Phase 4 added by Claude Opus 5.5 on 2026-11-09 from Ken's requests
 (a lyric style per guest; a new name for vocal volume, which guests read as their own
-microphone), marked (4). Ken's checks move from Phase 4 to Phase 5.
+microphone), marked (4). Ken's checks move from Phase 4 to Phase 5. Phase 5 added by Claude
+Opus 5.5 on 2026-11-18 from the phone pages' style review (rulings L1, L6, L15 and L16),
+marked (5). Ken's checks move from Phase 5 to Phase 6.
 
 # Singer defaults: key and vocal volume per guest
 
@@ -88,6 +90,40 @@ Assumptions stated to Ken on 2026-11-09, accepted ("go"):
   - Original vocals: *"How loud the recording's singer is. Your microphone isn't changed. 0%
     leaves just the music."*
   - Lyrics: *"Karaoke highlights each word as it's sung. Subtitles shows whole lines."*
+
+## Rulings (Ken, 2026-11-18), Phase 5: one look
+
+From the style review across the seven phone-page branches (`plans/open-issues.md` on `dev`,
+"Phone pages: one look"; numbers are that list's, prefixed L). Visual reference: the canvas
+https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL (private to Ken), boards "Reference
+palette", "Your singer settings (tap your name)", "Join form (first visit)", and the nav bar
+on every guest board. For colours, buttons and the nav bar it wins over this branch's mockups;
+this file wins over both.
+
+- **L1. One green, one amber.** `#2ecc71` means a tap that queues. `--bulma-success` (so
+  `has-text-success`) points at it in `bulma-dark.css`, and `--bulma-warning` at `#f1b70e`.
+  Singer names and Save use that green.
+- **L6. The name leaves the burger menu for the nav bar, on phones too:** a sliders icon (not
+  a gear: Queue rows use a gear for options) and the name, white, in a thin outlined pill, no
+  chevron. A tap opens the guest form. Long names cut with an ellipsis (about 70 px for the
+  name on a 390 px phone). The nav icons narrow from 50 to 44 px to make room. The same icon
+  replaces the mic beside the name on desktop. The edit form's title becomes "Your singer
+  settings"; the join form gains one line under its controls: "Change these any time from
+  [icon] <name> at the top of the page."
+- **L15. Grey button fill `#434d4e`**, one step above the `#343c3d` card, so a button sits
+  raised on it; the `#5e6d6f` border stays.
+- **L16. Disabled, whatever its colour:** no fill, a faded border (`#5e6d6f` at half
+  strength), a `#8c9b9d` label, no opacity fade. A white label always means a tap works.
+
+Ken placed L1, L15 and L16 on this branch (2026-11-18): it is likely the first of the seven
+to land, singer names are its own, and `now_playing_remote` sits on it. They live in
+`bulma-dark.css`, the one source the other six branches take them from once this reaches
+`dev`.
+
+Not here: the chosen lyric style turning blue is `now_playing_remote`'s (L5); it changes
+`--button-selected-bg`, which the guest form's lyric buttons share with Now Playing. Hiding
+the Processing nav icon from guests (L14) is `queue_phone`'s, after its failed row; the two
+nav edits will conflict a little in `base.html` at landing.
 
 ## What the code does today (read 2026-11-06 at `4497f4d`)
 
@@ -1027,7 +1063,57 @@ Self-review: step 3 is several files on the playback path (playback, registry, r
 so a review is due after this phase. Give the `/code-review` line at the checkpoint, over the
 three code commits, with one finder angle per Self-Review axis.
 
-### Phase 5: Ken's checks
+### Phase 5: one look (5)
+
+From rulings L1, L6, L15 and L16. Runs after Phase 4's `/code-review` and any fixes it brings.
+Executor: Sonnet. A choice marked "spec choice" is the executor's to make; anything else that
+needs a decision stops and asks.
+
+What the code does today (read 2026-11-18 at `13b96f2`):
+
+- `bulma.min.css` builds `has-text-success` and `--bulma-success` from `--bulma-success-h`,
+  `-s` and `-l`, so L1 sets those three parts (warning likewise); setting `--bulma-success`
+  alone leaves `has-text-success` at `#48c78e`. Bulma's derived shades (`-dark-invert` and the
+  rest) move with the parts.
+- Bulma's `.button[disabled]` reads `--bulma-button-disabled-background-color`,
+  `-border-color`, `-shadow` and `-opacity`. `bulma-dark.css` adds its own
+  `.button.is-primary[disabled]` (`#3e5b7a`), which L16 replaces.
+- The nav bar (`base.html`): `#home`, `#queue`, `#search`, `#browse` and `#processing` in
+  `.navbar-brand`, then the burger. `#current-user` (an `icon-mic-1` and the name) sits in
+  `.navbar-menu`, so on a phone it is behind the burger.
+- The guest form's plain `.button`s (key −/+, the three lyric buttons, Cancel) take L15's
+  fill. The edit form's title is "Your name and settings".
+
+Commits, in this order:
+
+1. `fix(theme): one green and one amber; grey buttons sit raised on the card; disabled buttons
+   lose their fill`. `bulma-dark.css` only: L1's parts; a `--dark-bg-raised: #434d4e` token
+   (the name is a spec choice; other plans already cite it, so a rename updates them) as the
+   plain `.button` fill with a `--dark-border` border (L15); L16 through Bulma's disabled
+   variables, plus whatever the colour buttons (`is-success`, `is-primary`, `is-warning`,
+   `is-danger`, `is-info`) need to match. No test (CSS).
+2. `feat(ui): the singer's name sits in the nav bar on phones, behind a sliders icon`. L6
+   whole: `base.html` (and `spa-navigation.js` if the name's click handler moves), the pill,
+   the 44 px icons, the desktop icon, the edit form's title, the join form's line. A render
+   test that pins the old title or the mic icon follows.
+
+Then **ui-check** at 390 px and 360 px, each outcome and screenshots in the Results log:
+
+- Computed colours: a singer name on Queue and Save are `#2ecc71`; a `has-text-warning` line
+  is `#f1b70e`.
+- The guest form's Cancel and key buttons are `#434d4e` with a `#5e6d6f` border. A disabled
+  button (set `disabled` through Playwright if none shows on its own), plain and `is-success`,
+  has a transparent background, a half-strength border, a `#8c9b9d` label and opacity 1.
+- Nav: the pill shows the sliders icon and the name outside the burger; a 20-character name
+  cuts with an ellipsis, nothing wraps and the page doesn't scroll sideways; a tap opens "Your
+  singer settings"; the burger still opens the rest. At desktop width the sliders icon replaces
+  the mic.
+- The join form shows its new line under the controls, with the icon.
+
+Self-review: commit 1 is one stylesheet that every page loads, commit 2 the nav bar on every
+page; give the `/code-review` line over both at the checkpoint.
+
+### Phase 6: Ken's checks
 
 Ken runs the test plan below at a real party or a rehearsal on his box. No code unless he
 finds something.
@@ -1063,6 +1149,10 @@ finds something.
 - [ ] (4) Tap each (i) on the form and on Now Playing: the note reads well on a phone and
       closes on a tap elsewhere. The Processing page's notes still work.
 - [ ] (4) Ask a guest what "Original vocals" does before they open the note.
+- [ ] (5) On a phone, your name shows in the top bar beside a sliders icon, not behind the
+      menu; a long name cuts off with "…"; tapping it opens "Your singer settings".
+- [ ] (5) Singer names, Save and every Queue button are the same green; greyed-out buttons
+      have no fill and a grey label.
 
 ## Follow-ups (not in this plan)
 
