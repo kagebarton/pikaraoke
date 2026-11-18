@@ -1,4 +1,6 @@
-Model: Claude Opus 5.5 (author, 2026-11-17). Executor: Claude Sonnet 5.5.
+Model: Claude Opus 5.5 (author, 2026-11-17). Executor: Claude Sonnet 5.5. Rulings 6 and 9 and
+the Design's colours amended by Claude Opus 5.5 on 2026-11-18 from the phone pages' style
+review, marked (L5), (L15) and (L16).
 
 # Now Playing as a remote
 
@@ -10,13 +12,20 @@ master volume and subtitle delay become the admin's. A guest's key stops at −3
 form's Original vocals and Key use the same control, so a setting looks the same everywhere.
 
 Mockup (agreed with Ken 2026-11-17): https://claude.ai/artifact/1vCot5F227mmHnqpKBLaN5 (three
-screens: current singer, admin, guest form).
+screens: current singer, admin, guest form). Visual reference since 2026-11-18: the canvas
+https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL (private to Ken), boards "Now Playing:
+current singer", "Now Playing: admin", "Your singer settings (tap your name)" and "Reference
+palette". For colours and buttons it wins over the mockup; this file wins over both.
 
 Base: `singer_defaults` at `13b96f2` (not on `dev` yet; it owns the "Original vocals" name, the
 (i) notes, the guest form and `KEY_LIMIT`). Branch `now_playing_remote`, worktree
 `.claude/worktrees/now_playing_remote`. `dev` has not touched any file this plan changes since
 `singer_defaults` branched (only five lines of `karaoke.py`), so this lands right after
 `singer_defaults`, by cherry-pick like it.
+
+(L5, L15, L16) **Before Phase 1, rebase onto `singer_defaults` once its Phase 5 is committed.**
+That phase puts L1's green and amber, L15's grey button fill (`--dark-bg-raised`, `#434d4e`)
+and L16's disabled look in `bulma-dark.css`; the Design below uses them.
 
 ## Rulings (Ken, 2026-11-17)
 
@@ -27,16 +36,38 @@ Base: `singer_defaults` at `13b96f2` (not on `dev` yet; it owns the "Original vo
 4. **The name stays "Original vocals"** (singer_defaults Phase 4).
 5. **One shared control** for every slider: Now Playing's four and the guest form's two.
 6. **Transport:** three equal text buttons, Restart | Pause | Skip, all the same neutral grey. No
-   button is highlighted: on this page the green fill already means "chosen" (the Lyrics row).
+   button is highlighted. (L5) Grey because on every page green means a tap that queues and
+   blue a chosen option; the earlier reason, "on this page the green fill already means
+   chosen", goes.
 7. **Pause reads "Resume" while paused** (a button names what a tap does), and a "Paused" tag
    shows beside the "Now Playing" heading.
 8. **Confirm texts:** Restart asks "Restart this song?", Skip asks "Skip this song?". Skip's old
    "If you didn't add this song, ask permission first!" goes: only the singer and the admin see
    Skip now.
-9. **The green is Bulma's success green**, the same as singer names and Save. The "(mint)"
-   comment in `home.html` was wrong (`--bulma-success-dark-invert` resolves to the same 53%
-   lightness as `--bulma-success`) and goes.
+9. (L5) **The chosen lyric style, the knob and the fill are blue `#375a7f`, with white text.**
+   This replaces "the green is Bulma's success green, the same as singer names and Save", which
+   rested on a wrong fact: Save is `is-success`, `#2ecc71`, not `--bulma-success`. The "(mint)"
+   comment in `home.html` still goes (it was wrong: `--bulma-success-dark-invert` resolves to
+   the same 53% lightness as `--bulma-success`).
 10. **Branch off `singer_defaults`**, not `dev`.
+
+## Rulings (Ken, 2026-11-18): one look
+
+From the style review across the seven phone-page branches (`plans/open-issues.md` on `dev`,
+"Phone pages: one look"; numbers are that list's, prefixed L). L5 changes rulings 6 and 9
+above. Also:
+
+11. (L5) **Song titles are amber `#f1b70e`.** They are `has-text-warning` (`#now-playing`,
+    `#up-next`), which L1 points at `#f1b70e` (`singer_defaults` Phase 5); nothing to build
+    here beyond checking it.
+12. (L5) **The app's blue nav bar stays.** The mockup drew a grey one; it is not built.
+13. (L15) **Grey buttons are filled `#434d4e`**, one step above the `#343c3d` card: the
+    transport and the steppers' −/+.
+14. (L16) **Disabled, whatever its colour:** no fill, a faded border (`#5e6d6f` at half
+    strength), a `#8c9b9d` label, no opacity fade. A stepper's −/+ at its end is drawn so.
+
+Not ruled (L5): the mockup's near-black control panel (not in this spec) and the 12-14 px
+corners (in it). The spec stands until Ken rules.
 
 ## What the code does today (read 2026-11-17 at `13b96f2`)
 
@@ -121,13 +152,15 @@ The heading above it (label and (i) note) stays the page's own markup, with an `
 
 **`static/stepper.css`**, sizes as in the mockup:
 
-- **−/+ buttons:** 56 px square, 14 px radius, filled `--dark-bg-tertiary`, glyph
-  `--dark-text-primary` 34 px bold, 0.35 opacity when disabled.
-- **Rail:** 10 px, `--dark-bg-tertiary`. **Fill:** `--bulma-success` at 0.5 opacity, from
+- **−/+ buttons:** 56 px square, 14 px radius, filled `--dark-bg-raised` (L15), glyph
+  `--dark-text-primary` 34 px bold. Disabled (L16): no fill, a `--dark-border` border at half
+  strength, glyph `--dark-text-muted` (`#8c9b9d`), full opacity. Use `singer_defaults`' L16
+  rule if it covers these buttons, else the same values once in `stepper.css`.
+- **Rail:** 10 px, `--dark-bg-tertiary`. **Fill:** `--dark-primary` (L5) at 0.5 opacity, from
   `--lo` to `--hi`.
 - **Zero tick:** `.has-zero` only, a 2 px tick at `--zero`.
-- **Knob:** 68 × 44 px pill, `--bulma-success`, text `--bulma-dark` 18 px heavy. Left edge at
-  `calc((100% - 68px) * var(--frac))`, with `pointer-events: none`.
+- **Knob:** 68 × 44 px pill, `--dark-primary` (L5), text `--dark-text-primary` (white) 18 px
+  heavy. Left edge at `calc((100% - 68px) * var(--frac))`, with `pointer-events: none`.
 - **Range:** covers the track, `appearance: none`, transparent. Its native thumb is transparent
   and 68 × 48 px, so a drag grabs exactly where the knob is drawn (`::-webkit-slider-thumb`,
   `::-moz-range-thumb`, both tracks transparent).
@@ -144,7 +177,8 @@ and no "Player Control" heading:
 1. **Seek bar** (`{% if admin %}`), as today. Its `$(function)` binding gets a null check.
 2. **Transport:** a 3-column grid of `<button type="button">`: `#restart` "Restart",
    `#pause-resume` "Pause"/"Resume", `#skip` "Skip". Each is 64 px tall, 12 px radius,
-   `--dark-bg-tertiary` with white 20 px bold text, and has no hover tint on touch (match
+   `--dark-bg-raised` (L15; the canvas draws no border) with white 20 px bold text, and has no
+   hover tint on touch (match
    `custom.css`'s `@media (hover: hover)` rule). `handleNowPlaying` sets the pause button's text
    from `np.is_paused`, and a tap flips it at once (optimistic, as today). The two labels come
    from Jinja into the script.
@@ -186,8 +220,10 @@ knob shows the value now), `#vol-up`/`#vol-down`, and `var volume`. In the `:roo
 `/vol_down`, `Karaoke.vol_up`, `Karaoke.vol_down`, their tests and conftest lines, and the
 `vol_up/down` mention in `Karaoke.volume_change`'s docstring.
 
-**Kept but renamed:** `--button-selected-bg` becomes `var(--bulma-success)`. Same colour, and
-the name says what it is.
+**Changed (L5):** `--button-selected-bg` becomes `var(--dark-primary)` and
+`--button-selected-text` becomes `var(--dark-text-primary)`, so the chosen lyric style is blue
+with white text. `.subtitle-mode-btn.is-selected` is shared, so this turns the guest form's
+chosen lyric style blue too.
 
 ### The guest form (`templates/base.html`, `static/spa-navigation.js`)
 
@@ -228,7 +264,8 @@ suite, then pre-commit on the changed files, then `git diff --cached` against th
 1. `feat(ui): Now Playing's sliders become steppers with the value on the knob`. The three
    `stepper` files and `base.html` loading them. Now Playing's Volume, Original vocals, Key
    (still −12..12 for everyone in this commit) and Subtitle delay. The dead CSS and variables,
-   the `--button-selected-bg` rename, and the `vol_up`/`vol_down` removal with their tests.
+   the `--button-selected-bg` change (L5), and the `vol_up`/`vol_down` removal with their
+   tests.
 2. `feat(ui): Now Playing's transport is three text buttons; Pause reads Resume while paused`.
    The transport grid, the Paused tag and the confirm texts.
 3. `feat(ui): the seek bar, volume and subtitle delay are the admin's; a guest's key stops at
@@ -264,6 +301,10 @@ forcing it.
 8. **Navigation:** away to Queue and back twice, then one tap is one step (no stacked
    handlers), with no page errors.
 9. **Width:** no horizontal scroll at 360 px and 390 px on Now Playing and the form.
+10. **Colours (L5, L15, L16), computed:** the knob, the fill and the chosen lyric button are
+    `#375a7f` with white text, on Now Playing and the form; the transport and an enabled −/+
+    are `#434d4e`; Key's + at `+3` has a transparent background, a `#8c9b9d` glyph and opacity
+    1; the song title is `#f1b70e`.
 
 A `/code-review` is due after Phase 1. The session writes the line at the checkpoint.
 
