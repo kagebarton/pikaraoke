@@ -26,14 +26,37 @@ file wins.
    which opens a menu with Edit song and Song info. Edit all songs stays at the top right.
 7. **Three states, shown in the Queue button's place:**
    - Ready: green Queue.
-   - Processing: blue Queue with "processing" in small text under it. Still tappable: the queue
-     holds the song's place (`_do_enqueue`, `routes/queue.py`). Covers running, in line for
-     processing, downloading, and waiting for a lyrics pick.
+   - Processing: blue (green since L8, below) Queue with "processing" in small text under it.
+     Still tappable: the queue holds the song's place (`_do_enqueue`, `routes/queue.py`). Covers
+     running, in line for processing, downloading, and waiting for a lyrics pick.
    - Needs fix: a dashed box, not a button, for admins only. Covers a failed song and a song that
      never finished processing with nothing working on it, both of which `_do_enqueue` refuses.
      Song info says which and offers the fix.
 8. **Guests never see needs-fix songs.**
 9. **Titles wrap between words**, not mid-word (today's `break-all` goes).
+
+## Phone pages: one look (Ken, 2026-11-18)
+
+From the style review across the seven phone-page branches (`plans/open-issues.md` on `dev`,
+"Phone pages: one look"; numbers are that list's, prefixed L). Visual reference: the canvas
+https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL (private to Ken), boards "Browse: admin, by
+artist", "Browse: admin, by song", "Browse: guest, by song" and "Reference palette". For colours
+and buttons it wins over this branch's mockup; this file wins over both.
+
+- **L8. The "Queue / processing" button is green** `#2ecc71`, like Ready, not info blue
+  `#3298dc`: the song can be queued now and plays when ready. Changes decision 7's Processing
+  state.
+- Every page (L2, L3): blue `#375a7f` only for a chosen option (the sort toggle, the letter),
+  teal `#1abc9c` only for links and the current nav icon. The canvas draws the admin's chevron
+  as a grey square, `#434d4e` with a `#5e6d6f` border (L15).
+- L1 (one green, one amber), L15 (grey fill `#434d4e`) and L16 (disabled: no fill, a faded
+  border, a `#8c9b9d` label, no opacity fade) land in `bulma-dark.css` on `singer_defaults`, its
+  Phase 5. This branch takes them from `dev` once that lands.
+- **Empty letters take L16's disabled look** (Ken, 2026-11-18): no fill, a faded border
+  (`#5e6d6f` at half strength), a `#8c9b9d` label, no opacity fade. The canvas's dimmer pill
+  (`#2b3131`, label `#6b7a7c`) is not followed.
+- Not ruled, for Queue's shared stylesheet to settle: this page's 60 px slot against Queue's
+  52 px, and the chevron (a menu here, a row expand on Processing, a gear on Queue).
 
 ## Where the names come from (open until GATE N)
 
