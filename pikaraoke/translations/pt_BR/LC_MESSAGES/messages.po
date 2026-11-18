@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: mawkee@gmail.com\n"
-"POT-Creation-Date: 2026-11-18 10:16-0500\n"
+"POT-Creation-Date: 2026-11-18 10:50-0500\n"
 "PO-Revision-Date: 2022-06-28 18:57-0300\n"
 "Last-Translator: FULL NAME <mawkee@gmail.com>\n"
 "Language: pt_BR\n"
@@ -160,6 +160,40 @@ msgstr ""
 #: lib/queue_manager.py:366
 #, python-format
 msgid "%s is back"
+msgstr ""
+
+#: lib/source_names.py:19
+msgid "Genius"
+msgstr ""
+
+#: lib/source_names.py:20 routes/song_info.py:460
+#: templates/song_repair.html:877 templates/song_repair.html:908
+msgid "Custom lyrics"
+msgstr ""
+
+#: lib/source_names.py:21 routes/song_info.py:462
+#: templates/song_repair.html:881 templates/song_repair.html:938
+#: templates/song_repair.html:939
+msgid "Movie subtitles"
+msgstr ""
+
+#: lib/source_names.py:24 routes/song_info.py:314 routes/song_info.py:464
+msgid "YouTube captions"
+msgstr ""
+
+#: lib/source_names.py:33
+#, python-format
+msgid "%(source)s (auto, edited)"
+msgstr ""
+
+#: lib/source_names.py:35
+#, python-format
+msgid "%(source)s (auto)"
+msgstr ""
+
+#: lib/source_names.py:37
+#, python-format
+msgid "%(source)s (edited)"
 msgstr ""
 
 #. Message shown after starting the youtube-dl update.
@@ -324,268 +358,255 @@ msgstr "Música renomeada: %s para %s"
 msgid "CPU usage query unsupported"
 msgstr "Consulta de uso da CPU não suportada"
 
-#: routes/library.py:25
+#: routes/library.py:26
 msgid "with captions"
 msgstr ""
 
-#: routes/library.py:29
+#: routes/library.py:30
 #, python-format
 msgid "LRCLIB filled %(num)d line"
 msgid_plural "LRCLIB filled %(num)d lines"
 msgstr[0] ""
 msgstr[1] ""
 
-#: routes/library.py:31
+#: routes/library.py:32
 msgid "LRCLIB not used"
 msgstr ""
 
-#: routes/library.py:33
+#: routes/library.py:34
 msgid "LRCLIB skipped"
 msgstr ""
 
-#: routes/library.py:35
+#: routes/library.py:36
 msgid "LRC can't be read"
 msgstr ""
 
-#: routes/library.py:37
+#: routes/library.py:38
 msgid "LRC on disk"
 msgstr ""
 
-#: routes/library.py:37
+#: routes/library.py:38
 msgid "no LRCLIB match"
 msgstr ""
 
-#: routes/library.py:43
+#: routes/library.py:44
 #, python-format
 msgid "Version %(v)d"
 msgstr ""
 
-#: routes/library.py:45
+#: routes/library.py:46
 #, python-format
 msgid "%(guessed)d of %(n)d lines guessed"
 msgstr ""
 
-#: routes/library.py:50
+#: routes/library.py:51
 msgid "Transcribed"
 msgstr ""
 
-#: routes/library.py:52
+#: routes/library.py:53
 msgid "Cue align"
 msgstr ""
 
-#: routes/library.py:56
+#: routes/library.py:57
 #, python-format
 msgid "Behind (v%(v)d)"
 msgstr ""
 
-#: routes/library.py:58
+#: routes/library.py:59
 #, fuzzy
 msgid "Up to date"
 msgstr "Atualizações"
 
-#: routes/library.py:60 routes/song_info.py:236 templates/processing.html:108
-#: templates/processing.html:261
+#: routes/library.py:61 routes/song_info.py:216 templates/processing.html:108
+#: templates/processing.html:258
 #, fuzzy
 msgid "No lyrics"
 msgstr "Tocando agora"
 
-#: routes/library.py:61 routes/song_info.py:238
+#: routes/library.py:62 routes/song_info.py:218
 msgid "Not processed"
 msgstr ""
 
-#: routes/library.py:68 routes/library.py:76 routes/library.py:216
-#: routes/library.py:244 routes/library.py:253 routes/library.py:270
-#: routes/library.py:283 routes/library.py:296 routes/library.py:320
-#: routes/library.py:358 routes/library.py:388 routes/library.py:402
-#: routes/processing.py:69 routes/processing.py:111 routes/processing.py:130
-#: routes/processing.py:140 routes/processing.py:150 routes/processing.py:160
-#: routes/song_info.py:559 routes/song_info.py:670 routes/song_info.py:686
-#: routes/song_info.py:718 routes/song_info.py:739 routes/song_info.py:1073
-#: routes/song_info.py:1102 routes/song_info.py:1121 routes/song_info.py:1134
-#: routes/song_info.py:1176
+#: routes/library.py:69 routes/library.py:77 routes/library.py:214
+#: routes/library.py:242 routes/library.py:251 routes/library.py:268
+#: routes/library.py:281 routes/library.py:294 routes/library.py:318
+#: routes/library.py:356 routes/library.py:386 routes/library.py:400
+#: routes/processing.py:75 routes/processing.py:117 routes/processing.py:136
+#: routes/processing.py:146 routes/processing.py:156 routes/processing.py:166
+#: routes/song_info.py:535 routes/song_info.py:646 routes/song_info.py:662
+#: routes/song_info.py:694 routes/song_info.py:715 routes/song_info.py:1049
+#: routes/song_info.py:1078 routes/song_info.py:1097 routes/song_info.py:1110
+#: routes/song_info.py:1152
 #, fuzzy
 msgid "Admin only"
 msgstr "Administração"
 
-#: routes/library.py:79
+#: routes/library.py:80
 #, fuzzy
 msgid "Not a song list"
 msgstr "Acabaram as músicas!"
 
-#: routes/library.py:121
+#: routes/library.py:122
 #, fuzzy
 msgid "You don't have permission to view the library tools"
 msgstr "Você não tem permissão para redimensionar o sistema de arquivos"
 
-#: routes/library.py:127 templates/processing.html:166
-#: templates/processing.html:282
+#: routes/library.py:128 templates/processing.html:166
+#: templates/processing.html:279
 #, fuzzy
 msgid "Update stale songs"
 msgstr "Editar todas as músicas"
 
-#: routes/library.py:128
+#: routes/library.py:129
 #, fuzzy
 msgid "Reprocess all songs"
 msgstr "Mostrar todas as músicas"
 
-#: routes/library.py:129
+#: routes/library.py:130
 #, fuzzy
 msgid "Reset all songs"
 msgstr "Editar todas as músicas"
 
-#: routes/library.py:136
+#: routes/library.py:137
 msgid ""
 "Songs on an older version are redone with the lyric picks they already "
 "have. Vocals are reused; only lyrics and timing are redone."
 msgstr ""
 
-#: routes/library.py:140
+#: routes/library.py:141
 msgid ""
 "Every song is redone on the current code, keeping its lyric pick. Vocals "
 "are reused; only lyrics and timing are redone."
 msgstr ""
 
-#: routes/library.py:144
+#: routes/library.py:145
 msgid ""
 "Every song's lyric source is chosen again from scratch, except songs with"
 " custom lyrics or movie subtitles, which keep them. Vocals are reused; "
 "only lyrics and timing are redone."
 msgstr ""
 
-#: routes/library.py:155
-msgid "Now: LRCLIB timing (auto, edited)"
-msgstr ""
-
-#: routes/library.py:156
-msgid "Now: LRCLIB timing (auto)"
-msgstr ""
-
-#: routes/library.py:158 routes/song_info.py:202
-#, python-format
-msgid "%(source)s (edited)"
-msgstr ""
-
-#: routes/library.py:163
+#: routes/library.py:161
 #, python-format
 msgid "Now: Genius, %(title)s · %(artist)s"
 msgstr ""
 
-#: routes/library.py:168
+#: routes/library.py:166
 msgid "Now: custom lyrics"
 msgstr ""
 
-#: routes/library.py:170
+#: routes/library.py:168
 msgid "Now: movie subtitles"
 msgstr ""
 
-#: routes/library.py:172
+#: routes/library.py:170
 msgid "Now: LRCLIB timing"
 msgstr ""
 
-#: routes/library.py:174
+#: routes/library.py:172
 msgid "Now: YouTube captions"
 msgstr ""
 
-#: routes/library.py:176
+#: routes/library.py:174
 msgid "Now: transcribed, no lyrics"
 msgstr ""
 
-#: routes/library.py:178
+#: routes/library.py:176
 msgid "Not processed yet"
 msgstr ""
 
-#: routes/library.py:179
+#: routes/library.py:177
 msgid "Now: no recorded lyric source"
 msgstr ""
 
-#: routes/library.py:220
+#: routes/library.py:218
 msgid "Not a run"
 msgstr ""
 
-#: routes/library.py:257
+#: routes/library.py:255
 #, fuzzy
 msgid "Not a song in this run"
 msgstr "Nenhuma música na fila."
 
-#: routes/library.py:302
+#: routes/library.py:300
 #, python-format
 msgid "Queued %(n)d song."
 msgid_plural "Queued %(n)d songs."
 msgstr[0] ""
 msgstr[1] ""
 
-#: routes/library.py:305
+#: routes/library.py:303
 #, python-format
 msgid "%(n)d song was left out: it is already waiting or running."
 msgid_plural "%(n)d songs were left out: they are already waiting or running."
 msgstr[0] ""
 msgstr[1] ""
 
-#: routes/library.py:311
+#: routes/library.py:309
 #, python-format
 msgid "Backup: %(folder)s."
 msgstr ""
 
-#: routes/library.py:327
+#: routes/library.py:325
 msgid "Playlist"
 msgstr ""
 
 #. Button label for the direct download form's submit button.
-#: routes/library.py:327 templates/processing.html:218
+#: routes/library.py:325 templates/processing.html:218
 #: templates/search.html:699 templates/search.html:828
 #: templates/search.html:1114 templates/search.html:1188
 #: templates/search.html:1209
 msgid "Download"
 msgstr "Baixar"
 
-#: routes/library.py:328
+#: routes/library.py:326
 #, fuzzy
 msgid "no caption"
 msgstr "Informação"
 
-#: routes/library.py:328
+#: routes/library.py:326
 msgid "caption too sparse"
 msgstr ""
 
-#: routes/library.py:348 templates/processing.html:236
+#: routes/library.py:346 templates/processing.html:236
 msgid "Pick lyrics"
 msgstr ""
 
-#: routes/library.py:362
+#: routes/library.py:360
 msgid "Not a song waiting for a pick"
 msgstr ""
 
-#: routes/library.py:379 templates/playlist.html:289
+#: routes/library.py:377 templates/playlist.html:289
 #: templates/processing.html:179
 msgid "Add playlist"
 msgstr ""
 
-#: routes/library.py:405
+#: routes/library.py:403
 msgid "Not a playlist selection"
 msgstr ""
 
-#: routes/library.py:417
+#: routes/library.py:415
 #, python-format
 msgid "Added %(n)d video to the download queue."
 msgid_plural "Added %(n)d videos to the download queue."
 msgstr[0] ""
 msgstr[1] ""
 
-#: routes/library.py:426
+#: routes/library.py:424
 #, python-format
 msgid "%(n)d song sent to processing."
 msgid_plural "%(n)d songs sent to processing."
 msgstr[0] ""
 msgstr[1] ""
 
-#: routes/library.py:435
+#: routes/library.py:433
 #, python-format
 msgid "%(n)d song needs a lyrics pick."
 msgid_plural "%(n)d songs need a lyrics pick."
 msgstr[0] ""
 msgstr[1] ""
 
-#: routes/library.py:444
+#: routes/library.py:442
 msgid "Nothing to add: those songs are already in the library or waiting."
 msgstr ""
 
@@ -599,19 +620,19 @@ msgstr "Você não tem permissão para alterar as preferências"
 msgid "You don't have permission to clear preferences"
 msgstr "Você não tem permissão para limpar as preferências"
 
-#: routes/processing.py:73 routes/song_info.py:563 routes/song_info.py:674
-#: routes/song_info.py:722 routes/song_info.py:743 routes/song_info.py:1077
-#: routes/song_info.py:1106 routes/song_info.py:1125 routes/song_info.py:1138
-#: routes/song_info.py:1180
+#: routes/processing.py:79 routes/song_info.py:539 routes/song_info.py:650
+#: routes/song_info.py:698 routes/song_info.py:719 routes/song_info.py:1053
+#: routes/song_info.py:1082 routes/song_info.py:1101 routes/song_info.py:1114
+#: routes/song_info.py:1156
 #, fuzzy
 msgid "Not a song in the library"
 msgstr "Músicas disponíveis na biblioteca local"
 
-#: routes/processing.py:76
+#: routes/processing.py:82
 msgid "This song is already waiting or running."
 msgstr ""
 
-#: routes/processing.py:91 routes/processing.py:100
+#: routes/processing.py:97 routes/processing.py:106
 msgid "Not owner"
 msgstr ""
 
@@ -693,546 +714,518 @@ msgstr "Erro ao remover da fila"
 msgid "Error toggling pause"
 msgstr "Erro ao baixar a música: "
 
-#: routes/song_info.py:156
+#: routes/song_info.py:153
 #, python-format
 msgid "%(n)d s longer"
 msgstr ""
 
-#: routes/song_info.py:157
+#: routes/song_info.py:154
 #, python-format
 msgid "%(n)d s shorter"
 msgstr ""
 
-#: routes/song_info.py:164
+#: routes/song_info.py:161
 #, python-format
 msgid "The match is %(match)s; this video is %(video)s."
 msgstr ""
 
-#: routes/song_info.py:165
+#: routes/song_info.py:162
 #, python-format
 msgid "The match is %(match)s; this video is %(video)s (%(gap)s)."
 msgstr ""
 
-#: routes/song_info.py:179
+#: routes/song_info.py:176
 msgid "within a few s"
 msgstr ""
 
-#: routes/song_info.py:187
+#: routes/song_info.py:184
 msgid "lines didn't line up"
 msgstr ""
 
-#: routes/song_info.py:189
+#: routes/song_info.py:186
 msgid ""
 "Not used: its line times didn't line up with this video. Usually a "
 "different recording."
 msgstr ""
 
-#: routes/song_info.py:194
+#: routes/song_info.py:191
 msgid "lyrics didn't match"
 msgstr ""
 
-#: routes/song_info.py:194
+#: routes/song_info.py:191
 msgid "Not used: its lines didn't match these lyrics."
 msgstr ""
 
-#: routes/song_info.py:196
+#: routes/song_info.py:193
 msgid "starts too early"
 msgstr ""
 
-#: routes/song_info.py:196
+#: routes/song_info.py:193
 msgid "Not used: its timing starts before this video does."
 msgstr ""
 
-#: routes/song_info.py:197
+#: routes/song_info.py:194
 msgid "not checked"
 msgstr ""
 
-#: routes/song_info.py:197
+#: routes/song_info.py:194
 msgid "Not checked on the last run."
 msgstr ""
 
-#: routes/song_info.py:213 templates/processing.html:258
-msgid "Genius"
-msgstr ""
-
-#: routes/song_info.py:215 routes/song_info.py:483
-#: templates/song_repair.html:877 templates/song_repair.html:908
-msgid "Custom lyrics"
-msgstr ""
-
-#: routes/song_info.py:217 routes/song_info.py:485
-#: templates/song_repair.html:881 templates/song_repair.html:938
-#: templates/song_repair.html:939
-msgid "Movie subtitles"
-msgstr ""
-
-#: routes/song_info.py:221 routes/song_info.py:334 routes/song_info.py:489
-#: templates/processing.html:257
-msgid "YouTube captions"
-msgstr ""
-
-#: routes/song_info.py:246
+#: routes/song_info.py:226
 #, python-format
 msgid "behind (v%(v)d)"
 msgstr ""
 
-#: routes/song_info.py:248
+#: routes/song_info.py:228
 #, fuzzy
 msgid "up to date"
 msgstr "Atualizações"
 
-#: routes/song_info.py:249
+#: routes/song_info.py:229
 msgid "Lyrics"
 msgstr ""
 
-#: routes/song_info.py:254 routes/song_info.py:260 routes/song_info.py:344
+#: routes/song_info.py:234 routes/song_info.py:240 routes/song_info.py:324
 #: templates/song_info.html:206
 msgid "Timed"
 msgstr ""
 
-#: routes/song_info.py:256
+#: routes/song_info.py:236
 #, python-format
 msgid "%(n)d guessed"
 msgstr ""
 
-#: routes/song_info.py:259 routes/song_info.py:387
+#: routes/song_info.py:239 routes/song_info.py:367
 #, python-format
 msgid "%(num)d word"
 msgid_plural "%(num)d words"
 msgstr[0] ""
 msgstr[1] ""
 
-#: routes/song_info.py:266
+#: routes/song_info.py:246
 msgid "Timing"
 msgstr ""
 
-#: routes/song_info.py:266
+#: routes/song_info.py:246
 #, fuzzy
 msgid "times this song"
 msgstr "Apagar esta música"
 
-#: routes/song_info.py:268
+#: routes/song_info.py:248
 msgid "Genius or custom lyrics only"
 msgstr ""
 
-#: routes/song_info.py:272
+#: routes/song_info.py:252
 #, fuzzy
 msgid "Used"
 msgstr "Pausando"
 
-#: routes/song_info.py:272
+#: routes/song_info.py:252
 #, python-format
 msgid "fills %(num)d line"
 msgid_plural "fills %(num)d lines"
 msgstr[0] ""
 msgstr[1] ""
 
-#: routes/song_info.py:274
+#: routes/song_info.py:254
 msgid "skipped by you"
 msgstr ""
 
-#: routes/song_info.py:274 routes/song_info.py:293
+#: routes/song_info.py:254 routes/song_info.py:273
 #: templates/library_run.html:51
 msgid "Skipped"
 msgstr ""
 
-#: routes/song_info.py:276
+#: routes/song_info.py:256
 msgid "Unreadable"
 msgstr ""
 
-#: routes/song_info.py:276
+#: routes/song_info.py:256
 msgid "the .lrc file can't be read"
 msgstr ""
 
-#: routes/song_info.py:283
+#: routes/song_info.py:263
 msgid "Not used"
 msgstr ""
 
-#: routes/song_info.py:284
+#: routes/song_info.py:264
 msgid "no match found"
 msgstr ""
 
-#: routes/song_info.py:284 routes/song_info.py:298
+#: routes/song_info.py:264 routes/song_info.py:278
 #: templates/song_repair.html:157
 msgid "None"
 msgstr ""
 
-#: routes/song_info.py:295
+#: routes/song_info.py:275
 msgid "Unreadable .lrc"
 msgstr ""
 
-#: routes/song_info.py:311
+#: routes/song_info.py:291
 msgid "Checked at download: no LRCLIB record passed the timing check."
 msgstr ""
 
-#: routes/song_info.py:314
+#: routes/song_info.py:294
 msgid ""
 "LRCLIB could not be checked at download. Repair lyrics can time this song"
 " from LRCLIB by hand."
 msgstr ""
 
-#: routes/song_info.py:332
+#: routes/song_info.py:312
 msgid "Lyric aligner"
 msgstr ""
 
-#: routes/song_info.py:333
+#: routes/song_info.py:313
 msgid "Transcription"
 msgstr ""
 
-#: routes/song_info.py:335
+#: routes/song_info.py:315
 msgid "LRCLIB fill"
 msgstr ""
 
-#: routes/song_info.py:340
+#: routes/song_info.py:320
 msgid "Aligned"
 msgstr ""
 
-#: routes/song_info.py:341
+#: routes/song_info.py:321
 msgid "Re-aligned"
 msgstr ""
 
-#: routes/song_info.py:345
+#: routes/song_info.py:325
 msgid "Spaced from caption"
 msgstr ""
 
-#: routes/song_info.py:345
+#: routes/song_info.py:325
 #, fuzzy
 msgid "Guessed"
 msgstr "Pausando"
 
-#: routes/song_info.py:375
+#: routes/song_info.py:355
 #, python-format
 msgid "Missing from the screen: %(count)s. Regenerate to show them."
 msgstr ""
 
-#: routes/song_info.py:380
+#: routes/song_info.py:360
 #, python-format
 msgid "Guessed timing: %(count)s."
 msgstr ""
 
-#: routes/song_info.py:386
+#: routes/song_info.py:366
 #, python-format
 msgid "%(words)s in %(lines)s"
 msgstr ""
 
-#: routes/song_info.py:388
+#: routes/song_info.py:368
 #, python-format
 msgid "%(num)d line"
 msgid_plural "%(num)d lines"
 msgstr[0] ""
 msgstr[1] ""
 
-#: routes/song_info.py:402
+#: routes/song_info.py:382
 #, python-format
 msgid "Used: it filled %(num)d line."
 msgid_plural "Used: it filled %(num)d lines."
 msgstr[0] ""
 msgstr[1] ""
 
-#: routes/song_info.py:405
+#: routes/song_info.py:385
 msgid "Skipped: you chose no match."
 msgstr ""
 
-#: routes/song_info.py:408
+#: routes/song_info.py:388
 msgid "No LRCLIB match was found."
 msgstr ""
 
-#: routes/song_info.py:413
+#: routes/song_info.py:393
 msgid ""
 "Lyrics from the movie's subtitles, timed against the subtitles' own line "
 "times."
 msgstr ""
 
-#: routes/song_info.py:415
+#: routes/song_info.py:395
 msgid "Lyrics from an LRCLIB match, timed against its own line times."
 msgstr ""
 
-#: routes/song_info.py:418
+#: routes/song_info.py:398
 msgid ""
 "Lyrics from an LRCLIB match picked at download, timed against its own "
 "line times."
 msgstr ""
 
-#: routes/song_info.py:420
+#: routes/song_info.py:400
 msgid ""
 "Lyrics from the YouTube caption, timed against the caption's own line "
 "times."
 msgstr ""
 
-#: routes/song_info.py:426
+#: routes/song_info.py:406
 msgid "The words were edited here."
 msgstr ""
 
-#: routes/song_info.py:431
+#: routes/song_info.py:411
 msgid ""
 "Custom lyrics, timed by combining the lyric aligner, a transcription and "
 "YouTube's auto-captions."
 msgstr ""
 
-#: routes/song_info.py:434
+#: routes/song_info.py:414
 msgid "Custom lyrics, timed by combining the lyric aligner and a transcription."
 msgstr ""
 
-#: routes/song_info.py:437
+#: routes/song_info.py:417
 msgid ""
 "Genius lyrics, timed by combining the lyric aligner, a transcription and "
 "YouTube's auto-captions."
 msgstr ""
 
-#: routes/song_info.py:440
+#: routes/song_info.py:420
 msgid "Genius lyrics, timed by combining the lyric aligner and a transcription."
 msgstr ""
 
-#: routes/song_info.py:454
+#: routes/song_info.py:434
 msgid "no LRCLIB"
 msgstr ""
 
-#: routes/song_info.py:457
+#: routes/song_info.py:437
 #, python-format
 msgid "LRCLIB %(length)s"
 msgstr ""
 
-#: routes/song_info.py:476
-msgid "LRCLIB timing (auto, edited)"
-msgstr ""
-
-#: routes/song_info.py:476
-msgid "LRCLIB timing (auto)"
-msgstr ""
-
-#: routes/song_info.py:480
-#, python-format
-msgid "Genius · %(artist)s"
-msgstr ""
-
-#: routes/song_info.py:487 templates/song_repair.html:885
+#: routes/song_info.py:455 templates/song_repair.html:885
 #: templates/song_repair.html:916
 msgid "LRCLIB timing"
 msgstr ""
 
-#: routes/song_info.py:495
+#: routes/song_info.py:457
+#, python-format
+msgid "Genius · %(artist)s"
+msgstr ""
+
+#: routes/song_info.py:471
 #, fuzzy
 msgid "added"
 msgstr "Avançado"
 
-#: routes/song_info.py:495
+#: routes/song_info.py:471
 #, fuzzy
 msgid "changed"
 msgstr "Mudar tom"
 
-#: routes/song_info.py:505
+#: routes/song_info.py:481
 #, python-format
 msgid "%(timed)d of %(n)d lines"
 msgstr ""
 
-#: routes/song_info.py:522
+#: routes/song_info.py:498
 #, fuzzy
 msgid "You don't have permission to view song info"
 msgstr "Você não tem permissão para sair"
 
-#: routes/song_info.py:535 templates/song_info.html:89
+#: routes/song_info.py:511 templates/song_info.html:89
 #, fuzzy
 msgid "Song Info"
 msgstr "Informação do Sistema"
 
-#: routes/song_info.py:542 templates/song_repair.html:873
+#: routes/song_info.py:518 templates/song_repair.html:873
 msgid "Genius lyrics"
 msgstr ""
 
-#: routes/song_info.py:603
+#: routes/song_info.py:579
 #, fuzzy
 msgid "You don't have permission to repair lyrics"
 msgstr "Você não tem permissão para limpar as preferências"
 
-#: routes/song_info.py:618 templates/song_edit_words.html:62
+#: routes/song_info.py:594 templates/song_edit_words.html:62
 #: templates/song_info.html:220 templates/song_repair.html:857
 msgid "Repair lyrics"
 msgstr ""
 
-#: routes/song_info.py:638
+#: routes/song_info.py:614
 #, fuzzy
 msgid "You don't have permission to edit words"
 msgstr "Você não tem permissão para sair"
 
-#: routes/song_info.py:655 templates/song_edit_words.html:261
+#: routes/song_info.py:631 templates/song_edit_words.html:261
 #: templates/song_info.html:222
 #, fuzzy
 msgid "Edit words"
 msgstr "Editar música"
 
-#: routes/song_info.py:689 routes/song_info.py:725
+#: routes/song_info.py:665 routes/song_info.py:701
 msgid "Not a Genius song"
 msgstr ""
 
-#: routes/song_info.py:694 routes/song_info.py:731
+#: routes/song_info.py:670 routes/song_info.py:707
 msgid "Genius didn't return that song's lyrics. Try again."
 msgstr ""
 
-#: routes/song_info.py:704
+#: routes/song_info.py:680
 msgid "LRCLIB can't be reached right now. Try again."
 msgstr ""
 
-#: routes/song_info.py:709
+#: routes/song_info.py:685
 #, python-format
 msgid "video is %(length)s"
 msgstr ""
 
-#: routes/song_info.py:792 templates/song_repair.html:155
+#: routes/song_info.py:768 templates/song_repair.html:155
 #, python-format
 msgid "matches %(n)s of %(m)s lines"
 msgstr ""
 
-#: routes/song_info.py:800
+#: routes/song_info.py:776
 #, python-format
 msgid "Speed adjusted by %(pct)s%%."
 msgstr ""
 
-#: routes/song_info.py:806
+#: routes/song_info.py:782
 #, python-format
 msgid "%(num)d line falls outside the clip and is dropped."
 msgid_plural "%(num)d lines fall outside the clip and are dropped."
 msgstr[0] ""
 msgstr[1] ""
 
-#: routes/song_info.py:820
+#: routes/song_info.py:796
 #, python-format
 msgid "Subtitle times move %(time)s earlier."
 msgstr ""
 
-#: routes/song_info.py:821
+#: routes/song_info.py:797
 #, python-format
 msgid "Subtitle times move %(time)s later."
 msgstr ""
 
-#: routes/song_info.py:823
+#: routes/song_info.py:799
 msgid ""
 "The subtitles run at a different speed than the clip. That happens when "
 "they were made for a different frame rate, or when the clip was sped up "
 "or slowed down."
 msgstr ""
 
-#: routes/song_info.py:828
+#: routes/song_info.py:804
 msgid "Fits. The timing already matches the clip."
 msgstr ""
 
-#: routes/song_info.py:830
+#: routes/song_info.py:806
 msgid "Fits. These subtitles can time this song."
 msgstr ""
 
-#: routes/song_info.py:843
+#: routes/song_info.py:819
 msgid "Not an SRT file."
 msgstr ""
 
-#: routes/song_info.py:845
+#: routes/song_info.py:821
 msgid ""
 "SRT subtitles are numbered cues with times, like 00:01:02,500 --> "
 "00:01:05,000."
 msgstr ""
 
-#: routes/song_info.py:852
+#: routes/song_info.py:828
 #, python-format
 msgid "These subtitles have more than %(n)s lines."
 msgstr ""
 
-#: routes/song_info.py:853
+#: routes/song_info.py:829
 msgid "Paste only the part of the movie with the song."
 msgstr ""
 
-#: routes/song_info.py:858
+#: routes/song_info.py:834
 msgid ""
 "This song has no heard words to compare the subtitles with, and a song "
 "whose lyrics were transcribed doesn't keep them yet."
 msgstr ""
 
-#: routes/song_info.py:862
+#: routes/song_info.py:838
 msgid ""
 "This song has no heard words yet, so there is nothing to compare the "
 "subtitles with."
 msgstr ""
 
-#: routes/song_info.py:864
+#: routes/song_info.py:840
 msgid "These subtitles have no lines to check."
 msgstr ""
 
-#: routes/song_info.py:866
+#: routes/song_info.py:842
 msgid ""
 "The clip may be cut from several scenes, or these subtitles are for a "
 "different release."
 msgstr ""
 
-#: routes/song_info.py:870
+#: routes/song_info.py:846
 msgid ""
 "Check that these subtitles are from this movie and cover the part this "
 "clip shows."
 msgstr ""
 
-#: routes/song_info.py:891
+#: routes/song_info.py:867
 msgid "Can't check."
 msgstr ""
 
-#: routes/song_info.py:896
+#: routes/song_info.py:872
 msgid "Can't check yet."
 msgstr ""
 
-#: routes/song_info.py:899
+#: routes/song_info.py:875
 msgid "Regenerate the song from Song info first, then come back and check."
 msgstr ""
 
-#: routes/song_info.py:909
+#: routes/song_info.py:885
 #, python-format
 msgid "Found %(n)d of %(m)d lines, but they don't agree on one timing."
 msgstr ""
 
-#: routes/song_info.py:913
+#: routes/song_info.py:889
 #, python-format
 msgid "Only %(n)d of %(m)d lines were found in the clip."
 msgstr ""
 
-#: routes/song_info.py:915 routes/song_info.py:989
+#: routes/song_info.py:891 routes/song_info.py:965
 msgid "Doesn't fit."
 msgstr ""
 
-#: routes/song_info.py:929
+#: routes/song_info.py:905
 #, python-format
 msgid "%(first)s–%(last)s · %(num)d line"
 msgid_plural "%(first)s–%(last)s · %(num)d lines"
 msgstr[0] ""
 msgstr[1] ""
 
-#: routes/song_info.py:954
+#: routes/song_info.py:930
 #, python-format
 msgid "Line times move %(time)s earlier."
 msgstr ""
 
-#: routes/song_info.py:955
+#: routes/song_info.py:931
 #, python-format
 msgid "Line times move %(time)s later."
 msgstr ""
 
-#: routes/song_info.py:957
+#: routes/song_info.py:933
 msgid ""
 "The match runs at a different speed than the clip. That happens when it "
 "was made for a different frame rate, or when the video is sped up or "
 "slowed down."
 msgstr ""
 
-#: routes/song_info.py:962
+#: routes/song_info.py:938
 msgid "Fits. This match can time this song."
 msgstr ""
 
-#: routes/song_info.py:965
+#: routes/song_info.py:941
 msgid "The lines fit, but the length is too far off."
 msgstr ""
 
-#: routes/song_info.py:967
+#: routes/song_info.py:943
 msgid "The lines fit, but the match has no length to check."
 msgstr ""
 
-#: routes/song_info.py:969
+#: routes/song_info.py:945
 msgid "Fits, but check these lines first."
 msgstr ""
 
-#: routes/song_info.py:972
+#: routes/song_info.py:948
 #, python-format
 msgid ""
 "A match this much longer or shorter than the video is usually another "
@@ -1240,57 +1233,57 @@ msgid ""
 "%(n)d s."
 msgstr ""
 
-#: routes/song_info.py:977
+#: routes/song_info.py:953
 msgid "No line was heard far from its time."
 msgstr ""
 
-#: routes/song_info.py:989
+#: routes/song_info.py:965
 msgid "This match has no timed lines."
 msgstr ""
 
-#: routes/song_info.py:992
+#: routes/song_info.py:968
 #, python-format
 msgid "This match has more than %(n)s lines."
 msgstr ""
 
-#: routes/song_info.py:997
+#: routes/song_info.py:973
 msgid ""
 "This song has no heard words to compare the match with, and a song whose "
 "lyrics were transcribed doesn't keep them yet."
 msgstr ""
 
-#: routes/song_info.py:1001
+#: routes/song_info.py:977
 msgid ""
 "This song has no heard words yet, so there is nothing to compare the "
 "match with."
 msgstr ""
 
-#: routes/song_info.py:1003
+#: routes/song_info.py:979
 msgid "This match has no lines to check."
 msgstr ""
 
-#: routes/song_info.py:1005
+#: routes/song_info.py:981
 msgid ""
 "The video may be a different edit of the song, with a section this match "
 "lacks or repeats."
 msgstr ""
 
-#: routes/song_info.py:1009
+#: routes/song_info.py:985
 msgid ""
 "Check that this match is the same song as the video. A cover, a live take"
 " or another language won't match the words heard."
 msgstr ""
 
-#: routes/song_info.py:1023
+#: routes/song_info.py:999
 msgid "The match has no length, so the video can't be compared with it."
 msgstr ""
 
-#: routes/song_info.py:1025
+#: routes/song_info.py:1001
 #, python-format
 msgid "The video is more than %(n)d s longer or shorter than this match."
 msgstr ""
 
-#: routes/song_info.py:1032
+#: routes/song_info.py:1008
 msgid ""
 "That's fine if the extra is talk, applause or an intro before or after "
 "the song; those parts get no lyrics. It's wrong if the video skips or "
@@ -1298,16 +1291,16 @@ msgid ""
 "listen first."
 msgstr ""
 
-#: routes/song_info.py:1109 routes/song_info.py:1141
+#: routes/song_info.py:1085 routes/song_info.py:1117
 #, python-format
 msgid "%(key)s must be a number"
 msgstr ""
 
-#: routes/song_info.py:1144
+#: routes/song_info.py:1120
 msgid "lrclib_skip must be true or false"
 msgstr ""
 
-#: routes/song_info.py:1147
+#: routes/song_info.py:1123
 msgid "allow_gap must be true or false"
 msgstr ""
 
@@ -1449,7 +1442,7 @@ msgstr "Salvar"
 
 #: templates/edit.html:94 templates/library_run.html:74
 #: templates/library_run.html:284 templates/playlist.html:315
-#: templates/processing.html:269 templates/song_edit_words.html:295
+#: templates/processing.html:266 templates/song_edit_words.html:295
 #: templates/song_repair.html:947
 msgid "Cancel"
 msgstr ""
@@ -1458,7 +1451,7 @@ msgstr ""
 #. Title of the page where an admin fixes the words of a song's lyrics line by
 #. line.
 #. Title of the page where an admin replaces a song's lyric source.
-#: templates/edit.html:104 templates/processing.html:266
+#: templates/edit.html:104 templates/processing.html:263
 #: templates/song_edit_words.html:260 templates/song_repair.html:855
 #, fuzzy
 msgid "Song info"
@@ -2166,12 +2159,12 @@ msgid "Looks poor"
 msgstr ""
 
 #: templates/pick_pass.html:64 templates/pick_pass.html:371
-#: templates/processing.html:87 templates/processing.html:291
+#: templates/processing.html:87 templates/processing.html:288
 #, fuzzy
 msgid "No songs in this list."
 msgstr "Nenhuma música na fila."
 
-#: templates/pick_pass.html:65 templates/processing.html:272
+#: templates/pick_pass.html:65 templates/processing.html:269
 msgid "Keep"
 msgstr ""
 
@@ -2231,7 +2224,7 @@ msgid "your pick"
 msgstr ""
 
 #: templates/pick_pass.html:81
-#, fuzzy, python-format
+#, fuzzy
 msgid "Skip song"
 msgstr "Pulando: %s"
 
@@ -2525,7 +2518,7 @@ msgstr ""
 msgid "Every song on current code. Keeps picks."
 msgstr ""
 
-#: templates/processing.html:170 templates/processing.html:283
+#: templates/processing.html:170 templates/processing.html:280
 msgid "Reprocess all"
 msgstr ""
 
@@ -2533,7 +2526,7 @@ msgstr ""
 msgid "Start over: re-check captions, pick Genius where needed."
 msgstr ""
 
-#: templates/processing.html:174 templates/processing.html:284
+#: templates/processing.html:174 templates/processing.html:281
 #, fuzzy
 msgid "Reset all"
 msgstr "Reiniciar Música"
@@ -2584,7 +2577,7 @@ msgstr ""
 msgid "Reset"
 msgstr "Reiniciar Música"
 
-#: templates/processing.html:225 templates/processing.html:267
+#: templates/processing.html:225 templates/processing.html:264
 #, fuzzy
 msgid "Repair"
 msgstr "Reiniciar Música"
@@ -2688,23 +2681,19 @@ msgstr ""
 msgid "%(h)s h %(m)s min"
 msgstr ""
 
-#: templates/processing.html:260
-msgid "LRCLIB (auto)"
-msgstr ""
-
-#: templates/processing.html:262
+#: templates/processing.html:259
 msgid "Lyrics file"
 msgstr ""
 
-#: templates/processing.html:263
+#: templates/processing.html:260
 msgid "Didn't finish processing"
 msgstr ""
 
-#: templates/processing.html:264
+#: templates/processing.html:261
 msgid "Processing failed"
 msgstr ""
 
-#: templates/processing.html:265
+#: templates/processing.html:262
 #, fuzzy
 msgid "Retry"
 msgstr "Reiniciar Música"
@@ -2713,80 +2702,80 @@ msgstr "Reiniciar Música"
 #. The button adds it to                                         the queue.
 #. Checkbox label which marks the song to take a place in the queue while it
 #. downloads.
-#: templates/processing.html:268 templates/search.html:1052
+#: templates/processing.html:265 templates/search.html:1052
 #: templates/search.html:1109 templates/search.html:1162
 msgid "Add to queue"
 msgstr "Adicionar à fila"
 
-#: templates/processing.html:270
+#: templates/processing.html:267
 #, fuzzy
 msgid "Delete song"
 msgstr "Apagar esta música"
 
-#: templates/processing.html:271
+#: templates/processing.html:268
 msgid "Dismiss"
 msgstr ""
 
-#: templates/processing.html:273
+#: templates/processing.html:270
 msgid "Cancel this job?"
 msgstr ""
 
-#: templates/processing.html:274
+#: templates/processing.html:271
 msgid "Cancel job"
 msgstr ""
 
-#: templates/processing.html:275
+#: templates/processing.html:272
 #, fuzzy
 msgid "Delete this song from the library?"
 msgstr "Tem certeza que quer excluir esta música da biblioteca?"
 
-#: templates/processing.html:276
+#: templates/processing.html:273
 #, python-format
 msgid "Clear %(n)s finished"
 msgstr ""
 
-#: templates/processing.html:277
+#: templates/processing.html:274
 #, fuzzy
 msgid "Ready to sing"
 msgstr "Editar música"
 
-#: templates/processing.html:278
+#: templates/processing.html:275
 msgid "The download failed. Try another video of this song."
 msgstr ""
 
-#: templates/processing.html:279
+#: templates/processing.html:276
 msgid "This song couldn't be prepared. The host can retry it."
 msgstr ""
 
-#: templates/processing.html:280
+#: templates/processing.html:277
 msgid "That did not work."
 msgstr ""
 
-#: templates/processing.html:286
+#: templates/processing.html:283
 #, python-format
 msgid "%(mode)s is open: %(k)s of %(n)s picked."
 msgstr ""
 
-#: templates/processing.html:287
+#: templates/processing.html:284
 #, python-format
 msgid "%(mode)s is open: checking captions (%(k)s of %(n)s)."
 msgstr ""
 
-#: templates/processing.html:288
+#: templates/processing.html:285
 #, python-format
 msgid "%(mode)s is open: ready to queue."
 msgstr ""
 
-#: templates/processing.html:289
+#: templates/processing.html:286
 msgid "Could not open the run."
 msgstr ""
 
-#: templates/processing.html:290 templates/song_repair.html:153
+#: templates/processing.html:287 templates/song_repair.html:153
 #, fuzzy
 msgid "Loading…"
 msgstr "Baixar"
 
-#: templates/processing.html:292
+#: templates/processing.html:289
 msgid "Couldn't load this list."
 msgstr ""
 
@@ -3783,4 +3772,19 @@ msgstr ""
 
 #~ msgid "Add to queue once downloaded"
 #~ msgstr "Adicionar na fila depois de baixar"
+
+#~ msgid "Now: LRCLIB timing (auto, edited)"
+#~ msgstr ""
+
+#~ msgid "Now: LRCLIB timing (auto)"
+#~ msgstr ""
+
+#~ msgid "LRCLIB timing (auto, edited)"
+#~ msgstr ""
+
+#~ msgid "LRCLIB timing (auto)"
+#~ msgstr ""
+
+#~ msgid "LRCLIB (auto)"
+#~ msgstr ""
 

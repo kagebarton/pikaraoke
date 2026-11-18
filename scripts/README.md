@@ -263,6 +263,12 @@ line numbers, never lyric text.
 python scripts/lrc_timing_report.py [--folder PATH]
 ```
 
+## compile_translations.py
+
+Compiles every locale's `messages.po` to `messages.mo`, in place of `pybabel compile`,
+leaving out plurals nobody translated so they fall back to English. The workflow is in
+`pikaraoke/_TRANSLATION.md`.
+
 ## Architecture notes
 
 ### Why a script as well as the web UI?
