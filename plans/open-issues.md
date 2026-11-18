@@ -136,10 +136,9 @@ that queued them is already closed; 7.1f).
 - **Custom-sheet review leftovers**: `_custom_repair_plan`
   normalizes the sheet text twice; ~~`routes/song_info._typed` repeats
   `library_tools._pick_text` without its length cap, so the POST LRCLIB search
-  sends title and artist uncapped~~ (no longer applies, seen 2026-11-16: the
-  LRCLIB search has one `q` box since `lrclib_search_box`, `_typed` reads only
-  that, and the GET form reads its `q` uncapped too). Record:
-  `plans/custom-lyrics-sheet.md`, Code review rows 7-8.
+  sends title and artist uncapped~~ (both LRCLIB search routes cap their query with
+  `library_tools.pick_text`, `182905e5` on `lrclib_fit_pick`; strike on `dev` when it
+  lands). Record: `plans/custom-lyrics-sheet.md`, Code review rows 7-8.
 - **`add_songs --folder` defaults to `~\pikaraoke-songs`** (`get_default_dl_dir`)
   instead of `config.ini`'s `download_path`; `regen_alignment_bundles.py` on
   `dev` has the same default. The status report has no title column. Record:
@@ -984,6 +983,18 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   first in `SHEETS`; a skip marker or a hand-placed `.lrc`, which the joint fill
   treats as the admin's choice, is overwritten. Needs a re-download over a
   library song; not seen. Record: review of `2fd9c4f9~1..313384ea`, finding 5.
+- **Song Info's download-check note can sit under an LRCLIB match the joint fill
+  used.** The note goes by the download's check alone (`_download_check_note`): a
+  Genius song whose check returned no pick, while the joint fill used the `.lrc`
+  on disk, shows the match on its LRCLIB row and "Checked at download: no LRCLIB
+  record passed the timing check." right under it. A wording question; not ruled.
+  Record: review of `bac42182~1..0bde9554`, finding 7.
+- **History names a version by its Genius identity before its origin.**
+  `song_info._versions` tests `entry.genius` ahead of the custom, movie and
+  caption origins (both LRCLIB origins now come first, `dc17c08e`). A later origin
+  whose bundle also keeps `lyrics.genius` would read "Genius · <artist>". Going by
+  origin first changes what a custom version that keeps a Genius identity reads,
+  so not done blind. Record: review of `bac42182~1..0bde9554`, finding 10.
 
 ## Test suite (Windows box)
 
