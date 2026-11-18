@@ -28,6 +28,22 @@ msgstr "Chronométré"
 """
 
 
+PARTLY_TRANSLATED_PO = """\
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=utf-8\\n"
+"Language: ru_RU\\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && "
+"(n%100<10 || n%100>=20) ? 1 : 2);\\n"
+
+msgid "%(num)d line"
+msgid_plural "%(num)d lines"
+msgstr[0] "%(num)d строка"
+msgstr[1] ""
+msgstr[2] ""
+"""
+
+
 def compiled(tmp_path, text: str) -> gettext.GNUTranslations:
     po = tmp_path / "messages.po"
     po.write_text(text, encoding="utf-8")
@@ -56,3 +72,10 @@ def test_it_reports_how_many_plurals_it_left_out(tmp_path):
     po.write_text(ONE_FORM_PO, encoding="utf-8")
 
     assert compile_po(po) == 1
+
+
+def test_a_partly_translated_plural_is_left_to_english_not_mixed(tmp_path):
+    t = compiled(tmp_path, PARTLY_TRANSLATED_PO)
+
+    assert t.ngettext("%(num)d line", "%(num)d lines", 1) == "%(num)d line"
+    assert t.ngettext("%(num)d line", "%(num)d lines", 5) == "%(num)d lines"

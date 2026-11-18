@@ -133,6 +133,12 @@ class TestProcessingPage:
         assert body.index('data-list="lrc"') < body.index('data-list="lrc_auto"')
         assert "LRCLIB (auto) · cue align" in body
 
+    def test_the_source_lists_name_their_source_as_the_job_rows_do(self, env):
+        body = get(env, "/processing", admin=True).get_data(as_text=True)
+
+        for heading in ("YouTube captions · cue align", "Custom lyrics · joint"):
+            assert heading in body
+
     def test_a_job_row_names_its_lyric_source_by_origin_as_song_info_does(self, env):
         """The row's method is ``<origin>+<route>``; the script looks its origin up here."""
         body = get(env, "/processing", admin=True).get_data(as_text=True)

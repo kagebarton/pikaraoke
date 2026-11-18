@@ -152,7 +152,7 @@ def _run_explanation(mode: str) -> str:
 def _now_text(now: dict) -> str:
     """The lyric source a song has today, in words."""
     return qualified_name(
-        _source_text(now), auto=now.get("auto", False), edited=now.get("edited", False)
+        _source_text(now), origin=now.get("origin"), edited=now.get("edited", False)
     )
 
 

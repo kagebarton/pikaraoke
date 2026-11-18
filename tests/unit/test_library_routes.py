@@ -1349,6 +1349,23 @@ class TestEditedLabels:
         assert "current (edited)" not in card(html, source)
 
     @pytest.mark.parametrize(
+        ("suffix", "tag"),
+        [
+            (".lrclib-auto.srt", "current (auto)"),
+            (".lrclib-auto-edited.srt", "current (auto, edited)"),
+        ],
+    )
+    def test_the_repair_page_tags_the_downloads_lrclib_pick_current_auto(self, env, suffix, tag):
+        bundle = caption_bundle()
+        bundle["lyrics"] = {"origin": "lrclib_auto_srt", "genius": GENIUS, "lines": ["one"]}
+        song = env.add_song("A---aaaaaaaaaaa.mp4", bundle)
+        write_sheet(env.folder, "A---aaaaaaaaaaa", suffix=suffix)
+
+        html = text(env.client.get("/song_info/repair", query_string={"song": song}))
+
+        assert f'<span class="rp-tag">{tag}</span>' in card(html, "lrclib")
+
+    @pytest.mark.parametrize(
         "source, now",
         [
             ("caption", "Now: YouTube captions (edited)"),

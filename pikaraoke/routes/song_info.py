@@ -195,17 +195,13 @@ def _rejected_texts(reason: str | None) -> tuple[str, str]:
 
 
 def _source_name(status: SongStatus) -> str:
-    return qualified_name(
-        _origin_name(status), auto=status.origin == LRC_AUTO_ORIGIN, edited=status.edited
-    )
+    return qualified_name(_origin_name(status), origin=status.origin, edited=status.edited)
 
 
 def _sheet_source_name(sheet: WordSheet) -> str:
     """The source of the cue sheet an Edit words page shows, which a bundle may not agree with."""
     origin = SHEETS[sheet.kind].origin
-    return qualified_name(
-        origin_names().get(origin, "—"), auto=origin == LRC_AUTO_ORIGIN, edited=sheet.edited
-    )
+    return qualified_name(origin_names().get(origin, "—"), origin=origin, edited=sheet.edited)
 
 
 def _origin_name(status: SongStatus) -> str:
@@ -462,9 +458,7 @@ def _versions(history: list[HistoryEntry]) -> list[Version]:
             genius_text, lrclib_text = _("Movie subtitles"), None
         else:
             genius_text, lrclib_text = _("YouTube captions"), None
-        genius_text = qualified_name(
-            genius_text, auto=entry.origin == LRC_AUTO_ORIGIN, edited=entry.edited
-        )
+        genius_text = qualified_name(genius_text, origin=entry.origin, edited=entry.edited)
         older_lrclib = (older.lrclib or {}).get("id") if older else lrclib_id
         lrclib_changed = lrclib_text is not None and lrclib_id != older_lrclib
         if lrclib_changed and lrclib_id is not None:
@@ -555,6 +549,13 @@ def _current_source(status: SongStatus) -> str | None:
     return "transcribe" if status.category == "no_lyrics" else None
 
 
+def _current_label(status: SongStatus) -> str:
+    """The "current" tag's words, qualified as the sheet the next regenerate reads."""
+    kind = status.sheet_kind
+    origin = SHEETS[kind].origin if kind is not None else None
+    return qualified_name(_("current"), origin=origin, edited=is_edited_kind(kind))
+
+
 def _lrc_match(status: SongStatus) -> dict | None:
     """The song's LRCLIB match on disk as one row of the page's match list, or None."""
     meta = status.lrc_match
@@ -596,7 +597,7 @@ def repair_page():
         name=k.song_manager.filename_from_path(song),
         has_youtube_id=status.youtube_id is not None,
         current_source=_current_source(status),
-        current_edited=is_edited_kind(status.sheet_kind),
+        current_label=_current_label(status),
         preselect=source if source in REPAIR_SOURCES else None,
         current_genius_id=(status.genius or {}).get("id"),
         custom_prefill=start["text"],
