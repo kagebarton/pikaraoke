@@ -146,11 +146,12 @@ that queued them is already closed; 7.1f).
 - **CLI paths never run on real data:** `regen --song --reset` and backfill's
   queued path. Record: `library-tools.md`.
 - **Simplicity leftovers:** ~~`_ActiveJob.kind` is set and never read~~ (dropped,
-  `104e5580` on `lrclib_fit_pick`); `prepare_regen_job` accepts plan kinds no
-  caller builds; ~~the int-not-bool
-  Genius id check is written three times~~ (one `library_tools.is_whole_number`,
-  `13dbee03`, from `genius_search_accuracy`); ~~the watch URL is built in more than
-  one module~~ (one `library_regen.watch_url`, `f4aa97b`). Record: web plan, 3.1i and 8.1f.
+  `da11a06b`); `prepare_regen_job` accepts plan kinds no caller builds; ~~the
+  int-not-bool Genius id check is written three times~~ (the route checks share
+  `library_tools.is_whole_number`, `13dbee03`, from `genius_search_accuracy`;
+  `_PickEntry.genius_id` still checks `isinstance(..., int)` and lets `true`
+  through); ~~the watch URL is built in more than one module~~ (one
+  `library_regen.watch_url`, `f4aa97b`). Record: web plan, 3.1i and 8.1f.
 - ~~**`SongStatus` carries two overlapping sheet flags** (`library_status.py`):
   `custom_sheet` is true for either kind of sheet and `movie_sheet` for the
   `.custom.srt` one, so every reader (`_now`, `_current_source`) must test
@@ -484,18 +485,19 @@ change (L14).
 Stage 4, after `queue_phone` lands, side by side:
 
 - `browse_phone` Phase 1, after GATE N.
-- `processing_phone` (`f28d582`), after `lrclib_fit_pick` lands as well (below) and its open
-  question on group order under All is ruled.
+- `processing_phone` (`f28d582`), after its open question on group order under All is ruled.
 - Search Part 3 (L12, L13), after `download_modal_speed` lands as well: it restyles the
   dialog's controls.
 
 Independent of the phone order:
 
-- `lrclib_fit_pick` (`c45689f`): lands after Ken's Phase 6 checks. Before `processing_phone`
-  writes code: it changes `processing.html` and `routes/processing.py`, which that branch
-  rewrites. Its other overlaps (`routes/processing.py` with `singer_defaults`,
-  `library_regen.py` with `download_modal_speed`) are in different functions.
-- `defer_timing` (`9e7f6da`): plan only, parked behind `lrclib_fit_pick` (Ken, 2026-11-10).
+- `lrclib_fit_pick`: landed on `dev` 2026-11-18 (`0d203816`..`ee7062af`). It changed
+  `processing.html` and `routes/processing.py`, which `processing_phone` rewrites, so that
+  branch writes its code on top of this `dev`. Its other overlaps (`routes/processing.py`
+  with `singer_defaults`, `library_regen.py` with `download_modal_speed`) are in different
+  functions.
+- `defer_timing` (`9e7f6da`): plan only, parked behind `lrclib_fit_pick` (Ken, 2026-11-10),
+  which has now landed.
 - `chinese_karaoke` (`9900277`): probe scripts under `scripts/zh_probe/` only; research, not a
   landing candidate.
 - `whisper_input_fresh_vs_regen` (`ed96958`): an experiment; its code commits are
@@ -973,7 +975,7 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   module the stage can import that holds every origin name (stage 2 review,
   finding 11; the second name from the review of `2fd9c4f9~1..313384ea`).
 
-## LRCLIB timing picked at download (on `lrclib_fit_pick`)
+## LRCLIB timing picked at download
 
 - **A pick does not look at what is already in `lyrics/`.** The align stage
   moves the picked sheet in and writes the record's `.lrc` without checking for
@@ -991,7 +993,7 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   Record: review of `bac42182~1..0bde9554`, finding 7.
 - **History names a version by its Genius identity before its origin.**
   `song_info._versions` tests `entry.genius` ahead of the custom, movie and
-  caption origins (both LRCLIB origins now come first, `dc17c08e`). A later origin
+  caption origins (both LRCLIB origins now come first, `17c0a6bc`). A later origin
   whose bundle also keeps `lyrics.genius` would read "Genius · <artist>". Going by
   origin first changes what a custom version that keeps a Genius identity reads,
   so not done blind. Record: review of `bac42182~1..0bde9554`, finding 10.
