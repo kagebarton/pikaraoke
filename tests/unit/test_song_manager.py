@@ -8,7 +8,7 @@ import pytest
 
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.karaoke_database import KaraokeDatabase
-from pikaraoke.lib.song_manager import SongManager
+from pikaraoke.lib.song_manager import SongManager, split_title
 
 
 def _native(path: Path) -> str:
@@ -126,6 +126,29 @@ OWNED_KINDS = [
 ]
 # The kinds a backup snapshot holds: stems are regenerable and never backed up.
 BACKED_UP_KINDS = [(sub, tail) for sub, tail in OWNED_KINDS if not tail.endswith(".m4a")]
+
+
+class TestSplitTitle:
+    """split_title turns a display title into (artist, song); no usable split gives ("", title)."""
+
+    def test_artist_dash_song(self):
+        assert split_title("Queen - Bohemian Rhapsody") == ("Queen", "Bohemian Rhapsody")
+
+    def test_no_separator_is_no_split(self):
+        assert split_title("Bohemian Rhapsody") == ("", "Bohemian Rhapsody")
+
+    def test_a_dash_without_spaces_is_not_a_separator(self):
+        assert split_title("Jay-Z") == ("", "Jay-Z")
+
+    def test_splits_at_the_first_separator(self):
+        assert split_title("Artist - Song - Live Version") == ("Artist", "Song - Live Version")
+
+    @pytest.mark.parametrize("title", [" - Song", "Artist - ", " - ", "Artist -  "])
+    def test_an_empty_side_is_no_split(self, title):
+        assert split_title(title) == ("", title)
+
+    def test_each_side_is_trimmed(self):
+        assert split_title("  Artist   -   Song  ") == ("Artist", "Song")
 
 
 @pytest.fixture

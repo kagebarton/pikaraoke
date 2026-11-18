@@ -36,7 +36,7 @@ from pikaraoke.lib.preference_manager import PreferenceManager
 from pikaraoke.lib.processing_manager import ProcessingManager
 from pikaraoke.lib.queue_hold import QueueHold
 from pikaraoke.lib.queue_manager import QueueManager
-from pikaraoke.lib.song_manager import SongManager
+from pikaraoke.lib.song_manager import SongManager, split_title
 from pikaraoke.lib.youtube_dl import get_youtubedl_version, upgrade_youtubedl
 from pikaraoke.version import __version__ as VERSION
 
@@ -641,9 +641,13 @@ class Karaoke:
 
         # Get playback state from PlaybackController
         playback_state = self.playback_controller.get_now_playing()
+        title = playback_state["now_playing"]
+        artist, song = split_title(title) if title else (None, None)
 
         return {
             **playback_state,
+            "now_playing_artist": artist,
+            "now_playing_song": song,
             "up_next": next_song["title"] if next_song else None,
             "next_user": next_song["user"] if next_song else None,
             "volume": self.volume,
