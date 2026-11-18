@@ -4,6 +4,8 @@ Invariant: a held item's ``file`` is a URL until its download lands, and ``waiti
 cleared only once ``file`` is a library path, so the run loop never pops a URL.
 Wiring: construct it before LibraryTools' ``song_downloaded`` handler is registered, because
 that handler can emit processing events synchronously and they must find the item's path set.
+A song that fails processing stays on the queue as ``waiting == "failed"``: it never plays, and
+a retry, a lyrics pick, or the song's deletion settles it through the same events as any held item.
 """
 
 from __future__ import annotations
@@ -157,13 +159,13 @@ class QueueHold:
     def _on_processing_error(self, data: dict[str, Any]) -> None:
         with self._queue_manager.lock:
             item = self._held(data["song_path"])
-            if item is None:
+            # An already failed row ignores a repeat: settle() can follow the event.
+            if item is None or item["waiting"] == "failed":
                 return
-            self._remove(item)
+            item["waiting"] = "failed"
+            self._changed()
             self._events.emit(
-                "notification",
-                _("%s couldn't be processed and was taken off the queue") % item["title"],
-                "danger",
+                "notification", _("%s couldn't be processed") % item["title"], "danger"
             )
 
     def _drop(self, song_path: str) -> None:
