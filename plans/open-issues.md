@@ -491,7 +491,8 @@ Stage 4, after `queue_phone` lands, side by side:
 
 Independent of the phone order:
 
-- `lrclib_fit_pick`: landed on `dev` 2026-11-18 (`0d203816`..`ee7062af`). It changed
+- `lrclib_fit_pick`: landed on `dev` 2026-11-18 (`0d203816`..`ee7062af`), retired as
+  `archive/lrclib_fit_pick`. It changed
   `processing.html` and `routes/processing.py`, which `processing_phone` rewrites, so that
   branch writes its code on top of this `dev`. Its other overlaps (`routes/processing.py`
   with `singer_defaults`, `library_regen.py` with `download_modal_speed`) are in different
@@ -1014,7 +1015,7 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   failure (see "A failed re-align cannot be told from a refused one"): SexyBack's one failure
   was line 78. Why these blocks were re-paced instead of placed from the singing is not shown;
   same family as "A re-paced line can start before the previous line's end". Not ruled beyond
-  shipping. Record: `plans/lrclib-fit-pick.md` on branch `lrclib_fit_pick`, Results rows 21-24.
+  shipping. Record: `plans/lrclib-fit-pick.md` on tag `archive/lrclib_fit_pick`, Results rows 21-24.
 - **A line the record stamps late stays late (Who You Are, 1:49).** Ken (2026-11-18): "1:48
   late line, otherwise good". Line 21 ("'Cause everything inside me screams") is shown at
   109.6 s, the record's own stamp (01:49.54); the transcriber hears its first word at 106.1 s
@@ -1091,7 +1092,7 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   (2026-10-30): a fit that passes may override the gap limit with a checkbox.
 - **Flag finished-karaoke lines that are shifted, for an eyeball and a repair.**
   Raised by Ken 2026-11-12 after the Decision 30 listen (record:
-  `plans/lrclib-shift-check.md` Results row 9 on branch `lrclib_fit_pick`): on
+  `plans/lrclib-shift-check.md` Results row 9 on tag `archive/lrclib_fit_pick`): on
   three LRCLIB-timed songs, lines that "come in early but end on time" and one late
   stretch. Tried once, scratch only, on those three songs' bundles: the finished
   lines (`output_line_timings` + `lyrics.lines`, as an SRT) put through
@@ -1127,7 +1128,7 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   first pick. Also: Repair's own check still uses the length gap the bar dropped
   (`LRC_MAX_GAP_S`), so a record the download picked can show there as needing an
   override. Not in the build (Decision 33). Raised 2026-11-12. Record:
-  `plans/lrclib-fit-pick.md` on branch `lrclib_fit_pick`, "How the open points were
+  `plans/lrclib-fit-pick.md` on tag `archive/lrclib_fit_pick`, "How the open points were
   settled".
 - **Prefer the record with fewer shifted lines in the pick order.** Raised by
   I'm A Slave 4 U at GATE Q of `plans/lrclib-shift-check.md`. Sized 2026-11-12 on the
@@ -1135,4 +1136,4 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   uploader captions it helps about as often as it hurts (of the 23: 5 better, 7 the
   same, 4 worse, 7 with no caption). The replacement records were not heard. Not
   done: Ken kept the measured order (Decision 32). Record: `plans/lrclib-fit-pick.md`
-  on branch `lrclib_fit_pick`, "Sizing for Decision 32".
+  on tag `archive/lrclib_fit_pick`, "Sizing for Decision 32".
