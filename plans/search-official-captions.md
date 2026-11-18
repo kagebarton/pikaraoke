@@ -2,7 +2,8 @@
 
 Model: Claude Sonnet 5.5 (spec by Claude Fable 5.2, 2026-11-11; rules revised 2026-11-16 after
 the held-out check, see Measurements; Part 2, the search page layout, spec by Claude Opus 5.5,
-2026-11-17)
+2026-11-17; commit 9 and Part 3's rulings from the phone pages' style review, Claude Opus 5.5,
+2026-11-18)
 
 Branch `search_official_captions` off `dev` at `1016e20`, worktree
 `.claude/worktrees/search_official_captions` (inside the main checkout, gitignored via
@@ -504,6 +505,19 @@ this section and the mockup differ, this section wins.
     dialog's own button became "Queue" (`download_modal_speed`), so the card and the dialog
     name the same action.
 
+### Decisions (Ken, 2026-11-18): one look
+
+From the style review across the seven phone-page branches (`plans/open-issues.md` on `dev`,
+"Phone pages: one look"; numbers are that list's, prefixed L). Visual reference: the canvas
+https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL (private to Ken), boards "Search: results",
+"Search: Advanced open" and "Reference palette". For colours and buttons it wins over this
+Part's mockup; this file wins over both.
+
+- **L11. The card's "Queue…" is green** (`is-success`), like every Queue: green means a tap
+  that queues (L1). Commit 9.
+- L12 and L13, the card restyle and the dark In library row, wait for Part 3 (below), after
+  `queue_phone` lands.
+
 Spec choices (Opus, not ruled by Ken; reopen any of them by asking):
 
 - S1. Each library copy is noted once, on the first card in display order that matches it and
@@ -664,6 +678,12 @@ onto `dev` first, so they hold until Part 1's commits move `routes/search.py`.
 **Stop after commit 8** (and its Results row). Don't land, push or retire anything. Report a
 Review-due checkpoint for commits 5-8: multi-file and a script rewrite, so it is due.
 
+9. **`fix(search): the card's Queue… is green, like every Queue`** (L11, added 2026-11-18 after
+   the stop above). `search_result.html`: `search_result_items_select` gains `is-success`; the
+   card test that pins each kind of card's button class follows. Then its Results row and stop
+   again. If the review of commits 5-8 has not run yet, its line takes in commit 9; if it has,
+   commit 9 is one class and the self-review covers it.
+
 ### Manual checks, Part 2 (Ken, on a phone)
 
 - [ ] A song you own by its exact video: that card is first, above the official one, with a
@@ -680,6 +700,33 @@ Review-due checkpoint for commits 5-8: multi-file and a script rewrite, so it is
 - [ ] A direct-URL download with the box ticked is queued, from a fresh Search page with no
       results showing.
 - [ ] Show more: a card you own on the second page lands first in the appended batch.
+- [ ] Every Queue and Queue… on the page is green (L11).
+
+## Part 3: search page restyle (after `queue_phone` lands)
+
+Ruled by Ken 2026-11-18 (L12 and L13 in `plans/open-issues.md` on `dev`, "Phone pages: one
+look"); no spec yet. Visual reference: the canvas
+https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL, boards "Search: results" and "Search:
+Advanced open", and the download dialog's three boards.
+
+- **L12. The card restyle is its own pass**, after `queue_phone` lands its shared stylesheet
+  (row, slot and button styles). It takes the download dialog's controls with it: the Search
+  button, the list and the input, and no card behind the content (`download_modal_speed`'s
+  dialog still has the Search page's Bulma look). Order: `queue_phone` lands, then this pass,
+  which carries L13. Partly reverses decision 8's light tint. What it restyles, from the
+  review: the amber (`is-warning`) Search button, white inputs, 4 px corners, 40 px buttons;
+  the Official tag and the In library note in `is-info is-light`, the app's only light
+  surfaces; a third blue `#6cb8ea` for the YouTube link and a grey `#a3b0b2` for the channel;
+  titles 16 px regular, not 17 px bold.
+- **L13. The In library note becomes a dark row** (option A): `#282f2f`, 6 px corners, the
+  Browse folder icon, "In library" over the file name, a full-size green Queue. On a card with
+  a library match, the card's own button reads "Download…" in neutral grey (L4, the fill
+  `#434d4e` from L15), to steer guests to the copy they have; cards without a match keep the
+  green "Queue…" (L11). The dialog's button still reads "Queue" when opened from "Download…"
+  (`download_modal_speed`, L7).
+- L1 (one green, one amber), L15 and L16 (disabled: no fill, a faded border, a `#8c9b9d`
+  label, no opacity fade) come from `bulma-dark.css` on `singer_defaults` (its Phase 5), via
+  `dev`. The canvas draws Advanced's disabled Download in L16's look.
 
 ## Measurements (2026-11-11)
 
