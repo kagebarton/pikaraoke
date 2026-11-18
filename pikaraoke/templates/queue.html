@@ -179,7 +179,8 @@ var currentUser = (typeof getUserCookie === 'function') ? getUserCookie() : null
 var WAITING_LABELS = {
   download: '{{ _("downloading") }}',
   processing: '{{ _("processing") }}',
-  pick: '{{ _("waiting for lyrics") }}'
+  pick: '{{ _("waiting for lyrics") }}',
+  failed: '{{ _("failed") }}'
 };
 
 // Generate queue row HTML
