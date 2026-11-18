@@ -14,7 +14,7 @@ from pikaraoke.lib.library_regen import (
 
 def origin_names() -> dict[str, str]:
     """Each bundle ``lyrics.origin`` that names a source, in words; both LRCLIB origins
-    read "LRCLIB", which :func:`qualified_name` marks ``auto`` where a page tells them apart."""
+    read "LRCLIB", which :func:`qualified_name` marks auto where a page tells them apart."""
     return {
         "genius": _("Genius"),
         CUSTOM_ORIGIN: _("Custom lyrics"),
@@ -25,10 +25,11 @@ def origin_names() -> dict[str, str]:
     }
 
 
-def qualified_name(name: str, *, auto: bool = False, edited: bool = False) -> str:
+def qualified_name(name: str, *, origin: str | None = None, edited: bool = False) -> str:
     """``name`` with its qualifiers in one bracket: "LRCLIB (auto, edited)", never
-    "(auto) (edited)". ``auto`` marks the LRCLIB match a download picked by itself;
-    ``edited``, lyrics whose words an admin fixed."""
+    "(auto) (edited)". An ``origin`` of the LRCLIB match a download picked by itself reads
+    auto; ``edited`` marks lyrics whose words an admin fixed."""
+    auto = origin == LRC_AUTO_ORIGIN
     if auto and edited:
         return _("%(source)s (auto, edited)") % {"source": name}
     if auto:

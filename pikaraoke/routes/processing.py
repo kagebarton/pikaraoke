@@ -10,7 +10,6 @@ from flask import jsonify, render_template, request
 from flask_smorest import Blueprint
 
 from pikaraoke.lib.current_app import get_karaoke_instance, is_admin
-from pikaraoke.lib.library_regen import LRC_AUTO_ORIGIN
 from pikaraoke.lib.library_status import POOR_GUESSED_SHARE
 from pikaraoke.lib.source_names import origin_names, qualified_name
 from pikaraoke.routes.library import needs_pick_subline
@@ -34,8 +33,7 @@ def processing():
         admin=is_admin(),
         poor_share=round(POOR_GUESSED_SHARE * 100),
         lyric_sources={
-            origin: qualified_name(name, auto=origin == LRC_AUTO_ORIGIN)
-            for origin, name in origin_names().items()
+            origin: qualified_name(name, origin=origin) for origin, name in origin_names().items()
         },
     )
 

@@ -4,7 +4,8 @@ Used in place of ``pybabel compile`` (see ``pikaraoke/_TRANSLATION.md``). Babel 
 each empty form of an untranslated plural with the English singular or plural by the
 form's index, so a language with one plural form (Japanese, Chinese, Korean, Thai,
 Indonesian) reads "fills 5 line", and Russian "fills 21 line". Left out of the ``.mo``,
-the message falls back to English, which picks its form by the English rule. Fuzzy
+the message falls back to English, which picks its form by the English rule. A plural
+with only some forms translated is left out too, so it never mixes the two. Fuzzy
 entries are left out as ``pybabel compile`` leaves them.
 """
 
@@ -19,8 +20,11 @@ TRANSLATIONS = Path(__file__).resolve().parents[1] / "pikaraoke" / "translations
 
 
 def drop_untranslated_plurals(catalog: Catalog) -> int:
-    """Delete each plural message none of whose forms is translated; returns how many."""
-    untranslated = [m for m in catalog if m.id and m.pluralizable and not any(m.string)]
+    """Delete each plural message with a form left untranslated; returns how many.
+
+    A partly translated one goes too: Babel would fill its empty forms with English.
+    """
+    untranslated = [m for m in catalog if m.id and m.pluralizable and not all(m.string)]
     for message in untranslated:
         catalog.delete(message.id, message.context)
     return len(untranslated)

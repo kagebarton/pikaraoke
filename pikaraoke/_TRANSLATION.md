@@ -59,7 +59,8 @@ which are binary files created by the compile step.
 
 Compile with the script, not `pybabel compile`: Babel fills an untranslated plural's
 every form with the English singular or plural by index, so a language with one plural
-form shows "5 line". The script leaves untranslated plurals out, and they fall back to English.
+form shows "5 line". The script leaves out any plural with a form untranslated, and it falls
+back to English.
 
 ## Updating an existing translation
 

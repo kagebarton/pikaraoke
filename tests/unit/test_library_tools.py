@@ -30,6 +30,10 @@ from pikaraoke.lib.genius import (
 )
 from pikaraoke.lib.library_links import Playlist, PlaylistVideo
 from pikaraoke.lib.library_regen import (
+    CUSTOM_ORIGIN,
+    LRC_AUTO_ORIGIN,
+    LRC_ORIGIN,
+    MOVIE_ORIGIN,
     CaptionCheck,
     RegenError,
     RegenJob,
@@ -2534,7 +2538,9 @@ class TestRunsReplayCustomSheets(OpensRuns):
 
         now = {Path(s["song"]).stem: s["now"] for s in tools.run_view()["songs"]}
 
-        assert now[self.MINE] == now[self.SHEET_ONLY] == {"source": "custom"}
+        assert (
+            now[self.MINE] == now[self.SHEET_ONLY] == {"source": "custom", "origin": CUSTOM_ORIGIN}
+        )
 
     def test_a_custom_bundle_whose_sheet_is_gone_is_not_custom_now(
         self, tmp_path, monkeypatch, library
@@ -2609,7 +2615,7 @@ class TestRunsReplayMovieSheets(OpensRuns):
         now = {Path(s["song"]).stem: s["now"] for s in tools.run_view()["songs"]}
 
         # The sheet on disk says it, with a bundle (MINE) or without one (SHEET_ONLY).
-        assert now[self.MINE] == now[self.SHEET_ONLY] == {"source": "movie"}
+        assert now[self.MINE] == now[self.SHEET_ONLY] == {"source": "movie", "origin": MOVIE_ORIGIN}
         assert now[self.PLAIN]["source"] == "genius"
 
     @pytest.mark.parametrize(("mode", "reset"), [("all", False), ("reset", True)])
@@ -2687,7 +2693,7 @@ class TestRunsReplayLrcSheets(OpensRuns):
         now = {Path(s["song"]).stem: s["now"] for s in tools.run_view()["songs"]}
 
         # The sheet on disk says it, with a bundle (MINE) or without one (SHEET_ONLY).
-        assert now[self.MINE] == now[self.SHEET_ONLY] == {"source": "lrclib"}
+        assert now[self.MINE] == now[self.SHEET_ONLY] == {"source": "lrclib", "origin": LRC_ORIGIN}
         assert now[self.PLAIN]["source"] == "genius"
 
     @pytest.mark.parametrize(("mode", "reset"), [("all", False), ("reset", True)])
@@ -4384,29 +4390,29 @@ class TestNowSource:
         return LibraryTools._now(library_status.song_status(video))
 
     @pytest.mark.parametrize(
-        "kind, source",
+        "kind, source, origin",
         [
-            ("caption_edited", "captions"),
-            ("movie_edited", "movie"),
-            ("lrclib_edited", "lrclib"),
+            ("caption_edited", "captions", "srt"),
+            ("movie_edited", "movie", MOVIE_ORIGIN),
+            ("lrclib_edited", "lrclib", LRC_ORIGIN),
         ],
     )
-    def test_an_edited_sheet_names_its_source_and_says_so(self, tmp_path, kind, source):
+    def test_an_edited_sheet_names_its_source_and_says_so(self, tmp_path, kind, source, origin):
         now = self.now(tmp_path, lambda folder, stem: write_edited_sheet(folder, stem, kind))
 
-        assert now == {"source": source, "edited": True}
+        assert now == {"source": source, "origin": origin, "edited": True}
 
     @pytest.mark.parametrize(
-        "write, source",
+        "write, source, origin",
         [
-            (partial(write_movie_sheet, text=WORDS_SRT), "movie"),
-            (partial(write_lrc_sheet, text=WORDS_SRT), "lrclib"),
-            (write_sheet, "custom"),
+            (partial(write_movie_sheet, text=WORDS_SRT), "movie", MOVIE_ORIGIN),
+            (partial(write_lrc_sheet, text=WORDS_SRT), "lrclib", LRC_ORIGIN),
+            (write_sheet, "custom", CUSTOM_ORIGIN),
         ],
         ids=["movie", "lrclib", "custom"],
     )
-    def test_a_plain_sheet_is_as_it_was(self, tmp_path, write, source):
-        assert self.now(tmp_path, write) == {"source": source}
+    def test_a_plain_sheet_is_as_it_was(self, tmp_path, write, source, origin):
+        assert self.now(tmp_path, write) == {"source": source, "origin": origin}
 
     @pytest.mark.parametrize(
         ("kind", "edited"), [("lrclib_auto", {}), ("lrclib_auto_edited", {"edited": True})]
@@ -4416,7 +4422,7 @@ class TestNowSource:
     ):
         now = self.now(tmp_path, lambda folder, stem: write_edited_sheet(folder, stem, kind))
 
-        assert now == {"source": "lrclib", "auto": True, **edited}
+        assert now == {"source": "lrclib", "origin": LRC_AUTO_ORIGIN, **edited}
 
     def test_a_caption_with_no_sheet_is_captions_and_not_edited(self, tmp_path):
         now = self.now(tmp_path, write_cue_caption)

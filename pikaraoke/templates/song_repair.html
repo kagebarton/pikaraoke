@@ -44,7 +44,7 @@
 
 {# The "current" tag of a source card: the source the song's next regenerate uses. #}
 {% macro current_tag(source) -%}
-{% if current_source == source %} <span class="rp-tag">{% if current_edited %}{% trans %}current (edited){% endtrans %}{% else %}{% trans %}current{% endtrans %}{% endif %}</span>{% endif %}
+{% if current_source == source %} <span class="rp-tag">{{ current_label }}</span>{% endif %}
 {%- endmacro %}
 
 {% block styles %}

@@ -1431,15 +1431,17 @@ class LibraryTools:
 
         Custom (typed lines) and movie (subtitles) mean a sheet on disk, the record the
         run's groups go by, bundle or not. The edited sheet of a cue source names that
-        source, with ``edited`` set. The sheets of the LRCLIB record a download picked name
-        LRCLIB too, with ``auto`` set. With that sheet gone, the song is named by the Genius
-        song it was found with, which is what a ``keep`` pick replays.
+        source, with ``edited`` set, and every sheet gives its ``origin``, which tells the
+        LRCLIB record a download picked from one picked by hand. With the automatic sheet
+        gone, the song is named by the Genius song it was found with, which is what a
+        ``keep`` pick replays.
         """
         if status.sheet_kind is not None:
             source = repair_source(status.sheet_kind)
-            now = {"source": "captions" if source == "caption" else source}
-            if SHEETS[status.sheet_kind].origin == LRC_AUTO_ORIGIN:
-                now["auto"] = True
+            now = {
+                "source": "captions" if source == "caption" else source,
+                "origin": SHEETS[status.sheet_kind].origin,
+            }
             if is_edited_kind(status.sheet_kind):
                 now["edited"] = True
             return now
