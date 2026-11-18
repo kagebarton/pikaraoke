@@ -436,6 +436,82 @@ Record: `plans/queue-hold.md` on branch `queue_hold`, the manual checks row.
   2026-11-16 as `58ccd638` (landed from `genius_search_accuracy`, where Ken took it
   from the review triage): `downloadSong` reads `#add-to-queue-direct`.
 
+## Landing order (every open branch)
+
+Proposed by Claude Opus 5.5, 2026-11-18, from the branch plans and file overlaps at the
+hashes named. Ken asked for it to be recorded; the order itself is not ruled beyond what each
+plan already says. Each branch's own dependency notes stay in its plan, which wins where it is
+more specific. Update this section when a branch lands or its gate moves.
+
+The phone overhaul's two gates: `singer_defaults` Phase 5 puts L1, L15 and L16 in
+`bulma-dark.css`, which every phone branch takes from `dev` ("Phone pages: one look", below);
+`queue_phone` creates the shared row style that Browse, Processing and the Search restyle reuse
+(`plans/queue-phone.md` decision 1).
+
+Stage 1, can run now, side by side:
+
+- `singer_defaults` (`fafc262`): Phase 5 (commit 1 the theme, `bulma-dark.css` only; commit 2
+  L6, the name in the nav bar), the `/code-review` of Phase 4 that is due, Ken's Phase 6
+  checks.
+- `download_modal_speed` (`d3128ba`): commit 3b (L7), `/code-review`, Ken's phone checks. Its
+  grey and disabled looks arrive with the theme; no build dependency on `singer_defaults`.
+- `search_official_captions` Parts 1-2 (`5f1b446`): commit 9 (L11), the review of commits 5-8,
+  Ken's manual checks.
+- `queue_phone` (`09ea061`): its spec ("nothing blocks them now", its Pending list). Code waits
+  for stage 3.
+- `browse_phone` (`c49e3bb`): Phase 0 (name-source test, offline) and GATE N.
+
+Stage 2, landing:
+
+1. `singer_defaults`, then `now_playing_remote` (`254bec0`) right after it. The latter is built
+   on the former: rebase once Phase 5 is committed, then its Phases 1-4
+   (`plans/now-playing-remote.md`).
+2. `search_official_captions` Parts 1-2 and `download_modal_speed`, one after the other: both
+   edit `youtube_dl.py`, `routes/search.py`, `search.html` and `search_result.html`. Proposed:
+   Search first, since its commit 7 makes `#add-to-queue` the surviving box and
+   `plans/download-modal-speed.md` ("At landing") already says how the second one repoints
+   `queueAfterDownload()`. If the dialog clears Ken's checks first, it goes first and the same
+   note applies the other way.
+
+Stage 3: `queue_phone` code, after `singer_defaults` is on `dev`. It takes L1, L15, L16 from
+`dev`, and its L14 nav half and `singer_defaults`' L6 both rewrite the nav bar in `base.html`;
+landing `singer_defaults` first leaves no conflict to resolve. Failed row first, then the nav
+change (L14).
+
+Stage 4, after `queue_phone` lands, side by side:
+
+- `browse_phone` Phase 1, after GATE N.
+- `processing_phone` (`f28d582`), after `lrclib_fit_pick` lands as well (below) and its open
+  question on group order under All is ruled.
+- Search Part 3 (L12, L13), after `download_modal_speed` lands as well: it restyles the
+  dialog's controls.
+
+Independent of the phone order:
+
+- `lrclib_fit_pick` (`c45689f`): lands after Ken's Phase 6 checks. Before `processing_phone`
+  writes code: it changes `processing.html` and `routes/processing.py`, which that branch
+  rewrites. Its other overlaps (`routes/processing.py` with `singer_defaults`,
+  `library_regen.py` with `download_modal_speed`) are in different functions.
+- `defer_timing` (`9e7f6da`): plan only, parked behind `lrclib_fit_pick` (Ken, 2026-11-10).
+- `chinese_karaoke` (`9900277`): probe scripts under `scripts/zh_probe/` only; research, not a
+  landing candidate.
+- `whisper_input_fresh_vs_regen` (`ed96958`): an experiment; its code commits are
+  onset-loud-start's, already on `dev` (`archive/onset_loud_start`). Nothing to land; retire
+  when done.
+
+To retire as archive tags (work already on `dev`, or closed): `movie_split` (origin only,
+`67248de`; all five code commits on `dev`), `refine_ablation` (origin only, `c713bec`; repoint
+the "Whisper's refine pass may not earn its cost" entry first, since the branch records the
+blind listen as done), `queue_hold` (`5b64e5e`), `search_caption_check` (`025b756`).
+
+Not ruled (Ken's calls):
+
+- Land `singer_defaults` Phase 5 commit 1 (the theme) on `dev` ahead of the rest of the branch,
+  so `queue_phone`'s code can start sooner. Bends landing in order; proposed only if
+  `singer_defaults` stalls at its checks.
+- Search Part 3 on a fresh branch off `dev` after `queue_phone` (proposed), or keep
+  `search_official_captions` open until Part 3 is done and land all three parts together.
+
 ## Phone pages: one look (branches `browse_phone`, `queue_phone`, `processing_phone`, `search_official_captions`, `singer_defaults`, `now_playing_remote`, `download_modal_speed`)
 
 Style and palette review, 2026-11-18 (Opus), of the seven branches' UI at `3b4d5cc`,
