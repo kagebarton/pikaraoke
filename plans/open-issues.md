@@ -436,6 +436,56 @@ Record: `plans/queue-hold.md` on branch `queue_hold`, the manual checks row.
   2026-11-16 as `58ccd638` (landed from `genius_search_accuracy`, where Ken took it
   from the review triage): `downloadSong` reads `#add-to-queue-direct`.
 
+## Phone pages: one look (branches `browse_phone`, `queue_phone`, `processing_phone`, `search_official_captions`, `singer_defaults`, `now_playing_remote`)
+
+Style and palette review, 2026-11-18 (Opus), of the six branches' UI at `3b4d5cc`,
+`0417a8c`, `af9d11a`, `3968c1a`, `13b96f2`, `52a9ce7`. Canvas with every settled
+screen side by side, a palette board, and a drift note per row (private to Ken):
+https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL. Its screens are copies of the
+three agreed mockups, so those stay the record of each page's decisions.
+
+The reference look is Queue v2 / Browse v2 / Processing draft 1: `bulma-dark.css`
+greys, a `#343c3d` card, 17/13 px two-line rows, a 44 px state slot, 40 px square
+buttons with 6 px corners, `#375a7f` for a chosen option, `#2ecc71` for a tap that
+queues, dashed slots for a state.
+
+- **Two greens are live.** `.button.is-success` and `.tag.is-success` use the theme's
+  `#2ecc71` (`bulma-dark.css`); `has-text-success` and `--bulma-success` are Bulma's
+  own `#48c78e`, as are singer names on `dev` today. Likewise two ambers: `#f1b70e`
+  (buttons) and `#ffb70f` (`has-text-warning`, the song titles on Now Playing).
+- **`now_playing_remote` ruling 9 rests on a wrong fact.** It picks `--bulma-success`
+  as "the same as singer names and Save", but Save is `is-success`, so `#2ecc71`.
+  The spec's knob, fill and chosen Lyrics button would be the only `#48c78e` fills.
+- **Green means two things.** Every v2 page uses green for "tap to queue" and blue
+  `#375a7f` for a chosen option. Now Playing (ruling 6) and the guest form use a green
+  fill for the chosen lyric style and for the slider knob.
+- **Now Playing spec, other drift:** a near-black `#14161a` control panel, 12-14 px
+  corners and 56-64 px buttons, no `#343c3d` card behind the content.
+- **Guest form as built on `singer_defaults`:** a plain Bulma modal with a native
+  slider and `-`/`+` buttons. The spec swaps its controls, not its look.
+- **Search as built is still Bulma defaults:** a yellow (`is-warning`) Search button,
+  white inputs, 4 px corners, 40 px buttons; the Official tag and the In library note
+  are `is-info is-light` pale-blue boxes, the only light surfaces in the app; a third
+  blue (`#6cb8ea`) for the YouTube link and a grey `#a3b0b2` for the channel; titles
+  16 px regular, not 17 px bold. Search plan decision 8 asked for the light tint.
+- **Small gaps inside the v2 group**, for Queue's shared stylesheet to settle when it
+  lands: the slot is 52 px on Queue, 60 px on Browse and Processing; "processing" is a
+  solid blue Queue button on Browse but a dashed grey slot on Queue and Processing;
+  the chevron opens a menu on Browse and expands the row on Processing (Queue uses a
+  gear); the 13 px sub-line grey `#b5bfc0` is not a `bulma-dark.css` token yet.
+
+Open for Ken, none ruled:
+
+1. One green everywhere? Recommended: `#2ecc71` only, meaning "tap to queue"; point
+   `--bulma-success` (and so `has-text-success`) at it in `bulma-dark.css`.
+2. How Now Playing and the guest form show a chosen option: if 1 holds, the chosen lyric
+   style and the knob go blue like the v2 toggles. Reopens `now_playing_remote` rulings
+   6 and 9.
+3. Search into the card style now (on `search_official_captions`) or later in its own
+   pass. It reverses part of its decision 8.
+
+Not reviewed: the dialog redesign on `download_modal_speed`.
+
 ## Edit words (on `dev`)
 
 Landed 2026-11-03 as `90c37f2`..`03dff3a`. Record: `plans/edit-words.md` on tag
