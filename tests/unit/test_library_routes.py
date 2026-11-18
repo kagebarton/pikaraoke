@@ -498,9 +498,10 @@ class TestSongInfoPage:
             in html
         )
         tiles = html.split('class="tabs is-fullwidth si-tabs"')[0].split("</style>")[-1]
+        assert "LRCLIB (auto)" in tiles  # the Lyrics tile tells it from a hand pick
         assert "Timing" in tiles and "times this song" in tiles
         picks = html.split('id="tab-picks"')[1].split('id="tab-alignment"')[0]
-        assert '<span class="si-val">LRCLIB</span>' in picks
+        assert '<span class="si-val">LRCLIB (auto)</span>' in picks
         assert "Invented Song · Invented Artist · 3:20" in picks  # the pick, from the .lrc's header
         assert "Genius lyrics" not in html and "https://genius.com" not in html
         assert "Checked at download" not in html
@@ -540,10 +541,12 @@ class TestSongInfoPage:
             pipeline_decisions={"method_used": "cue_align"},
         )
 
-        history = text(env.page(song)).split('id="tab-history"')[1]
+        html = text(env.page(song))
+        tiles, history = html.split('id="tab-history"')[0], html.split('id="tab-history"')[1]
 
+        assert "LRCLIB (auto, edited)" in tiles  # the Lyrics tile, as History names it
         assert "LRCLIB timing (auto, edited)" in history
-        assert "(auto) (edited)" not in history
+        assert "(auto) (edited)" not in html
 
     @pytest.mark.parametrize(
         ("outcome", "line"),
@@ -1045,6 +1048,12 @@ class TestEditWordsPage:
         write_sheet(env.folder, Path(song).stem, EDIT_SRT, CUE_SOURCES["lrclib"][2])
 
         assert "Source: LRCLIB (edited) · 5 lines" in text(self.page(env, song))
+
+    def test_an_edited_automatic_sheet_reads_auto_edited_in_one_bracket(self, env):
+        song = env.add_cue_song("caption")
+        write_sheet(env.folder, Path(song).stem, EDIT_SRT, ".lrclib-auto-edited.srt")
+
+        assert "Source: LRCLIB (auto, edited) · 5 lines" in text(self.page(env, song))
 
     def test_a_line_is_escaped_in_its_box(self, env):
         sheet = cues_to_srt(['Rock & roll "forever"', "Carry me home"], EDIT_SPANS[:2])
