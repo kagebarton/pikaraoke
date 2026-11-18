@@ -483,21 +483,25 @@ queues, dashed slots for a state.
   the chevron opens a menu on Browse and expands the row on Processing (Queue uses a
   gear); the 13 px sub-line grey `#b5bfc0` is not a `bulma-dark.css` token yet.
 
-Ruled by Ken, 2026-11-18. Not yet in any branch's plan or code; each item names the
-branch that owes it. The canvas is not updated for items 13-14 yet.
+Ruled by Ken, 2026-11-18. Each item names the branch that owes it. Written into each
+owner's plan as L1-L16, no code yet: `singer_defaults` `fafc262` (its Phase 5),
+`now_playing_remote` `254bec0`, `download_modal_speed` `d3128ba`, `browse_phone`
+`c49e3bb`, `queue_phone` `09ea061`, `processing_phone` `f28d582`,
+`search_official_captions` `5f1b446`. The canvas shows items 1-16 and is the reference
+look for the phone pages.
 
 Colour meanings, every page:
 
 1. **One green, one amber.** `#2ecc71` means a tap that queues; `--bulma-success` (so
    `has-text-success`) points at it in `bulma-dark.css`, and `--bulma-warning` at
-   `#f1b70e`. Singer names and Save use that green. Lands first, on whichever branch
-   touches `bulma-dark.css` next.
+   `#f1b70e`. Singer names and Save use that green. Lands first, on `singer_defaults`
+   with 15 and 16 (placed by Ken, 2026-11-18).
 2. **Blue `#375a7f` means chosen**, never an action: picked toggles, letters, chips,
    the chosen lyric style, the slider knob and fill (knob text white), BRB when on.
 3. **Teal `#1abc9c` is for links and the current nav icon only.**
-4. **Other actions are neutral grey:** a `#343c3d` fill with a `#5e6d6f` border and bold
-   white text for a row's main action (Retry, Preview, Check playlist), an outline for
-   the rest (Song info, Repair). Red outline stays for delete.
+4. **Other actions are neutral grey:** a `#343c3d` fill (`#434d4e` since 15) with a
+   `#5e6d6f` border and bold white text for a row's main action (Retry, Preview, Check
+   playlist), an outline for the rest (Song info, Repair). Red outline stays for delete.
 
 Per page:
 
@@ -515,7 +519,9 @@ Per page:
    its controls: "Change these any time from [icon] <name> at the top of the page."
 7. `download_modal_speed`: the dialog's Queue is green (`is-success`), now, before Ken's
    phone checks. Its button text stays "Queue" also when opened from "Download…" (13).
+   Unticked, its "Add to library" is the raised grey of 15 (Ken, 2026-11-18).
 8. `browse_phone`: the "Queue / processing" button is green, not info blue `#3298dc`.
+   Empty letters take 16's disabled look, not the canvas's dimmer pill (Ken, 2026-11-18).
 9. `queue_phone`: BRB is a grey button when off and blue when on (was teal).
 10. `processing_phone`: Repair is a grey outline; Retry, Preview, Check playlist are
     neutral grey (4). Info blue stays only for the running-job spinner and step bar.
@@ -535,9 +541,18 @@ Per page:
     on Queue as a red "failed" row with a short reason and Dismiss, until dismissed
     (today queue hold removes it with a passing notice, `queue_hold.py:157`). No step
     detail on Queue rows: Ken, guests prefer less information. Check that nothing a guest
-    sees links to Processing. `processing_phone`'s guest view is dropped. Owner branch
-    not chosen (`queue_phone` holds the failed row, `singer_defaults` or whichever
-    touches `base.html` the nav).
+    sees links to Processing. `processing_phone`'s guest view is dropped. Owner:
+    `queue_phone`, the failed row first and then the nav change, so the order stays in
+    one branch (placed by Ken, 2026-11-18).
+
+Buttons, every page (Ken, 2026-11-18, drawn on the canvas; owner `singer_defaults`, in
+`bulma-dark.css` with 1):
+
+15. **Grey button fill `#434d4e`**, one step above the `#343c3d` card, so a button sits
+    raised on it. Replaces 4's `#343c3d` fill; the `#5e6d6f` border stays.
+16. **Disabled, whatever its colour:** no fill, a faded border (`#5e6d6f` at half
+    strength), a `#8c9b9d` label, no opacity fade. A white label always means a tap
+    works.
 
 Not ruled: the "Small gaps inside the v2 group" above (for Queue's shared stylesheet).
 
