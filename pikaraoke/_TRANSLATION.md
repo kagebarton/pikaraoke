@@ -49,13 +49,17 @@ from the ./pikaraoke subdirectory, run
 $ pybabel extract -F babel.cfg -o messages.pot --add-comments="MSG:" --strip-comment-tags  --sort-by-file .
 $ pybabel update -i messages.pot -d translations
 # Update any translations/**/messages.po files
-$ pybabel compile -d translations/
+$ python ../scripts/compile_translations.py
 ```
 
 This will extract the strings out of the .py and .html files, and place them into the master strings file `messages.pot`.
 The update command will update each languages `translations/<lang>/LC_MESSAGES/messages.po`
 file, which is what a translator for a particular language will see. The python app consumes `messages.mo` files,
 which are binary files created by the compile step.
+
+Compile with the script, not `pybabel compile`: Babel fills an untranslated plural's
+every form with the English singular or plural by index, so a language with one plural
+form shows "5 line". The script leaves untranslated plurals out, and they fall back to English.
 
 ## Updating an existing translation
 
@@ -65,11 +69,8 @@ _These will be ignored by the translation until they are addressed!_ A message m
 
 Be sure to review the updated translation and recompile as necessary.
 
-Often line break changes will trigger these, if you want to force compilation, run:
-
-```shell
-$ pybabel compile -f -d translations
-```
+Often line break changes will trigger these. The compile script leaves fuzzy entries out,
+as `pybabel compile` does; `pybabel compile -f` would put them in, with the plural fill-in above.
 
 ## Add a new language
 
