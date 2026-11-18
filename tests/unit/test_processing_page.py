@@ -7,6 +7,7 @@ so these tests look at the page's markup and at the JSON the script reads.
 
 import json
 import os
+import re
 from unittest.mock import MagicMock, patch
 from urllib.parse import quote
 
@@ -132,14 +133,19 @@ class TestProcessingPage:
         assert body.index('data-list="lrc"') < body.index('data-list="lrc_auto"')
         assert "LRCLIB (auto) · cue align" in body
 
-    def test_a_job_row_names_an_automatic_lrclib_pick_apart_from_a_hand_picked_one(self, env):
-        """The row's method is ``<origin>+<route>``; the plain ``lrclib`` prefix would take both."""
+    def test_a_job_row_names_its_lyric_source_by_origin_as_song_info_does(self, env):
+        """The row's method is ``<origin>+<route>``; the script looks its origin up here."""
         body = get(env, "/processing", admin=True).get_data(as_text=True)
 
-        auto = body.index("method.indexOf('lrclib_auto') === 0) return T.lyricLrclibAuto")
-        hand = body.index("method.indexOf('lrclib') === 0) return T.lyricLrclib;")
-        assert auto < hand
-        assert 'lyricLrclibAuto: "LRCLIB (auto)"' in body
+        sources = json.loads(re.search(r"lyricSources: (\{.*?\}),\n", body).group(1))
+        assert sources == {
+            "genius": "Genius",
+            "custom": "Custom lyrics",
+            "movie_srt": "Movie subtitles",
+            "lrclib_srt": "LRCLIB",
+            "lrclib_auto_srt": "LRCLIB (auto)",
+            "srt": "YouTube captions",
+        }
 
     def test_a_song_row_in_a_list_links_to_song_info_and_to_repair(self, env):
         body = get(env, "/processing", admin=True).get_data(as_text=True)

@@ -1,8 +1,28 @@
-"""How a lyric source's name reads once qualified, shared by every page that names one."""
+"""How a lyric source reads in words, shared by every page that names one."""
 
 from __future__ import annotations
 
 from flask_babel import _
+
+from pikaraoke.lib.library_regen import (
+    CUSTOM_ORIGIN,
+    LRC_AUTO_ORIGIN,
+    LRC_ORIGIN,
+    MOVIE_ORIGIN,
+)
+
+
+def origin_names() -> dict[str, str]:
+    """Each bundle ``lyrics.origin`` that names a source, in words; both LRCLIB origins
+    read "LRCLIB", which :func:`qualified_name` marks ``auto`` where a page tells them apart."""
+    return {
+        "genius": _("Genius"),
+        CUSTOM_ORIGIN: _("Custom lyrics"),
+        MOVIE_ORIGIN: _("Movie subtitles"),
+        LRC_ORIGIN: "LRCLIB",
+        LRC_AUTO_ORIGIN: "LRCLIB",
+        "srt": _("YouTube captions"),
+    }
 
 
 def qualified_name(name: str, *, auto: bool = False, edited: bool = False) -> str:

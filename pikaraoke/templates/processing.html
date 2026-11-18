@@ -254,10 +254,7 @@ var T = {
   elapsedM: {{ _('%(m)s min %(s)s s', m='{m}', s='{s}') | tojson }},
   elapsedH: {{ _('%(h)s h %(m)s min', h='{h}', m='{m}') | tojson }},
   guessed: {{ _('%(guessed)s of %(n)s lines guessed', guessed='{guessed}', n='{n}') | tojson }},
-  lyricCaptions: {{ _('YouTube captions') | tojson }},
-  lyricGenius: {{ _('Genius') | tojson }},
-  lyricLrclib: 'LRCLIB',
-  lyricLrclibAuto: {{ _('LRCLIB (auto)') | tojson }},
+  lyricSources: {{ lyric_sources | tojson }},
   lyricNone: {{ _('No lyrics') | tojson }},
   lyricFile: {{ _('Lyrics file') | tojson }},
   dbUnfinished: {{ _("Didn't finish processing") | tojson }},
@@ -366,13 +363,10 @@ function fmtAgo(seconds) {
 
 function lyricLabel(method) {
   if (!method) return '';
-  if (method.indexOf('srt') === 0) return T.lyricCaptions;
-  if (method.indexOf('lrclib_auto') === 0) return T.lyricLrclibAuto;
-  if (method.indexOf('lrclib') === 0) return T.lyricLrclib;
-  if (method.indexOf('genius') === 0) return T.lyricGenius;
   if (method === 'transcribe' || method.indexOf('none') === 0) return T.lyricNone;
   if (method.indexOf('override') === 0) return T.lyricFile;
-  return method;
+  // ``<origin>+<route>``: the origin names the source, as Song Info names it.
+  return T.lyricSources[method.split('+')[0]] || method;
 }
 
 function kindWord(row) {
