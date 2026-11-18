@@ -38,6 +38,13 @@ commits is due; Phase 5 waits for it. No push.**
 **2026-11-16, review: the Phase 4 commits are reviewed and its two fixes are in (Results row
 17). Next: Phase 5, Sonnet. No push.**
 
+**2026-11-18: Phase 5 is built (row 18) and reviewed twice, every ruled fix in (rows 19, 20).
+Next: Phase 6, Ken's seven checks, run from this branch on Windows (the GPU and the real
+library). The branch is pushed only to `d46691d3`; Windows fetches it from the VM (remote
+`vm`), so nothing needs pushing for the checks. Landing follows them, by cherry-pick onto
+`dev` with the plan edits stripped; the open-issues commits (`d46691d3`, `9ec43f84`,
+`3eb7a18e`, `b3c5b28f`) are the plan-file commits that do land.**
+
 ## Goal
 
 A first-time download with a Genius lyric pick is timed from an LRCLIB record automatically
