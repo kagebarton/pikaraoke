@@ -27,7 +27,7 @@ Sources gathered on 2026-10-26:
   Fixed 2026-10-27, on `dev` as `640a661`, `dadecd0` (with review fixes
   `7b07fc8`, `f4aa97b`): the modal checks the caption before offering it, and a
   caption choice gets the after-download gate. Record:
-  `plans/search-caption-check.md` on branch `search_caption_check`.
+  `plans/search-caption-check.md` on tag `archive/search_caption_check`.
 
 ## Ruled: own branch or plan
 
@@ -416,7 +416,7 @@ script's rules and workflow are in `scripts/movie_split.md`, and this entry is t
 ## Web pages (pre-existing on `dev`)
 
 Found 2026-10-27 during the `queue_hold` manual checks on the Windows box.
-Record: `plans/queue-hold.md` on branch `queue_hold`, the manual checks row.
+Record: `plans/queue-hold.md` on tag `archive/queue_hold`, the manual checks row.
 
 - **Server messages never reach a screen.** `Karaoke.send_notification` emits
   the socket event `notification`, and its only listener was the browser splash
@@ -505,9 +505,8 @@ Independent of the phone order:
 - `refine_ablation` (origin only, `c713bec`): research; one open item, decision 3 (a coarser
   `precision`), unscheduled. Stays until that is run or dropped (its "Next step").
 
-To retire as archive tags (every code commit patch-equal to one on `dev`, checked
-2026-11-18; the rest only plan records): `movie_split` (origin only, `67248de`),
-`queue_hold` (`5b64e5e`), `search_caption_check` (`025b756`).
+Retired 2026-11-18 (every code commit patch-equal to one on `dev`; the rest only plan
+records): `archive/movie_split`, `archive/queue_hold`, `archive/search_caption_check`.
 
 Not ruled (Ken's calls):
 
