@@ -1754,3 +1754,51 @@ deviated from this plan and why.)
   only (a bad one would raise, which the route's check keeps out).
 - **Not done:** `graphify update .` (no `graphify-out/` on this box). Phase 5 (Ken's checks) not
   started.
+
+### Reconcile: commits cited on `dev` that are not on origin (2026-11-18, Claude Opus 5.5)
+
+Written on the Linux box, on top of origin's `13b96f2`. Phase 5 (the theme, L1/L6/L15/L16) is
+cited on `dev` as `fafc262`, but that commit is neither on origin nor on this box, so this
+entry may sit beside a Phase 5 it has not seen.
+
+- **Cited but missing here and on origin:** `singer_defaults` `fafc262`; `now_playing_remote`
+  `254bec0`; `browse_phone` `c49e3bb`, `8b0e06d`; `queue_phone` `09ea061`, `81f4de1`. Cited by
+  `dev`'s `plans/open-issues.md` (`721651d` "Ruled by Ken", `c5d519c` and `17ac3fc` "Landing
+  order", "Phone pages: one look").
+- **Not a rewrite:** no commit on any origin branch carries those four branches' L-rulings
+  (their plans on origin mention none). The other three branches the same session ruled have
+  theirs on origin (`download_modal_speed` `d3128ba`, `processing_phone` `f28d582`,
+  `search_official_captions` `5f1b446`). So the four were committed and not pushed.
+- **Where:** the citing commits were made 10:47-13:38 on 11-18, and the Linux box was off from
+  11-17 22:19 to 11-18 17:32 (`last -x reboot`); its `dev` reached `17ac3fc` only by a pull at
+  17:35. No Claude Code transcript here mentions `fafc262`, and no other clone of the repo is on
+  this box. The commits are on another machine, or were in a cloud session.
+- **To do there:** push the four branches. For this one, `git pull --rebase` first: this entry
+  and the review below only append to the Results log, so they should apply on top of
+  `fafc262` without touching Phase 5.
+
+### Review of Phase 4 (2026-11-18, Claude Opus 5.5)
+
+`/code-review da52af19^..3d52fc3d`, the 22 files of Phase 4, three finders (correctness: the
+style read at song start against the queue and rename paths; simplicity: the (i)-note move and
+duplicated style handling; robustness: stale or unknown styles, an old page across the
+upgrade). 9 findings; each checked against `3d52fc3` by hand. Dispositions are proposed, not
+ruled.
+
+| # | Finding | Checked | Proposed |
+|---|---|---|---|
+| 5 | A song started in `off` keeps a subtitle track mpv selected by itself: the first play passes `skip_remove=True`, so `_apply_subtitle_mode` sets no `sid="no"` and, with no file to add, nothing deselects. New with Phase 4 (before it, `off` at start meant no lyric files). | `Butter---WMweEpGlu_U.mp4` has an embedded `mov_text` track, `eng`, default flag; loaded in mpv 0.42 (`vo=null`) with no choice made, `sid` is 1, that track selected. 1 of 248 library videos has an embedded track. mpv's `sub-auto=exact` with an empty `sub-file-paths` never loads `karaoke/` or `subtitles/` files, so only an embedded track or a same-name file beside the video can do this. | Critical, fix now: set `sid="no"` on first play when the start mode has no file to add (the code's comment says `sid="no"` is safe with `lavfi-complex` active). A test, and a real play of Butter in `off`. |
+| 6 | `setSingerSubMode` (`spa-navigation.js`) copies `applySubModeToButtons` (`home.html`) under another attribute (`data-sub-mode` vs `data-mode`); both toggle `is-info`, which `.subtitle-mode-btn.is-selected`'s `!important` rules override. | Both functions read as stated; `is-info` sets nothing the selected rule leaves visible. | Worthwhile, with 7: own commit before Phase 5's code. `now_playing_remote` keeps the Lyrics row ("6. Lyrics: unchanged"), so the fold survives it. Needs Now Playing's unscoped `[data-mode=...]` lookups scoped first (Deviation 5). If deferred, at least drop the `is-info` toggles. |
+| 7 | Karaoke / Subtitles / Off and their MSG comments are written three times: the form (`base.html`), Now Playing (`home.html`), the TV message (`karaoke.py` `mode_labels`). | As stated. The two template copies can share a macro beside the notes in `singer_tips.html`; the Python copy cannot, and gettext merges the identical msgids for translators. | Worthwhile, with 6. |
+| 1 | `sub_mode` is required, so a page loaded before the upgrade posts without it and gets 422 on every Save. | Already an accepted edge: Accepted edges, "A page left open across an upgrade", (4). | Drop. |
+| 3 | A page that ran the old `library-pages.js` binds the (i) handlers again when it loads `info-tip.js`, so a tap opens and closes a note. | Same mechanism as 1 (SPA keeps files already loaded); a reload clears it. | Drop; name it in the accepted edge (below). |
+| 4 | The `--button-*` variables moved to `custom.css`; a page holding the old `custom.css` has none, so the lyric buttons lose their colours. | Same as 3. | Drop; name it in the accepted edge. |
+| 2 | `initial_sub_mode` raises `KeyError` on a style outside `SUB_MODES`, which would end the play loop. | Only the route (validated by `OneOf(SUB_MODES)`) and `house_defaults()` (`"karaoke"`) build `SingerSettings`; the registry is in memory. Unreachable. | Drop. |
+| 8 | The styles should be owned by `singers.py`, not `playback_controller.py`. | `SUB_MODES` is already the one list; the route and `/sub_mode` import it; the fallback table belongs to playback. No bug behind it (2 is unreachable). | Drop. |
+| 9 | The (i)-note `MutationObserver` runs on Now Playing, where socket pushes rewrite the page often. | It observes only while a note is open and disconnects when none is; the same code ran on Processing before. | Drop. |
+
+- **Accepted edge to extend** ("A page left open across an upgrade"): (4.1) the same holds for
+  a page that already loaded the old `library-pages.js` (the notes bind twice, a tap opens and
+  closes them) or the old `custom.css` (the lyric buttons have no colours). A reload clears both.
+- **`plans/open-issues.md` entries in these files that are now easy:** none.
+- **Not done:** no fixes; they wait for this branch to be reconciled with `fafc262`.
