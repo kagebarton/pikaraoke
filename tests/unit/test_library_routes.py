@@ -30,6 +30,7 @@ from pikaraoke.lib.genius import GeniusSong, GeniusUnavailable, read_choice
 from pikaraoke.lib.library_links import Playlist, PlaylistVideo
 from pikaraoke.lib.library_regen import CaptionCheck
 from pikaraoke.lib.library_tools import LibraryTools, LrcTimingCheck, MovieSliceCheck
+from pikaraoke.lib.lrc_auto_timing import ERROR, NO_PICK, NO_RECORDS, SEARCH_FAILED
 from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.srt_cues import cue_spans_from_srt, cues_to_srt
@@ -551,15 +552,15 @@ class TestSongInfoPage:
     @pytest.mark.parametrize(
         ("outcome", "line"),
         [
-            ("no_pick", "Checked at download: no LRCLIB record passed the timing check."),
-            ("no_records", "Checked at download: no LRCLIB record passed the timing check."),
+            (NO_PICK, "Checked at download: no LRCLIB record passed the timing check."),
+            (NO_RECORDS, "Checked at download: no LRCLIB record passed the timing check."),
             (
-                "search_failed",
+                SEARCH_FAILED,
                 "LRCLIB could not be checked at download. "
                 "Repair lyrics can time this song from LRCLIB by hand.",
             ),
             (
-                "error",
+                ERROR,
                 "LRCLIB could not be checked at download. "
                 "Repair lyrics can time this song from LRCLIB by hand.",
             ),
@@ -3440,6 +3441,11 @@ class TestLrclibSearchRoute:
         assert current["duration_diff_s"] == 97
         assert best["syncedLyrics"] == self.records[1]["syncedLyrics"]
 
+    def test_a_long_search_is_capped_before_it_is_sent(self, env, song):
+        self.search(env, song, q=" " + "x" * 500)
+
+        assert self.searches == ["x" * 200]
+
     def test_each_match_says_how_its_length_fits_the_video(self, env, song):
         no_length = lrclib_record(9, "Line one here")
         no_length["duration"] = None
@@ -3544,6 +3550,11 @@ class TestLrclibSearchCustomRoute:
         assert response.status_code == 400
         assert message in response.get_json()["error"]
         assert self.searches == []
+
+    def test_a_long_search_is_capped_before_it_is_sent(self, env, song):
+        self.search(env, song, q=" " + "x" * 500)
+
+        assert self.searches == ["x" * 200]
 
     def test_the_candidates_are_scored_against_the_posted_sheet(self, env, song):
         lrclib.write_lrc(lrclib.lrc_path(Path(song)), lrclib_record(5, "Line one here"))

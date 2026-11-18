@@ -133,7 +133,8 @@ RUN_LABELS = {"stale": "Update", "all": "Reprocess", "reset": "Reset"}
 # ``needs_pick``, ``caption`` and ``reuse`` (see :meth:`_Run.undecided_group`).
 _PICK_GROUPS = {"genius": "genius", "keep": "genius", "transcribe": "transcribe", "skip": "skip"}
 
-# A typed Genius title or artist is shown back on the pick page; this much is plenty.
+# A typed Genius title or artist is shown back on the pick page, and an LRCLIB search is
+# sent on; this much is plenty for either.
 _PICK_TEXT_MAX = 200
 
 # The longest custom lyric sheet a repair takes; a song's lyrics are a few thousand characters.
@@ -170,7 +171,8 @@ PLAYLIST_UNREADABLE = "Couldn't read that playlist."
 PLAYLIST_USER = "Playlist"
 
 
-def _pick_text(value: object) -> str:
+def pick_text(value: object) -> str:
+    """Text an admin typed, trimmed and capped; anything else counts as empty."""
     return value.strip()[:_PICK_TEXT_MAX] if isinstance(value, str) else ""
 
 
@@ -1198,7 +1200,7 @@ class LibraryTools:
             with self._state_lock:
                 self._playlist_ids.add(video_id)
             self._download_manager.queue_download(
-                url, enqueue=False, user=PLAYLIST_USER, title=_pick_text(video.get("title")) or None
+                url, enqueue=False, user=PLAYLIST_USER, title=pick_text(video.get("title")) or None
             )
             downloads += 1
         processing = listed = 0
@@ -1470,8 +1472,8 @@ class LibraryTools:
             return {
                 "kind": "genius",
                 "genius_id": genius_id,
-                "title": _pick_text(pick.get("title")),
-                "artist": _pick_text(pick.get("artist")),
+                "title": pick_text(pick.get("title")),
+                "artist": pick_text(pick.get("artist")),
             }
         raise RegenError("Unknown pick.")
 

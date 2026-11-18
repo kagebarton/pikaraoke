@@ -11,6 +11,7 @@ import flask_babel
 from flask import abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_smorest import Blueprint
 
+from pikaraoke.lib import lrc_auto_timing
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name, is_admin
 from pikaraoke.lib.genius import GeniusUnavailable
 from pikaraoke.lib.library_regen import (
@@ -34,9 +35,10 @@ from pikaraoke.lib.library_tools import (
     MovieSliceRefused,
     custom_sheet_lines,
     is_whole_number,
+    pick_text,
 )
 from pikaraoke.lib.lrclib import LrclibUnavailable
-from pikaraoke.lib.source_names import qualified_name
+from pikaraoke.lib.source_names import origin_names, qualified_name
 from pikaraoke.lib.srt_slice_fit import (
     DISAGREE,
     FITS,
@@ -137,12 +139,6 @@ def _int_arg(name: str) -> int | None:
         return None
 
 
-def _typed(body: dict, key: str) -> str:
-    """The text a JSON body holds under ``key``, trimmed; anything else counts as empty."""
-    value = body.get(key)
-    return value.strip() if isinstance(value, str) else ""
-
-
 def _mmss(seconds: float) -> str:
     whole = round(seconds)
     return f"{whole // 60}:{whole % 60:02d}"
@@ -205,31 +201,16 @@ def _source_name(status: SongStatus) -> str:
     )
 
 
-def _name_of_origin(origin: str | None) -> str | None:
-    """A lyrics ``origin`` in words, or None for one that names no source."""
-    if origin == "genius":
-        return _("Genius")
-    if origin == CUSTOM_ORIGIN:
-        return _("Custom lyrics")
-    if origin == MOVIE_ORIGIN:
-        return _("Movie subtitles")
-    if origin in LRC_ORIGINS:
-        return "LRCLIB"
-    if origin == "srt":
-        return _("YouTube captions")
-    return None
-
-
 def _sheet_source_name(sheet: WordSheet) -> str:
     """The source of the cue sheet an Edit words page shows, which a bundle may not agree with."""
     origin = SHEETS[sheet.kind].origin
     return qualified_name(
-        _name_of_origin(origin) or "—", auto=origin == LRC_AUTO_ORIGIN, edited=sheet.edited
+        origin_names().get(origin, "—"), auto=origin == LRC_AUTO_ORIGIN, edited=sheet.edited
     )
 
 
 def _origin_name(status: SongStatus) -> str:
-    name = _name_of_origin(status.origin)
+    name = origin_names().get(status.origin)
     if name:
         return name
     if status.category == "no_lyrics":
@@ -307,9 +288,9 @@ def _download_check_note(status: SongStatus) -> str | None:
     """The line under a song's LRCLIB pick when the download checked LRCLIB and timed the song
     another way: that no record passed, or that the check could not run."""
     outcome = (status.lrclib_auto or {}).get("outcome")
-    if outcome in ("no_pick", "no_records"):
+    if outcome in (lrc_auto_timing.NO_PICK, lrc_auto_timing.NO_RECORDS):
         return _("Checked at download: no LRCLIB record passed the timing check.")
-    if outcome in ("search_failed", "error"):
+    if outcome in (lrc_auto_timing.SEARCH_FAILED, lrc_auto_timing.ERROR):
         return _(
             "LRCLIB could not be checked at download. "
             "Repair lyrics can time this song from LRCLIB by hand."
@@ -720,7 +701,7 @@ def lrclib_search():
     genius_id = _int_arg("genius_id")
     if genius_id is None:
         return _error(_("Not a Genius song"), 400)
-    query = request.args.get("q", "").strip()
+    query = pick_text(request.args.get("q"))
     try:
         sheet = k.library_tools.genius_sheet_lines(genius_id)
     except GeniusUnavailable as e:
@@ -743,7 +724,7 @@ def lrclib_search_custom():
         sheet = custom_sheet_lines(body.get("text"))
     except RegenError as e:
         return _error(str(e), 400)
-    return _lrclib_results(song, sheet, _typed(body, "q"))
+    return _lrclib_results(song, sheet, pick_text(body.get("q")))
 
 
 def _hms(seconds: float) -> str:
