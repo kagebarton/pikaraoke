@@ -483,18 +483,63 @@ queues, dashed slots for a state.
   the chevron opens a menu on Browse and expands the row on Processing (Queue uses a
   gear); the 13 px sub-line grey `#b5bfc0` is not a `bulma-dark.css` token yet.
 
-Open for Ken, none ruled:
+Ruled by Ken, 2026-11-18. Not yet in any branch's plan or code; each item names the
+branch that owes it. The canvas is not updated for items 13-14 yet.
 
-1. One green everywhere? Recommended: `#2ecc71` only, meaning "tap to queue"; point
-   `--bulma-success` (and so `has-text-success`) at it in `bulma-dark.css`.
-2. How Now Playing and the guest form show a chosen option: if 1 holds, the chosen lyric
-   style and the knob go blue like the v2 toggles. Reopens `now_playing_remote` rulings
-   6 and 9.
-3. Search into the card style now (on `search_official_captions`) or later in its own
-   pass. It reverses part of its decision 8. The download dialog's controls (Search
-   button, list, input, no card) go with whichever pass Search gets.
-4. The download dialog's Queue: green like every other Queue, now on
-   `download_modal_speed` (one class), or left blue. Follows from 1's meaning for green.
+Colour meanings, every page:
+
+1. **One green, one amber.** `#2ecc71` means a tap that queues; `--bulma-success` (so
+   `has-text-success`) points at it in `bulma-dark.css`, and `--bulma-warning` at
+   `#f1b70e`. Singer names and Save use that green. Lands first, on whichever branch
+   touches `bulma-dark.css` next.
+2. **Blue `#375a7f` means chosen**, never an action: picked toggles, letters, chips,
+   the chosen lyric style, the slider knob and fill (knob text white), BRB when on.
+3. **Teal `#1abc9c` is for links and the current nav icon only.**
+4. **Other actions are neutral grey:** a `#343c3d` fill with a `#5e6d6f` border and bold
+   white text for a row's main action (Retry, Preview, Check playlist), an outline for
+   the rest (Song info, Repair). Red outline stays for delete.
+
+Per page:
+
+5. `now_playing_remote`: rulings 6 and 9 change. The transport stays grey, but not
+   because "green means chosen here"; the chosen lyric style, knob and fill are blue with
+   white text (ruling 9's `--bulma-success` goes). Song titles use `#f1b70e`. The spec's
+   mockup drew a grey nav bar; the app's blue bar stays. The near-black panel and 12-14 px
+   corners are not ruled.
+6. `singer_defaults`: the name leaves the burger menu for the nav bar on phones too: a
+   sliders icon (not a gear: Queue rows use a gear for options) and the name, white, in a
+   thin outlined pill, no chevron; it opens the guest form. Long names cut with an
+   ellipsis (about 70 px for the name on a 390 px phone). The nav icons narrow from 50 to
+   44 px to make room. The same icon replaces the mic beside the name on desktop. The
+   edit form's title becomes "Your singer settings"; the join form gains one line under
+   its controls: "Change these any time from [icon] <name> at the top of the page."
+7. `download_modal_speed`: the dialog's Queue is green (`is-success`), now, before Ken's
+   phone checks. Its button text stays "Queue" also when opened from "Download…" (13).
+8. `browse_phone`: the "Queue / processing" button is green, not info blue `#3298dc`.
+9. `queue_phone`: BRB is a grey button when off and blue when on (was teal).
+10. `processing_phone`: Repair is a grey outline; Retry, Preview, Check playlist are
+    neutral grey (4). Info blue stays only for the running-job spinner and step bar.
+11. `search_official_captions`: the card's "Queue…" is green, like every Queue.
+12. **Search's card restyle waits** (was call 3): its own pass after `queue_phone` lands
+    its shared stylesheet, taking the download dialog's controls (Search button, list,
+    input, no card) with it. Order: `queue_phone` lands, then the Search pass, which
+    carries 13. Partly reverses Search decision 8 (the light tint).
+13. **The In library note becomes a dark row** (option A), in the Search pass: `#282f2f`,
+    6 px corners, the Browse folder icon, "In library" over the file name, a full-size
+    green Queue. On a card with a library match, the card's own button reads
+    "Download…" in neutral grey, to steer guests to the copy they have; cards without a
+    match keep the green "Queue…".
+14. **Processing is the admin's only.** Its nav icon is hidden from guests (the page still
+    opens by its address, as with Now Playing's hidden controls), which frees an icon's
+    width for the name. Before it goes: a guest's own song that fails processing stays
+    on Queue as a red "failed" row with a short reason and Dismiss, until dismissed
+    (today queue hold removes it with a passing notice, `queue_hold.py:157`). No step
+    detail on Queue rows: Ken, guests prefer less information. Check that nothing a guest
+    sees links to Processing. `processing_phone`'s guest view is dropped. Owner branch
+    not chosen (`queue_phone` holds the failed row, `singer_defaults` or whichever
+    touches `base.html` the nav).
+
+Not ruled: the "Small gaps inside the v2 group" above (for Queue's shared stylesheet).
 
 ## Edit words (on `dev`)
 
