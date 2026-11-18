@@ -850,6 +850,7 @@ files, and one finder angle per Self-Review axis.
 | 2 `feat(search): the download dialog opens at once on the thumbnail and says what it waits for` | `8a7bcd8` | 3864 passed, 0 failed (+2 over commit 1: the card's length, the dialog's place) | pre-commit passed on the 3 files; import smoke ok; the rendered inline scripts parse (deno, `new Function`); ui-check at 390x844, nine trials of three runs, counts below; Ken's phone checks not done | Deviations from the spec, each small: `#lyrics-loading` and `CAPTION_NOTES.checking` are deleted here (commit 2 supersedes them) rather than in commit 3; a Play tap sets the breathing state whether the link is known or not, so the button breathes while the video buffers; the title and the line under it sit in a `#modal-video-head` wrapper; the page's outer `</div>` now closes after `{% endif %}` (before, it was inside the `{% if search_rows %}` block and unclosed on a page with no results); the download handlers take the id, title and watch link from the dialog's state instead of looking the card up. Typed (custom) searches keep latest-wins through `d.typedSeq`. Trial 5 run 1 failed on my check's lower bound (see below), not on the page |
 | 3 `feat(search): the dialog's lyric choice is one list of lyrics with an (i), and its button reads Queue` | `d332dda` | 3867 passed, 0 failed (+3 over commit 2: the `srt` route test, the `raw` refusal replacing the old `raw` test, and two render tests, net +3) | pre-commit passed on the 6 files; import smoke ok; the rendered inline scripts parse (deno); ui-check at 390x844, eight trials of three runs, counts below; one extra look, not counted: the (i) opens on top of the dialog with exactly the two lines for a sparse caption with Genius hits, inside the viewport. Not done: Ken's phone checks; the by-hand 403-link check from "Done when" (trial 4 of commit 2 used a link that answers 404, commit 1 measured the 403 link only on the server side) | Deviations and readings: Queue is the theme's primary blue (`--dark-primary` `#375a7f`, as the old Download button was); the mockup draws it teal `#00d1b2`. The list is 44 px (spec), the mockup's is 48. The search icon is `icon-search-1` (the font has no `icon-search`). The state's `titleAnswer` became `genius`, since a typed answer replaces the Genius group; a typed answer's preselect is forced to null on the page, whatever the server says. A `sent` flag keeps a late answer from relabelling Queue after a tap, and a dialog closed before `/lyrics_select` answers still sends its `/download` (id, link, title taken at the tap). "Preview unavailable" is markup, so it is not in the script's strings object. The translation catalogs are not regenerated, so every new string shows in English |
 | 3a `fix(search): the dialog's lyric list is 48 px tall, level with Queue` | `2aa02ae` | 3867 passed, 0 failed (unchanged) | pre-commit passed; import smoke ok; ui-check trial 7 now measures 48 px (wrapper and select), 3/3, and trials 2 and 3 rerun 3/3; the other trials were not rerun, since only the list's height changed | Decision 16 (Ken): the list stays at the mockup's 48 px. Done as a CSS custom property on the wrapper (`--bulma-control-height`), which the select inherits. Trial 7's raw line below is commit 3's run at 44 px, before this ruling |
+| 3b `fix(search): the dialog's Queue is green, like every Queue` | `def8493` | 3868 passed, 0 failed (+1: the render test that pins the button's markup and the two places the script sets the class) | pre-commit passed on the 2 files; ui-check at 390x844, three runs of seven checks, 21/21 on the third version of my check (raw below, with the two earlier reads that failed and why); Ken's phone checks not done | `search.html` only: the markup loses `is-primary`; `syncQueue()` and the `/lyrics_select` answer set `is-success` from the box beside the label (`toggleClass("is-success", queued)`). Ticked, the enabled button computes `#2ecc71`; unticked it has no colour class and reads "Add to library", `rgb(20, 22, 26)` until `singer_defaults` Phase 5 puts its `#434d4e` fill on `dev`. Disabled and after a tap the button takes Bulma's disabled look (`rgb(72, 199, 142)` ticked): decision 17 builds nothing for that, L16's look comes from `bulma-dark.css`. Side effect, not asked for: a failed `/lyrics_select` now shows its "!" red (`rgb(255, 102, 133)`) in both states; the old build's disabled `is-primary` beat `is-danger` and showed `rgb(62, 91, 122)`. Review line: `/code-review` now takes in 3a and 3b, range `9110167..def8493` |
 | manual checks (Ken) | | n/a | | |
 
 ### Commit 1 measurement (raw)
@@ -948,3 +949,32 @@ run each, not three; 390x844.
 | C, "wedding toast speech" → "The Wedding Toast" | captions view at 5.4 s (its caption passed the gate), so not a no-lyrics case |
 | D: Queue tapped on A's captions view | the button read "Queued"; the dialog had closed after the fade; `/get_queue` right after showed the entry `waiting: download` for the watch URL; the video downloaded into the launch's library; the lyric choice file held `{"yt_id": "dQw4w9WgXcQ", "mode": "srt"}`; after the fake job the entry read `waiting: processing` |
 | E: client setting pointed at `no_such_client` in the working tree (restored afterwards; `git status` clean, no `no_such_client` in the tree) | inconclusive, not a pass of the "Done when" item: card 0 was a different upload ("Official Animated Video") whose answer did not show the captions view, and Play started the video in headless Chromium, so no 403 was seen. The by-hand check with a refused link is still not done |
+
+### Commit 3b ui-check (raw)
+
+Script `ui_3b.py` in the session scratchpad, not committed. The worktree app on port 5871 (checked:
+the listener's `PYTHONPATH` was the worktree), `FAKE_JOB_S=5`; a real YouTube search ("adele hello")
+for the card; `/caption_check`, `/lyrics_search`, `/lyrics_select` and `/download` answered by the
+script, their bodies recorded. 390x844, a fresh browser context per scenario. Three runs of:
+
+| check | passes |
+| ----- | ------ |
+| ticked, caption passed (captions view): "Queue", classes `is-fullwidth is-success`, background `rgb(46, 204, 113)` (`#2ecc71`), enabled | 3/3 |
+| ticked, caption failed, Genius hit preselected (list view): the same | 3/3 |
+| unticked, captions view: "Add to library", classes `is-fullwidth` only, background `rgb(20, 22, 26)` | 3/3 |
+| unticked, list view with a pick: the same | 3/3 |
+| ticked tap: "Queued", `is-success` kept, disabled; `/download` body `queue: true` | 3/3 |
+| unticked tap: "Added", no `is-success`, `rgb(20, 22, 26)`; `/download` body `queue: false` | 3/3 |
+| list view, no pick: disabled either way; ticked keeps `is-success` (`rgb(72, 199, 142)`), unticked has none | 3/3 |
+
+Two earlier versions of the check failed on the ticked tap, and both were my check, not the page:
+the first read the colour while the button was still fading (`rgb(47, 204, 114)`, one unit off,
+run 1 only); the second waited 500 ms and read Bulma's disabled green, since the button is disabled
+the moment it is tapped, against a bound that wanted `#2ecc71`. The spec fixes `#2ecc71` for the
+enabled button only, so the third version checks the class, the label and the disabled state after
+a tap. All other checks passed on every version.
+
+Not counted, one look each: a failed `/lyrics_select` (500) settles on "!" with `is-danger` and
+background `rgb(255, 102, 133)` both ticked (beside `is-success`) and unticked; a disabled throwaway
+button with the old `is-primary is-danger` computed `rgb(62, 91, 122)` in the same page. The
+app was stopped afterwards; nothing listens on 5871.
