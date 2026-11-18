@@ -436,13 +436,14 @@ Record: `plans/queue-hold.md` on branch `queue_hold`, the manual checks row.
   2026-11-16 as `58ccd638` (landed from `genius_search_accuracy`, where Ken took it
   from the review triage): `downloadSong` reads `#add-to-queue-direct`.
 
-## Phone pages: one look (branches `browse_phone`, `queue_phone`, `processing_phone`, `search_official_captions`, `singer_defaults`, `now_playing_remote`)
+## Phone pages: one look (branches `browse_phone`, `queue_phone`, `processing_phone`, `search_official_captions`, `singer_defaults`, `now_playing_remote`, `download_modal_speed`)
 
-Style and palette review, 2026-11-18 (Opus), of the six branches' UI at `3b4d5cc`,
-`0417a8c`, `af9d11a`, `3968c1a`, `13b96f2`, `52a9ce7`. Canvas with every settled
+Style and palette review, 2026-11-18 (Opus), of the seven branches' UI at `3b4d5cc`,
+`0417a8c`, `af9d11a`, `3968c1a`, `13b96f2`, `52a9ce7`, `ce4fa69`. Canvas with every settled
 screen side by side, a palette board, and a drift note per row (private to Ken):
 https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL. Its screens are copies of the
-three agreed mockups, so those stay the record of each page's decisions.
+agreed mockups, so those stay the record of each page's decisions; the download dialog's
+are its mockup's (Bx2pwN8RgLPcFjN4hawcSQ) with Queue in the colour it was built in.
 
 The reference look is Queue v2 / Browse v2 / Processing draft 1: `bulma-dark.css`
 greys, a `#343c3d` card, 17/13 px two-line rows, a 44 px state slot, 40 px square
@@ -468,6 +469,14 @@ queues, dashed slots for a state.
   are `is-info is-light` pale-blue boxes, the only light surfaces in the app; a third
   blue (`#6cb8ea`) for the YouTube link and a grey `#a3b0b2` for the channel; titles
   16 px regular, not 17 px bold. Search plan decision 8 asked for the light tint.
+- **Download dialog as built on `download_modal_speed`:** its Queue button is the
+  chosen-blue `#375a7f` (`is-primary`, as the old Download button was; the mockup drew
+  it teal `#00d1b2`), while every other Queue, the in-library card's on the same page
+  included, is green `#2ecc71`. The rest is the Search page's Bulma look: an amber
+  Search button, a white list and input, 4 px corners, `#a3b0b2` for the channel line
+  and hints, no `#343c3d` card (the content sits on the dark backdrop). In the style:
+  the 48 px list with its teal arrow, the 17.6 px bold title, the shared (i), amber for
+  "No lyrics found" (a state, as on Processing).
 - **Small gaps inside the v2 group**, for Queue's shared stylesheet to settle when it
   lands: the slot is 52 px on Queue, 60 px on Browse and Processing; "processing" is a
   solid blue Queue button on Browse but a dashed grey slot on Queue and Processing;
@@ -482,9 +491,10 @@ Open for Ken, none ruled:
    style and the knob go blue like the v2 toggles. Reopens `now_playing_remote` rulings
    6 and 9.
 3. Search into the card style now (on `search_official_captions`) or later in its own
-   pass. It reverses part of its decision 8.
-
-Not reviewed: the dialog redesign on `download_modal_speed`.
+   pass. It reverses part of its decision 8. The download dialog's controls (Search
+   button, list, input, no card) go with whichever pass Search gets.
+4. The download dialog's Queue: green like every other Queue, now on
+   `download_modal_speed` (one class), or left blue. Follows from 1's meaning for green.
 
 ## Edit words (on `dev`)
 
