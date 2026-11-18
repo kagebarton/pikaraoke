@@ -98,6 +98,29 @@ class TestGetNowPlaying:
         assert result["is_paused"] is False
         assert result["volume"] == 0.7
 
+    def test_get_now_playing_splits_the_title_into_artist_and_song(self, mock_karaoke):
+        mock_karaoke.playback_controller.now_playing = "Queen - Bohemian Rhapsody"
+
+        result = mock_karaoke.get_now_playing()
+
+        assert result["now_playing"] == "Queen - Bohemian Rhapsody"
+        assert result["now_playing_artist"] == "Queen"
+        assert result["now_playing_song"] == "Bohemian Rhapsody"
+
+    def test_get_now_playing_title_without_a_split_is_all_song(self, mock_karaoke):
+        mock_karaoke.playback_controller.now_playing = "Bohemian Rhapsody"
+
+        result = mock_karaoke.get_now_playing()
+
+        assert result["now_playing_artist"] == ""
+        assert result["now_playing_song"] == "Bohemian Rhapsody"
+
+    def test_get_now_playing_idle_has_no_artist_or_song(self, mock_karaoke):
+        result = mock_karaoke.get_now_playing()
+
+        assert result["now_playing_artist"] is None
+        assert result["now_playing_song"] is None
+
     def test_get_now_playing_with_queue(self, mock_karaoke):
         """Test now playing shows up_next from queue."""
         mock_karaoke.queue_manager.enqueue("/songs/Next Song---dQw4w9WgXcQ.mp4", "NextUser")

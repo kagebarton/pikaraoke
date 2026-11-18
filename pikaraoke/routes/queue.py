@@ -16,6 +16,7 @@ from pikaraoke.lib.current_app import (
     get_site_name,
     is_admin,
 )
+from pikaraoke.lib.song_manager import split_title
 
 _ = flask_babel.gettext
 
@@ -68,9 +69,13 @@ def queue():
 
 @queue_bp.route("/get_queue")
 def get_queue():
-    """Get the current song queue."""
+    """Get the current song queue, each item with its title split into ``artist`` and ``song``."""
     k = get_karaoke_instance()
-    return json.dumps(k.queue_manager.queue)
+    items = []
+    for item in k.queue_manager.queue:
+        artist, song = split_title(item["title"])
+        items.append({**item, "artist": artist, "song": song})
+    return json.dumps(items)
 
 
 @queue_bp.route("/queue/addrandom/<int:amount>", methods=["GET"])

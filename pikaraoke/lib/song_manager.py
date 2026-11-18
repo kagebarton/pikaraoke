@@ -35,6 +35,19 @@ def sanitize_filename(name: str) -> str:
     return name.strip()
 
 
+def split_title(title: str) -> tuple[str, str]:
+    """Split a display title into ``(artist, song)`` at its first " - ".
+
+    A title with no " - ", or with an empty side, has no usable split and comes back
+    as ``("", title)``: a caller shows the whole title as the song.
+    """
+    artist, separator, song = title.partition(" - ")
+    artist, song = artist.strip(), song.strip()
+    if not separator or not artist or not song:
+        return "", title
+    return artist, song
+
+
 class SongManager:
     """Manages the song library and file operations.
 
