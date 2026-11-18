@@ -3923,6 +3923,18 @@ class TestOpenRunRoute:
         assert song["now"] == now
         assert song["group"] == "reuse"  # the sheet on disk wins a reset
 
+    def test_an_automatic_song_whose_sheet_is_gone_names_the_genius_song_keep_all_keeps(self, env):
+        bundle = caption_bundle()
+        bundle["lyrics"] = {"origin": "lrclib_auto_srt", "genius": GENIUS, "lines": ["one"]}
+        env.add_song("Mine---aaaaaaaaaaa.mp4", bundle)  # no .lrclib-auto.srt beside it
+        env.client.post("/library/run", json={"mode": "reset"})
+        finish_checks(env)
+
+        [song] = env.client.get("/library/run/status").get_json()["songs"]
+
+        assert song["now"] == "Now: Genius, Defying Gravity · Kristin Chenoweth"
+        assert song["group"] == "needs_pick" and song["genius_id"] == 7  # what Keep all keeps
+
     def test_the_reset_run_says_custom_lyrics_keep_theirs(self, env):
         env.add_song("Mine---aaaaaaaaaaa.mp4", custom_bundle())  # not custom by itself: no sheet
         env.client.post("/library/run", json={"mode": "reset"})
