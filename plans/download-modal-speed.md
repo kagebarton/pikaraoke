@@ -2,7 +2,8 @@
 
 Model: Claude Sonnet 5.5 executes the Spec section, commit by commit (spec by Claude Opus 5.5,
 2026-11-17; brief by Claude Fable 5.2, 2026-11-11; decisions 7-15 on the dialog's layout added
-by Claude Opus 5.5, 2026-11-17)
+by Claude Opus 5.5, 2026-11-17; decision 17 and commit 3b from the phone pages' style review,
+Claude Opus 5.5, 2026-11-18)
 
 Branch `download_modal_speed`, rebased onto `dev` at `764df44` on 2026-11-17 (first cut from
 `1016e20`), worktree
@@ -108,6 +109,25 @@ differ, the decisions win.
 16. **The dialog's lyric list is 48 px tall**, as the mockup draws it, level with Queue. Ken ruled
     this after commit 3 ran (2026-11-17); the Spec had said 44 px (commit 3 item 4 and ui-check
     item 7), and this decision wins where they differ.
+
+17. **The dialog's Queue is green** (`is-success`), now, before Ken's phone checks (Ken,
+    2026-11-18: L7 of the phone pages' style review, `plans/open-issues.md` on `dev`, "Phone
+    pages: one look"). Green means a tap that queues on every page (L1); the blue `#375a7f`
+    (`is-primary`) it was built in now means only a chosen option (L2). Its text stays "Queue"
+    also when the dialog opens from a card's "Download…" (`search_official_captions` Part 3,
+    L13). Commit 3b.
+
+    Visual reference: the canvas https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL (private to
+    Ken), boards "Dialog: caption found", "Dialog: Genius pick", "Dialog: search by name". For
+    colours it wins over the mockup; these decisions win over both. The rest of the dialog keeps
+    the Search page's Bulma look until Search's restyle pass (L12). The disabled Queue (decision
+    8) takes L16's look (no fill, a faded border, a `#8c9b9d` label, no opacity fade) from
+    `bulma-dark.css` once `singer_defaults` Phase 5 reaches `dev`; nothing to build here.
+
+    Unticked, the same button reads "Add to library", which does not queue: it is the raised
+    grey of every other action (Ken, 2026-11-18; L4, L15), a plain `.button` that takes the
+    `#434d4e` fill and `#5e6d6f` border from `bulma-dark.css` once `singer_defaults` Phase 5
+    reaches `dev`. So the button's colour follows the tick, as its label does.
 
 Stated to Ken as assumptions and not objected to (2026-11-17):
 
@@ -778,6 +798,23 @@ Decisions 7, 8 and 10-15; O4-O7, O16. Files: `search.html`, `pikaraoke/routes/se
        to library", "Added", `queue: false`;
     7. the list is 48 px tall (decision 16) and its arrow is Bulma's `::after`, with no `::before`.
 
+### Commit 3b: `fix(search): the dialog's Queue is green, like every Queue`
+
+Decision 17 (L7), added 2026-11-18 after the stop below; runs before Ken's phone checks.
+
+1. `search.html`: `#lyrics-queue-btn` is `is-success` while it reads "Queue" or "Queued", and a
+   plain `.button` (no colour class; `is-primary` goes) while it reads "Add to library" or
+   "Added". The class is set where the label is, from `queueAfterDownload()` on every render.
+   A render test that pins the class follows.
+2. ui-check at 390×844, three runs: ticked, the button's computed background is `#2ecc71` in
+   the captions view and in the list view with a pick, and it reads "Queue"; unticked, it has
+   no colour class and reads "Add to library". Its `#434d4e` fill shows only once
+   `singer_defaults` Phase 5 is on `dev`; say so in the Results row if it isn't yet.
+
+Then its Results row and stop again. If the review of commits 1-3 has not run yet, its line
+takes in 3a and 3b; if it has, 3b is a class set beside the label and the self-review covers
+it.
+
 ### Stop
 
 After commit 3 and its Results row. Don't push, land or retire anything. Report a Review-due
@@ -788,14 +825,14 @@ files, and one finder angle per Self-Review axis.
 ### Manual checks (Ken, on phones)
 
 - [ ] Each screen matches the mockup's lower row. Where they differ, the decisions win (the
-  card reads "Queue…", decision 15).
+  card reads "Queue…", decision 15; Queue is green, decision 17).
 - [ ] The list's arrow sits right on Android Chrome.
 - [ ] iPhone (Safari) and Android (Chrome): Play tapped before the wait ends starts the video
   once it ends; tapped after, it starts at once.
 - [ ] A video with a good manual caption: the captions screen after one wait. A video without:
   the Genius list the moment the wait ends.
-- [ ] "Add to queue after download" unticked: the dialog reads "Add to library", and the song
-  downloads without joining the queue.
+- [ ] "Add to queue after download" unticked: the dialog reads "Add to library" on a grey
+  button (decision 17), and the song downloads without joining the queue.
 
 ### At landing (not this run)
 
