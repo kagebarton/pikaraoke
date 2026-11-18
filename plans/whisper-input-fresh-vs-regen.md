@@ -447,3 +447,88 @@ comes after pass 1, so a new LRCLIB match does not touch the compared fields.
   repeat itself, and W1 and W2 each need a second run before they are read. W0's
   Kickapoo stem equal to `53e41e87...`: a Windows separation and encode repeat byte for
   byte.
+
+### Reading (Windows arms) (Claude Opus 5.5, 2026-11-18)
+
+Interpretation of rows 16-31 against the key above, kept apart from the log. Read from
+the bundles, run logs and `compare_win_out2.txt` on D:; nothing was listened to. "Linux
+library v12" is `$LV`'s copy at `D:\Shared\whisper_regen_linux\` (row 28); row 28 also
+confirms, after the fact, that W1 read the stem and v11 bytes the Linux regen read.
+
+**The four songs split (the key's third case)**
+
+| song | W1, Windows | Linux library v12 | the R14 lines follow |
+|---|---|---|---|
+| Kickapoo | L41-43 stacked at 230.62 | the same | the stem |
+| `1YiAzyCzZzw` | L57-60 stacked at 175.14 | the same | the stem |
+| `pXNd2V88d60` | L56-62 aligned, as Windows v11 | L56-62 stacked at 296.08 | the box |
+| `GI6CfKcMhjY` | no stack; L12 23.48 align, L62 168.64 transcribe | no stack; L12 23.48 align, L62 171.94 align | L12 the stem, L62 the box |
+
+- Kickapoo is the clean case. In the 2x2 the Windows-made stem stacks on both boxes and
+  the Linux-made stem on neither (rows 26, 31). With the same stem, W1 and Linux v12 agree
+  on every pass-1 line, no source differing (row 30).
+- `1YiAzyCzZzw` repeats that on the one stem tested: the same stacked lines, interp list
+  and discards; aligned words equal (rows 30, 31).
+- `pXNd2V88d60` splits. Same stem bytes, same code, and all three bundles discard L56-62
+  as out of order with the same far-early best candidates (row 31). Windows v11 and W1
+  then place them; Linux v12 does not, and interpolates all seven to one time. The aligned
+  words differ by up to 44 s between the boxes (row 30), so the aligner itself landed
+  differently, not only the choice made after it. Its other 16 shared starts are in every
+  bundle; only 56-62 are new.
+- `GI6CfKcMhjY` never stacked. Its line 12 move in R14 (ytasr 27.84 to align 23.48) comes
+  with the saved stem: W1 makes it too. Its line 62 move (168.64 to 171.94) is the Linux
+  box's: W1 keeps Windows v11's time.
+
+For the Windows full regen at the onset-loud-start landing:
+
+- It would stack Kickapoo and `1YiAzyCzZzw` as the Linux regen did. On Windows too both
+  stacks are new with the regen: the fresh-WAV Windows v11 has neither (rows 25, 26).
+- It would not stack `pXNd2V88d60`, which the Linux regen did. R14's Linux list does not
+  predict a Windows regen in either direction, so which songs a regen stacks cannot be
+  known before it runs. The regen guard (idea 6), or a fix for the two defects, comes
+  before that regen.
+
+**What W2, W0 and the decode check say about the box**
+
+- Decoded PCM is byte-equal across the two ffmpeg builds for all six stems (row 24), and
+  the VM's ffmpeg is the Linux box's build (row 29). Step 12's second command matches
+  stable-whisper's streaming loader as installed in the VM's `pik` env (stable-ts 2.19.1);
+  the loader installed on Windows and on the Linux box was not read, and Windows's can only
+  be read on Windows. With that caveat, whisper got identical samples on both boxes on the
+  saved-stem path, and ffmpeg is not part of the box difference. What is left is the rest
+  of the box: GPU, torch and CUDA (rows 19, 29), and any Python package that differs
+  between the Windows install and the Linux `pik` env. Nothing here separates those. The
+  fresh path's resample is not covered.
+- Each box repeats itself. W0's Kickapoo equals Windows v11 to 0.000 s on every compared
+  field, and its new stem is byte-equal to the library's (rows 23, 25); Linux did the same
+  in row 8. The box differences are fixed per box, not run-to-run noise, so W1 and W2 need
+  no second run. W0 covers the WAV path only; after the decode, the saved-stem path runs
+  the same code.
+- W2 on Here I Go equals Linux arm B: aligned words within 0.02 s, no pass-1 line moved,
+  no source changed (row 25). The box alone does not move a well-behaved song.
+- On some songs the box moves what whisper hears from identical samples: Kickapoo's
+  Linux-made stem, 42 of 458 heard words unmatched and 7 pass-1 lines moved through
+  transcribe-sourced lines (W2 vs arm B, row 25); `GI6CfKcMhjY`, 133 of 504 unmatched (row
+  30). On others it barely does: Kickapoo's Windows-made stem 0, `1YiAzyCzZzw` 7. Across
+  boxes the aligned words hold steadier than the heard ones, except where the aligner
+  collapses (`pXNd2V88d60`).
+
+**Against the 2026-11-16 reading**
+
+- "Ruled out for Kickapoo: the Linux box" still holds for Kickapoo, not in general:
+  `pXNd2V88d60` stacked on Linux and not on Windows from the same bytes.
+- "The Windows-made stem is the input that tipped it" holds for Kickapoo and
+  `1YiAzyCzZzw` on both boxes. On Windows as on Linux, the fresh WAV did not stack them
+  and the saved stem did, so a fresh add and a regen can disagree on either box.
+- The two defects (the aligner collapsing, interpolated lines sharing one timestamp) now
+  show on two songs on both boxes and on a third on one box.
+
+**Open, Ken's call (adds to the list above)**
+
+- The regen guard (or a defect fix) before the Windows landing regen. Recommended: this
+  is what the split says, since neither box's run predicts the other's.
+- The Linux library still holds R14's stacked v12 bundles for Kickapoo, `1YiAzyCzZzw` and
+  `pXNd2V88d60`; their v11 bundles are in `regen_backups/20261116T160237Z/`. A regen from
+  the same stems on either box would stack Kickapoo and `1YiAzyCzZzw` again.
+- Which part of the box moves `pXNd2V88d60` and `GI6CfKcMhjY` is unknown. Narrowing it
+  starts with the package versions read on Windows; not needed for the guard decision.
