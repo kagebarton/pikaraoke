@@ -687,6 +687,31 @@ class TestQueueManagerTogglePause:
         assert queue_manager.queue[0]["paused"] is True
         assert queue_manager.queue[1]["paused"] is False
 
+    def test_toggle_pause_user_ignores_a_failed_song_when_unpausing(self, queue_manager):
+        """A failed song cannot be paused, so it must not keep the rest from unpausing."""
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1", waiting="failed")
+        queue_manager.enqueue("/songs/song2---def.mp4", "User1")
+        queue_manager.queue[1]["paused"] = True
+
+        result = queue_manager.toggle_pause_user("User1")
+
+        assert result is True
+        assert [item["paused"] for item in queue_manager.queue] == [False, False]
+
+    def test_toggle_pause_user_never_pauses_a_failed_song(self, queue_manager):
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1", waiting="failed")
+        queue_manager.enqueue("/songs/song2---def.mp4", "User1")
+
+        queue_manager.toggle_pause_user("User1")
+
+        assert [item["paused"] for item in queue_manager.queue] == [False, True]
+
+    def test_toggle_pause_user_with_only_failed_songs_does_nothing(self, queue_manager):
+        queue_manager.enqueue("/songs/song1---abc.mp4", "User1", waiting="failed")
+
+        assert queue_manager.toggle_pause_user("User1") is False
+        assert queue_manager.queue[0]["paused"] is False
+
     def test_toggle_pause_user_returns_false_for_unknown_user(self, queue_manager):
         """toggle_pause_user returns False when the user has no queued songs."""
         result = queue_manager.toggle_pause_user("Ghost")
@@ -767,6 +792,7 @@ class TestQueueManagerHeldItems:
         assert QueueManager.is_playable({"paused": False, "waiting": None}) is True
         assert QueueManager.is_playable({"paused": True, "waiting": None}) is False
         assert QueueManager.is_playable({"paused": False, "waiting": "pick"}) is False
+        assert QueueManager.is_playable({"paused": False, "waiting": "failed"}) is False
         assert QueueManager.is_playable({"user": "U", "file": "f"}) is True
 
     def test_pop_next_skips_a_held_item_and_leaves_it(self, qm):
@@ -858,6 +884,21 @@ class TestQueueManagerHeldItems:
             "/songs/held-a---aaa.mp4",
             "/songs/c1---ddd.mp4",
         ]
+
+    def test_a_failed_item_never_plays_and_its_turn_goes_to_its_singers_next_ready_song(self, qm):
+        qm.enqueue("/songs/failed---fff.mp4", "User1", waiting="failed")
+        qm.enqueue("/songs/b1---bbb.mp4", "User2")
+        qm.enqueue("/songs/a2---aaa.mp4", "User1")
+
+        assert qm.pop_next()["file"] == "/songs/a2---aaa.mp4"
+        assert [item["file"] for item in qm.queue] == [
+            "/songs/b1---bbb.mp4",
+            "/songs/failed---fff.mp4",
+        ]
+        assert qm.pop_next()["file"] == "/songs/b1---bbb.mp4"
+        assert qm.pop_next() is None
+        assert [item["file"] for item in qm.queue] == ["/songs/failed---fff.mp4"]
+        assert qm.has_playable_song() is False
 
     def test_no_swap_for_another_singers_held_item(self, qm):
         qm.enqueue("/songs/held---hhh.mp4", "User2", waiting="processing")

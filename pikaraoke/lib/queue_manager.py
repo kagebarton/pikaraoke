@@ -126,8 +126,9 @@ class QueueManager:
         """Add a song to the queue. Returns [success, message].
 
         `waiting` holds the slot for a song that is not ready to play yet
-        ("download", "processing" or "pick"); see QueueHold. `title` overrides the
-        title derived from the path, for a held song whose path is still a URL.
+        ("download", "processing" or "pick"; QueueHold also sets "failed" on a song
+        whose processing failed); see QueueHold. `title` overrides the title
+        derived from the path, for a held song whose path is still a URL.
         """
         title = title or self._resolve_title(song_path)
 
@@ -274,7 +275,7 @@ class QueueManager:
 
     @staticmethod
     def is_playable(item: dict[str, Any]) -> bool:
-        """Neither paused by its singer nor held for download or processing."""
+        """Neither paused by its singer nor held (downloading, processing, a lyrics pick, failed)."""
         return not item.get("paused", False) and not item.get("waiting")
 
     @_locked
@@ -351,10 +352,13 @@ class QueueManager:
     def toggle_pause_user(self, user: str) -> bool:
         """Toggle pause on all queued songs for a user (step-away mode).
 
-        Pauses all if any are unpaused; unpauses all if all are paused.
-        Returns False if the user has no songs in the queue.
+        Pauses all if any are unpaused; unpauses all if all are paused. A failed
+        song is left out of both: it never plays, so pausing it means nothing.
+        Returns False if the user has no such songs in the queue.
         """
-        user_items = [item for item in self.queue if item["user"] == user]
+        user_items = [
+            item for item in self.queue if item["user"] == user and item.get("waiting") != "failed"
+        ]
         if not user_items:
             logging.error(f"No queued songs found for user: {user}")
             return False

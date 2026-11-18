@@ -207,21 +207,25 @@ class TestProcessingEvents:
 
         assert queue_manager.queue[0]["waiting"] is None
 
-    def test_processing_error_removes_the_item_and_tells_the_singer(
-        self, hold, queue_manager, events, toasts
+    def test_processing_error_keeps_the_item_as_failed_and_tells_the_singer(
+        self, hold, queue_manager, events, toasts, queue_events
     ):
-        hold_item(queue_manager, "processing")
+        item = hold_item(queue_manager, "processing")
+        del queue_events[:]
 
         events.emit("processing_error", {"song_path": SONG, "error": "boom"})
 
-        assert queue_manager.queue == []
-        assert toasts == [("New Song couldn't be processed and was taken off the queue", "danger")]
+        assert queue_manager.queue == [item]
+        assert item["waiting"] == "failed"
+        assert queue_events == ["queue_update", "now_playing_update"]
+        assert toasts == [("New Song couldn't be processed", "danger")]
 
     @pytest.mark.parametrize("event", ["processing_cancelled", "song_deleted"])
+    @pytest.mark.parametrize("waiting", ["processing", "failed"])
     def test_cancel_and_delete_remove_the_item_quietly(
-        self, event, hold, queue_manager, events, toasts
+        self, event, waiting, hold, queue_manager, events, toasts
     ):
-        hold_item(queue_manager, "processing")
+        hold_item(queue_manager, waiting)
 
         events.emit(event, SONG)
 
@@ -236,6 +240,65 @@ class TestProcessingEvents:
 
         assert queue_manager.queue == [item]
         assert item["waiting"] == "processing"
+
+
+class TestFailedItem:
+    """A song that fails processing keeps its slot; a retry or the song's end settles it."""
+
+    @pytest.fixture
+    def failed(self, hold, queue_manager, events, toasts):
+        """Three songs queued, the middle one failed; returns the three items."""
+        queue_manager.enqueue("/songs/First---aaa11111111.mp4", "Bob", log_action=False)
+        item = hold_item(queue_manager, "processing")
+        queue_manager.enqueue("/songs/Last---ccc11111111.mp4", "Cy", log_action=False)
+        events.emit("processing_error", {"song_path": SONG, "error": "boom"})
+        del toasts[:]
+        return list(queue_manager.queue), item
+
+    def test_a_retry_that_works_brings_the_row_back_in_its_place(
+        self, failed, queue_manager, events
+    ):
+        items, item = failed
+
+        events.emit("processing_queued", SONG)
+        assert item["waiting"] == "processing"
+
+        events.emit("processing_complete", {"song_path": SONG, "lyric_method": None})
+        assert item["waiting"] is None
+        assert queue_manager.queue == items
+        assert queue_manager.queue[1] is item
+
+    def test_a_retry_that_fails_again_says_so_again(self, failed, queue_manager, events, toasts):
+        _, item = failed
+
+        events.emit("processing_queued", SONG)
+        events.emit("processing_error", {"song_path": SONG, "error": "boom again"})
+
+        assert item["waiting"] == "failed"
+        assert toasts == [("New Song couldn't be processed", "danger")]
+
+    def test_a_skipped_job_makes_it_ready(self, failed, events):
+        _, item = failed
+
+        events.emit("processing_skipped", SONG)
+
+        assert item["waiting"] is None
+
+    def test_a_lyrics_pick_turns_it_to_waiting_for_lyrics(self, failed, events):
+        _, item = failed
+
+        events.emit("needs_pick", SONG)
+
+        assert item["waiting"] == "pick"
+
+    def test_a_second_error_event_changes_nothing(self, failed, events, toasts, queue_events):
+        """A failed row gets one notice even if the same failure is reported twice."""
+        del queue_events[:]
+
+        events.emit("processing_error", {"song_path": SONG, "error": "boom"})
+
+        assert toasts == []
+        assert queue_events == []
 
 
 class TestReadyItemsAreNeverTouched:
@@ -282,16 +345,30 @@ class TestSettle:
         assert item["waiting"] is None
         song_manager.get_pipeline_state.assert_called_once_with(SONG)
 
-    def test_a_song_that_failed_meanwhile_is_removed_with_a_danger_toast(
+    def test_a_song_that_failed_meanwhile_leaves_a_failed_row_and_a_danger_toast(
         self, hold, queue_manager, song_manager, toasts
     ):
-        hold_item(queue_manager, "processing")
+        item = hold_item(queue_manager, "processing")
         song_manager.get_pipeline_state.return_value = "failed"
 
         hold.settle(SONG)
 
-        assert queue_manager.queue == []
-        assert toasts == [("New Song couldn't be processed and was taken off the queue", "danger")]
+        assert queue_manager.queue == [item]
+        assert item["waiting"] == "failed"
+        assert toasts == [("New Song couldn't be processed", "danger")]
+
+    def test_a_failure_the_event_already_reported_is_not_reported_twice(
+        self, hold, queue_manager, events, song_manager, toasts
+    ):
+        """The event can land between the Add's enqueue and its settle."""
+        item = hold_item(queue_manager, "processing")
+        events.emit("processing_error", {"song_path": SONG, "error": "boom"})
+        song_manager.get_pipeline_state.return_value = "failed"
+
+        hold.settle(SONG)
+
+        assert item["waiting"] == "failed"
+        assert toasts == [("New Song couldn't be processed", "danger")]
 
     def test_a_song_still_pending_stays_held(self, hold, queue_manager, song_manager, toasts):
         item = hold_item(queue_manager, "processing")
