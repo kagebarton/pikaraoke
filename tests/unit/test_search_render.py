@@ -438,12 +438,12 @@ def test_card_offers_queue_only_for_a_library_copy_and_queue_dots_for_the_dialog
 
     library_card, other_card = re.findall(r"<li data-ytID=.*?</li>", body, re.S)
     assert f'data-file-path="{_MIRRORS}"' in library_card
-    assert re.search(r'search_result_items_enqueue">Queue</button>', library_card)
+    assert re.search(r'is-success search_result_items_enqueue">Queue</button>', library_card)
     assert "search_result_items_select" not in library_card
     assert "8:04" in library_card
     assert "JT Channel" in library_card
     assert "data-file-path" not in other_card
-    assert re.search(r'search_result_items_select">Queue…</button>', other_card)
+    assert re.search(r'is-success search_result_items_select">Queue…</button>', other_card)
     assert "search_result_items_enqueue" not in other_card
     assert "duration-badge" not in other_card  # no duration, no badge
     assert "has-text-grey" not in other_card  # no channel, no channel line
