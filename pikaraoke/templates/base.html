@@ -1,4 +1,9 @@
 {% from 'singer_tips.html' import lyric_style_buttons, lyrics_tip, original_vocals_tip -%}
+{# The singer settings icon, in the navbar name and in the join form's line. The icon font has no
+   sliders glyph, so it is drawn here. #}
+{% macro sliders_icon() -%}
+<svg class="sliders-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h9M18 6h3M3 12h3M12 12h9M3 18h11M20 18h1"/><circle cx="15" cy="6" r="2.5"/><circle cx="9" cy="12" r="2.5"/><circle cx="17" cy="18" r="2.5"/></svg>
+{%- endmacro %}
 <!DOCTYPE html>
 <html data-theme="dark">
 
@@ -156,6 +161,56 @@
   .navbar-item > i {
     margin-right: 2px;
   }
+  /* The guest's name: a thin outlined pill in the navbar, outside the burger menu. Not a
+     .navbar-item, so Bulma's hover colour and the link colour stay off it. */
+  .singer-pill,
+  .singer-pill:hover {
+    color: var(--dark-text-primary);
+  }
+  .singer-pill {
+    display: flex;
+    align-items: center;
+    align-self: center;
+    gap: 4px;
+    /* Lets a long name give way to the icons and the burger instead of pushing them off */
+    min-width: 0;
+    margin: 0 2px;
+    padding: 3px 7px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 999px;
+    font-size: 0.9rem;
+  }
+  .singer-pill > span {
+    min-width: 0;
+    max-width: 70px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sliders-icon {
+    flex: none;
+    width: 1.2em;
+    height: 1.2em;
+  }
+  .help .sliders-icon {
+    vertical-align: -0.3em;
+  }
+  /* At desktop width the menu sits beside the icons, not behind the burger: the name stays at the
+     right, beside the Pikaraoke link, where it was before it moved into the brand. */
+  @media screen and (min-width: 1024px) {
+    .navbar-brand {
+      flex-grow: 1;
+    }
+    .navbar-menu {
+      flex-grow: 0;
+    }
+    .singer-pill {
+      margin-left: auto;
+    }
+    .singer-pill > span {
+      max-width: 12rem;
+    }
+  }
   .base-notification {
     position: fixed;
     width: 500px;
@@ -176,6 +231,11 @@
   @media screen and (max-width: 1088px) {
     .navbar-brand > .navbar-item > span {
       display: none;
+    }
+    /* Narrower than Bulma's 12px, to leave room for the name */
+    .navbar-brand > .navbar-item {
+      padding-left: 9px;
+      padding-right: 9px;
     }
     .base-notification {
       position: fixed;
@@ -228,6 +288,12 @@
           <span>{% trans %}Processing{% endtrans %}</span>
         </a>
 
+        {# The guest's name, filled in by spa-navigation.js; a tap opens the singer settings. #}
+        <a id="current-user" class="singer-pill is-hidden" href="#">
+          {{ sliders_icon() }}
+          <span></span>
+        </a>
+
         <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false">
           <span aria-hidden="true"></span>
           <span aria-hidden="true"></span>
@@ -236,10 +302,6 @@
       </div>
       <div class="navbar-menu" id="menu">
         <div class="navbar-end">
-          <a id="current-user" class="navbar-item is-hidden" href="#">
-            <i class="icon  icon-mic-1" title="Current user"></i>
-            <span></span>
-          </a>
           <a id="info" class="navbar-item" href="{{ url_for('info.info') }}">
             <i class="icon icon-info-circled-1" title="Info"></i>
             <span>Pikaraoke</span>&nbsp;&nbsp;
@@ -285,8 +347,8 @@
         <p class="modal-card-title is-size-5">
           {# MSG: Title of the form a guest fills in the first time they open the app #}
           <span class="singer-join-only">{% trans %}Join the party{% endtrans %}</span>
-          {# MSG: Title of the form a guest opens by clicking their name, to change their name, original vocals level, key and lyric style #}
-          <span class="singer-edit-only">{% trans %}Your name and settings{% endtrans %}</span>
+          {# MSG: Title of the form a guest opens by tapping their name at the top of the page, to change their name, original vocals level, key and lyric style #}
+          <span class="singer-edit-only">{% trans %}Your singer settings{% endtrans %}</span>
         </p>
       </header>
       <section class="modal-card-body">
@@ -335,6 +397,9 @@
           </div>
           <input type="hidden" id="singer-sub-mode">
         </div>
+
+        {# MSG: Line at the bottom of the first-visit form. It says where a guest changes these settings later: the icon stands for the button with their name at the top of the page #}
+        <p class="help singer-join-only">{% trans icon=sliders_icon() %}Change these any time from {{ icon }} your name at the top of the page.{% endtrans %}</p>
       </section>
       <footer class="modal-card-foot" style="padding: 15px;">
         <button type="submit" class="button is-success" id="singer-save" style="margin-right: 8px">{% trans %}Save{% endtrans %}</button>

@@ -239,7 +239,7 @@
 
         $(document).on('click.singer', '#current-user', function(e) {
             e.preventDefault();
-            // The name sits in the burger menu on a phone; don't leave it open behind the form
+            // Don't leave the burger menu open behind the form
             closeBurgerMenu();
             // Remove focus from the link to prevent CSS focus styling (black background)
             $(this).blur();
