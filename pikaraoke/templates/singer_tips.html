@@ -1,5 +1,5 @@
-{# The (i) notes of the guest form (base.html) and Now Playing (home.html), written once so the
-   two always say the same thing. #}
+{# The (i) notes and lyric buttons of the guest form (base.html) and Now Playing (home.html),
+   written once so the two always say the same thing. #}
 {% from 'info_tip.html' import info_tip %}
 
 {% macro original_vocals_tip() -%}
@@ -10,4 +10,19 @@
 {% macro lyrics_tip() -%}
 {# MSG: Note beside "Lyrics", the choice between Karaoke, Subtitles and Off (the guest form and Now Playing) #}
 {% call info_tip() %}{% trans %}Karaoke highlights each word as it's sung. Subtitles shows whole lines.{% endtrans %}{% endcall %}
+{%- endmacro %}
+
+{# The three lyric styles. `onclick` names a page function called with the style; without it the
+   page binds the clicks itself. markSubModeButtons (spa-navigation.js) shows the chosen one. #}
+{% macro lyric_style_buttons(onclick=None) -%}
+{%- macro _btn(mode, label) -%}
+<button type="button" class="button subtitle-mode-btn" data-sub-mode="{{ mode }}"
+  {%- if onclick %} onclick="{{ onclick }}('{{ mode }}')"{% endif %}>{{ label }}</button>
+{%- endmacro -%}
+{# MSG: Lyric style where each word lights up as it is sung #}
+{{ _btn("karaoke", _("Karaoke")) }}
+{# MSG: Lyric style that shows the song's words a whole line at a time #}
+{{ _btn("srt", _("Subtitles")) }}
+{# MSG: Lyric style that shows no words #}
+{{ _btn("off", _("Off")) }}
 {%- endmacro %}

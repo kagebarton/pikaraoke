@@ -94,13 +94,18 @@
         $('#singer-key-label').text(getSemitonesLabel(key));
     }
 
+    /** Show `mode` as the chosen lyric style among the buttons under `scope`. */
+    function markSubModeButtons(scope, mode) {
+        $(scope).find('[data-sub-mode]').each(function() {
+            $(this).toggleClass('is-selected', $(this).attr('data-sub-mode') === mode);
+        });
+    }
+    window.markSubModeButtons = markSubModeButtons;
+
     /** Mark `mode` ('karaoke', 'srt' or 'off') as the form's lyric style. */
     function setSingerSubMode(mode) {
         $('#singer-sub-mode').val(mode);
-        $('#singer-modal [data-sub-mode]').each(function() {
-            const selected = $(this).attr('data-sub-mode') === mode;
-            $(this).toggleClass('is-info', selected).toggleClass('is-selected', selected);
-        });
+        markSubModeButtons('#singer-modal', mode);
     }
 
     /**
