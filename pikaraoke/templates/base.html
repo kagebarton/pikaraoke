@@ -98,8 +98,10 @@
     $(function () {
       connectSocket();
 
-      $("#notification-close").click(function () {
-        $(".notification").hide();
+      // The flash and the toast share one close-button ID, so bind by class. Hide only the
+      // button's own box: pages style their notes as notifications too.
+      $(".base-notification .delete").click(function () {
+        $(this).closest(".notification").hide();
       });
       $("#notification-alt").hide()
 

@@ -123,9 +123,34 @@ def test_the_saved_search_term_is_a_script_string_of_the_query(mock_get, _site, 
 
     body = client.get(f"/search?search_string={quote(query)}").get_data(as_text=True)
 
-    saved = re.search(r'setItem\("pikaraoke_search_term", (.*)\);', body).group(1)
+    saved = _script_search_string(body)
     assert json.loads(saved) == query
     assert "</script>" not in saved
+
+
+def _script_search_string(body: str) -> str:
+    return re.search(r"const searchString = (.*);", body).group(1)
+
+
+@pytest.mark.parametrize(
+    "url, script_value",
+    [("/search", "null"), ("/search?search_string=xqzzv", '"xqzzv"')],
+    ids=["bare visit restores", "search with no results replaces"],
+)
+@patch("pikaraoke.routes.search.get_search_results", return_value=[])
+@patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_only_a_visit_without_a_query_restores_the_saved_cards(
+    mock_get, _site, _results, client, url, script_value
+):
+    """A search that found nothing still tells the script a query was submitted, so it does not
+    put back the previous search's cards and term (the page has no results block either way)."""
+    mock_get.return_value = _mock_karaoke()
+
+    body = client.get(url).get_data(as_text=True)
+
+    assert 'id="container_search_result"' not in body
+    assert _script_search_string(body) == script_value
 
 
 @patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
@@ -369,6 +394,17 @@ def test_a_library_copy_is_noted_inside_the_card_it_matched(mock_get, client):
     assert f'library-copy-enqueue" data-file-path="{_ZAYN_WNW}"' in wnw
     assert "Mirrors" not in body
     assert "Already in the library" not in body
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_noted_file_name_is_escaped_inside_the_translated_line(mock_get, client):
+    path = "/songs/Mena Massoud & Naomi <Scott> - A Whole New World---mmmmmmmmmmm.mp4"
+
+    body = _search_body(
+        client, mock_get, [_result(_WNW_LYRICS, "aaaaaaaaaaa")], _karaoke_with_library([path])
+    )
+
+    assert "In library: <strong>Mena Massoud &amp; Naomi &lt;Scott&gt; - A Whole New World" in body
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
