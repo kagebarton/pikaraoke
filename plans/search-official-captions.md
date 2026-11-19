@@ -724,6 +724,14 @@ Advanced open", and the download dialog's three boards.
   `#434d4e` from L15), to steer guests to the copy they have; cards without a match keep the
   green "Queue…" (L11). The dialog's button still reads "Queue" when opened from "Download…"
   (`download_modal_speed`, L7).
+- **In-library songs need a more obvious highlight** (Ken, 2026-11-19, after the Part 2
+  phone checks). Two cases, and L13 covers only the second: (a) a card that is itself in the
+  library (`row.existing_path`) is first on the page and its button is the green Queue, but
+  nothing else sets it apart from a `Queue…` card, so with "backstreet boys drowning" the
+  owned official video reads as just another result; (b) the "In library" note, which L13
+  already turns into a dark row with the folder icon. For the spec: decide what marks (a)
+  (an In library tag beside the Official tag, the same dark row, or a tinted card) and
+  keep (a) and (b) one look. Not ruled.
 - L1 (one green, one amber), L15 and L16 (disabled: no fill, a faded border, a `#8c9b9d`
   label, no opacity fade) come from `bulma-dark.css` on `singer_defaults` (its Phase 5), via
   `dev`. The canvas draws Advanced's disabled Download in L16's look.
