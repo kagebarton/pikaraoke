@@ -388,6 +388,13 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
   asks the person to choose, with the year and artist shown. Shipped as it is (Ken,
   2026-11-16): no order tried fixes one film title without breaking another. Record:
   as above.
+- **The dialog's caption check reads the preview link's client** (branch
+  `download_modal_speed`). One lookup asks `tv_simply,default` for both the link and the
+  caption, while a download asks yt-dlp's default clients. If they list different manual
+  English tracks, the dialog offers YouTube captions from one track and the download saves
+  another, or none (then it transcribes). Five videos agreed when it was built; nothing
+  enforces it. Closing it costs the second call the branch removed. Found in the
+  `/code-review` of `9110167..def8493`, 2026-11-19 (Results log on that branch). Not ruled.
 
 ## Movie splits (on `dev`)
 
