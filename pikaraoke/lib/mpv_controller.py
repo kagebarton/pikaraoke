@@ -549,11 +549,11 @@ class MpvController:
 
         Args:
             mode: One of 'karaoke', 'srt', 'off'.
-            skip_remove: When True, skip the sub_remove() call. Used on
-                initial play where mpv may have auto-loaded a matching subtitle;
-                calling sub-remove on that auto-loaded track while lavfi-complex
-                is active triggers a libmpv segfault. sub_add(..., "select")
-                alone correctly replaces the active subtitle without the crash.
+            skip_remove: When True, keep mpv's current track until a new one
+                is added. Used on initial play, where sub_add(..., "select")
+                replaces whatever mpv picked by itself. With no file to add,
+                the track is deselected anyway: mpv selects a video's embedded
+                track on its own, which would show in any mode.
             subtitle_delay: Delay to apply when mode is 'srt'. Ignored for
                 other modes (delay is reset to 0.0).
         """
@@ -565,11 +565,12 @@ class MpvController:
         elif mode == "srt":
             path = self._available_subs.get("srt")
 
-        if not skip_remove:
+        has_file = bool(path and os.path.exists(path))
+        if not skip_remove or not has_file:
             # sid="no" is safe with lavfi-complex active; sub-remove segfaults libmpv.
             self._player.sid = "no"
 
-        if path and os.path.exists(path):
+        if has_file:
             self._player.sub_add(path, "select")
             if mode == "srt":
                 self.apply_srt_style()

@@ -321,3 +321,29 @@ def test_get_system_volume_wpctl_unmuted_parses_percentage(controller, monkeypat
     controller._audio_backend = "wpctl"
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(stdout="Volume: 0.65"))
     assert controller.get_system_volume() == 65
+
+
+# ── play(): initial subtitle selection (Phase 4 review, finding 5) ───────────
+
+
+def test_play_off_deselects_track_mpv_picked_itself(ready_controller):
+    # A video's embedded subtitle track is auto-selected by mpv; "off" must clear it.
+    ready_controller._player.sid = 1
+    ready_controller.play("/tmp/song.mp4", initial_sub_mode="off")
+    assert ready_controller._player.sid == "no"
+    ready_controller._player.sub_add.assert_not_called()
+
+
+def test_play_karaoke_without_file_deselects_track(ready_controller):
+    ready_controller._player.sid = 1
+    ready_controller.play("/tmp/song.mp4", initial_sub_mode="karaoke", ass_path=None)
+    assert ready_controller._player.sid == "no"
+
+
+def test_play_karaoke_with_file_selects_it_without_clearing_first(ready_controller, tmp_path):
+    ass = tmp_path / "song.ass"
+    ass.write_text("[Script Info]\n")
+    ready_controller._player.sid = 1
+    ready_controller.play("/tmp/song.mp4", initial_sub_mode="karaoke", ass_path=str(ass))
+    ready_controller._player.sub_add.assert_called_once_with(str(ass), "select")
+    assert ready_controller._player.sid == 1  # sub_add replaces the pick; no sid write
