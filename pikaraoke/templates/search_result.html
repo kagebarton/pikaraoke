@@ -24,7 +24,8 @@
 		</div>
 		{% for path in row.library_copies %}
 		<div class="notification is-info is-light library-copy">
-			<span>In library: <strong>{{ filename_from_path(path) }}</strong></span>
+			{# MSG: Note on a search result card naming a song already in the library that looks like this result. NAME is the song's file name. #}
+			<span>{% trans name=filename_from_path(path) %}In library: <strong>{{ name }}</strong>{% endtrans %}</span>
 			<button class="button is-success is-small library-copy-enqueue" data-file-path="{{ path }}">{% trans %}Queue{% endtrans %}</button>
 		</div>
 		{% endfor %}
