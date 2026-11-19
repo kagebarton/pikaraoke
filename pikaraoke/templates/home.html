@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'singer_tips.html' import lyrics_tip, original_vocals_tip %}
+{% from 'singer_tips.html' import lyric_style_buttons, lyrics_tip, original_vocals_tip %}
 
 {# ── Control Box Configuration ──────────────────────────────────────── #}
 {% block styles %}
@@ -77,15 +77,8 @@ function formatSubtitleDelay(value) {
 function setSubMode(mode) {
   debounceStep(() => $.get("/sub_mode/" + mode), '_submode');
   // optimistic UI — server pushes confirmation via socket
-  applySubModeToButtons(mode);
+  markSubModeButtons("#subtitle-mode-section", mode);
   $("#subtitle-delay-section").toggle(mode === "srt");
-}
-
-function applySubModeToButtons(mode) {
-  document.querySelectorAll("#subtitle-mode-section [data-mode]").forEach(b => {
-    b.classList.toggle("is-info", b.dataset.mode === mode);
-    b.classList.toggle("is-selected", b.dataset.mode === mode);
-  });
 }
 
 // Format seconds as m:ss
@@ -164,11 +157,9 @@ function handleNowPlaying(np) {
   // Subtitle mode section
   if (np.subs_available && (np.subs_available.ass || np.subs_available.srt)) {
     $("#subtitle-mode-section").show();
-    var karaokeBtn = document.querySelector("[data-mode='karaoke']");
-    var srtBtn = document.querySelector("[data-mode='srt']");
-    if (karaokeBtn) karaokeBtn.disabled = !np.subs_available.ass;
-    if (srtBtn) srtBtn.disabled = !np.subs_available.srt;
-    if (np.sub_mode) applySubModeToButtons(np.sub_mode);
+    $("#subtitle-mode-section [data-sub-mode='karaoke']").prop("disabled", !np.subs_available.ass);
+    $("#subtitle-mode-section [data-sub-mode='srt']").prop("disabled", !np.subs_available.srt);
+    if (np.sub_mode) markSubModeButtons("#subtitle-mode-section", np.sub_mode);
     $("#subtitle-delay-section").toggle(np.sub_mode === "srt");
   } else {
     $("#subtitle-mode-section").hide();
@@ -487,15 +478,7 @@ $(function () {
       </div>
     </div>
     <div class="buttons has-addons is-fullwidth" style="margin-bottom: 0.5rem">
-      {# MSG: Lyric style where each word lights up as it is sung #}
-      <button class="button subtitle-mode-btn" data-mode="karaoke"
-        onclick="setSubMode('karaoke')">{% trans %}Karaoke{% endtrans %}</button>
-      {# MSG: Lyric style that shows the song's words a whole line at a time #}
-      <button class="button subtitle-mode-btn" data-mode="srt"
-        onclick="setSubMode('srt')">{% trans %}Subtitles{% endtrans %}</button>
-      {# MSG: Lyric style that shows no words #}
-      <button class="button subtitle-mode-btn is-selected" data-mode="off"
-        onclick="setSubMode('off')">{% trans %}Off{% endtrans %}</button>
+      {{ lyric_style_buttons(onclick="setSubMode") }}
     </div>
     <hr />
   </div>

@@ -1,4 +1,4 @@
-{% from 'singer_tips.html' import lyrics_tip, original_vocals_tip -%}
+{% from 'singer_tips.html' import lyric_style_buttons, lyrics_tip, original_vocals_tip -%}
 <!DOCTYPE html>
 <html data-theme="dark">
 
@@ -331,12 +331,7 @@
             <span class="label" style="display: inline">{% trans %}Lyrics{% endtrans %}</span>{{ lyrics_tip() }}
           </div>
           <div class="buttons has-addons is-fullwidth" style="margin-bottom: 0">
-            {# MSG: Lyric style where each word lights up as it is sung #}
-            <button type="button" class="button subtitle-mode-btn" data-sub-mode="karaoke">{% trans %}Karaoke{% endtrans %}</button>
-            {# MSG: Lyric style that shows the song's words a whole line at a time #}
-            <button type="button" class="button subtitle-mode-btn" data-sub-mode="srt">{% trans %}Subtitles{% endtrans %}</button>
-            {# MSG: Lyric style that shows no words #}
-            <button type="button" class="button subtitle-mode-btn" data-sub-mode="off">{% trans %}Off{% endtrans %}</button>
+            {{ lyric_style_buttons() }}
           </div>
           <input type="hidden" id="singer-sub-mode">
         </div>
