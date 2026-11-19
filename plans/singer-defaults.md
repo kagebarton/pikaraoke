@@ -579,6 +579,11 @@ buttons keep `data-mode` and their handlers.
   and "Could not save" until the page is reloaded. A join form there has no other way out, so
   the guest has to reload. A default for the field would hide a missing value on every save to
   cover one upgrade, and Ken upgrades between parties.
+  (4.1) The same holds for a page that already loaded the old `library-pages.js` (the (i)
+  notes bind twice, so a tap opens and closes them) or the old `custom.css` (the lyric buttons
+  have no colours), and for Now Playing reached by SPA navigation from such a page after the
+  review fold (`markSubModeButtons` is missing from the old `spa-navigation.js`, so the lyric
+  buttons don't mark the chosen style). A reload clears all three.
 - **A mode switch while a save is in flight (3.2)**: a navigation that finds the phone no
   longer joined, while an edit save is in flight, refills the form as a join form and enables
   Save. That needs a restart, a back swipe and a pending save at once, and since the edit save
@@ -1809,3 +1814,46 @@ ruled.
   closes them) or the old `custom.css` (the lyric buttons have no colours). A reload clears both.
 - **`plans/open-issues.md` entries in these files that are now easy:** none.
 - **Not done:** no fixes; they wait for this branch to be reconciled with `fafc262`.
+
+### Phase 4 review fixes (executed 2026-11-19, Claude Opus 5.5, Hyper-V VM)
+
+- **Commits:** `33d1e38` `fix(playback): a song started with no lyric file shows no subtitle
+  track mpv picked itself` (finding 5); `2a302d3` `refactor(ui): the lyric buttons are written
+  once for the guest form and Now Playing` (findings 6 and 7). Worktree
+  `.claude/worktrees/singer_defaults`, on `6fe7380`.
+- **5:** `_apply_subtitle_mode` now sets `sid="no"` whenever there is no file to add, first play
+  included; with a file, first play still lets `sub_add(..., "select")` replace mpv's pick.
+  Tests: 3 new in `test_mpv_controller.py` (Off with a track mpv picked; Karaoke with no file;
+  Karaoke with a file selects it and writes no `sid`). On the unfixed code the first two fail,
+  the third passes. Real libmpv on the VM (`vo=null`, `ao=null`, through `MpvController.start`
+  and `play`, single stem, lavfi-complex set), `BTS 방탄소년단 - Butter---WMweEpGlu_U.mp4` in
+  `off`: unfixed `sid` 1 (track 1, `eng`); fixed `sid` False. No crash either way. Script:
+  `scratchpad/butter_off.py` (session scratchpad).
+- **6 and 7:** `lyric_style_buttons(onclick=None)` in `singer_tips.html` renders the three
+  buttons for both pages on `data-sub-mode`; Now Playing passes `onclick="setSubMode"`.
+  `markSubModeButtons(scope, mode)` (`spa-navigation.js`, on `window`) replaces
+  `applySubModeToButtons` and the body of `setSingerSubMode`; neither toggles `is-info` now.
+  Now Playing's disable lookups are scoped to `#subtitle-mode-section` (Deviation 5 of Phase 4:
+  with one attribute they would otherwise reach the form). `karaoke.py`'s `mode_labels` stays
+  (Python). Now Playing's Off no longer starts with `is-selected` in the markup: the section
+  is hidden until the first now-playing state marks the real style.
+- **Translations:** `pybabel extract -c MSG:` before and after: `Karaoke`, `Subtitles` and `Off`
+  keep the same msgids and translator comments, now from `singer_tips.html` and `karaoke.py`.
+- **Tests:** full suite 3525 passed.
+- **ui-check** (`scratchpad/check_fold.py`, 390x844, touch), the worktree on port 5793:
+  **23 passed, 0 failed.** Join form on a direct load of `/queue`: three buttons in order, `type`
+  button, no `onclick`; tapping Subtitles selects only it, no `is-info`, hidden field `srt`,
+  selected colour differs from the other two, none transparent; the join posts `sub_mode=srt`.
+  Now Playing, on the first SPA visit and again after a Queue round trip, fed a now-playing
+  state with karaoke lyrics only and `sub_mode` karaoke: Karaoke selected, Subtitles disabled,
+  Off enabled; tapping Off selects only Off, sends one `/sub_mode/off`, selects nothing in the
+  form, no `is-info`. Edit form from the name (behind the burger on a phone): Subtitles, the
+  saved style. No console errors. The same driver against `HEAD` before the fold (port 5794):
+  `is-info` present and the Now Playing checks fail on the old attribute, as expected. On both
+  trees the form's buttons are all unselected after a join closes it (a form state is only
+  set when the form opens), so the driver doesn't check them then.
+- **Accepted edge extended:** "A page left open across an upgrade" (4.1), with the fold's own
+  case added.
+- **Self-review:** two small commits, each read in one pass, the fold checked in the browser
+  above; self-review covers both. No review is due.
+- **Not done:** `graphify update .` (no `graphify-out/` on this box). Phase 5 not started.
