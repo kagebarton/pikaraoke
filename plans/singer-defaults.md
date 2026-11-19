@@ -1781,6 +1781,8 @@ entry may sit beside a Phase 5 it has not seen.
   citation of `fafc262` still resolves; origin's `18968de` was replaced by that copy. All four
   branches pushed (`browse_phone` and `queue_phone` forced: the VM had rebased them onto newer
   `dev`, origin held the older copies).
+  That rebase had orphaned four of `dev`'s citations; `dev` `6c707d83` repoints them
+  (`c49e3bb`→`f852240`, `8b0e06d`→`c2de136`, `09ea061`→`572ec80`, `81f4de1`→`0439038`).
 
 ### Review of Phase 4 (2026-11-18, Claude Opus 5.5)
 
