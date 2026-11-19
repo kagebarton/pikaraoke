@@ -71,10 +71,6 @@
 		flex: 1;
 		min-width: 0;
 	}
-	.search_result_items_download {
-		flex-shrink: 0;
-	}
-
 	/* A library copy of the searched song, noted on the first card it matches */
 	.search_result_items_body .library-copy {
 		display: flex;
@@ -277,11 +273,21 @@
 			);
 		}
 
-		// Save results to sessionStorage if server-rendered them, otherwise restore from sessionStorage
-		const resultsContainer = document.getElementById("container_search_result");
-		if (resultsContainer) {
-			saveSearchResults();
-			sessionStorage.setItem("pikaraoke_search_term", {{ search_string | tojson }});
+		function forgetSearchResults() {
+			sessionStorage.removeItem("pikaraoke_search_results");
+			sessionStorage.removeItem("pikaraoke_search_term");
+		}
+
+		// A submitted search replaces the saved cards, even when it found nothing; only a visit
+		// without a query (the nav link) brings them back.
+		const searchString = {{ search_string | tojson }};
+		if (searchString !== null) {
+			if (document.getElementById("container_search_result")) {
+				saveSearchResults();
+				sessionStorage.setItem("pikaraoke_search_term", searchString);
+			} else {
+				forgetSearchResults();
+			}
 		} else {
 			const savedResults = sessionStorage.getItem("pikaraoke_search_results");
 			if (savedResults) {
@@ -300,24 +306,34 @@
 		$("#clear-search").on("click", function (e) {
 			e.preventDefault();
 			$("#search-input").val("");
-			sessionStorage.removeItem("pikaraoke_search_results");
-			sessionStorage.removeItem("pikaraoke_search_term");
+			forgetSearchResults();
 			$("#container_search_result").remove();
 		});
 
 		// The form submits natively, which reloads the page: show the wait first. A blank query
-		// does nothing.
+		// does nothing; a phone keyboard's stray spaces are not sent.
 		$("#search-form").on("submit", function (e) {
 			var searchTerm = $("#search-input").val().trim();
 			if (!searchTerm) {
 				e.preventDefault();
 				return;
 			}
+			$("#search-input").val(searchTerm);
 			$("#searching_loader #search_term").text(searchTerm);
 			$("#searching_loader").removeClass("is-hidden");
 			$("#search-link").addClass("is-loading").attr("disabled", true);
 			$("#container_search_result").hide();
 		});
+
+		// Back can bring this page out of the browser's page cache exactly as it was left, mid-wait.
+		$(window)
+			.off("pageshow.search")
+			.on("pageshow.search", function (e) {
+				if (!e.originalEvent.persisted) return;
+				$("#searching_loader").addClass("is-hidden");
+				$("#search-link").removeClass("is-loading").removeAttr("disabled");
+				$("#container_search_result").show();
+			});
 
 		// Remove any previously-registered handlers before rebinding. The SPA
 		// navigation in spa-navigation.js re-executes this inline script on every

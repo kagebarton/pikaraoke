@@ -85,7 +85,7 @@ def _note_library_copies(songs: Iterable[str], rows: list[SearchRow]) -> list[Se
     noted_rows = []
     for row in rows:
         copies: tuple[str, ...] = ()
-        if not row.existing_path:
+        if not row.existing_path and len(noted) < MAX_SIMILAR_SONGS:
             copies = tuple(
                 path
                 for path in similar_songs(row.result.title, library)
@@ -119,10 +119,8 @@ def search():
     if search_string:
         results = get_search_results(search_string, PAGE_SIZE)
         acts = read_first_page(results, search_string)
-        search_rows = _note_library_copies(
-            k.song_manager.songs,
-            _search_rows(k.song_manager.songs, results, search_string, acts),
-        )
+        songs = list(k.song_manager.songs)
+        search_rows = _note_library_copies(songs, _search_rows(songs, results, search_string, acts))
         show_more = len(results) >= PAGE_SIZE
     else:
         search_string = None
@@ -132,11 +130,9 @@ def search():
         "search.html",
         site_title=site_name,
         title="Search",
-        songs=k.song_manager.songs,
         search_rows=search_rows,
         show_more=show_more,
         search_string=search_string,
-        genius_client=k.genius_client,
     )
 
 
