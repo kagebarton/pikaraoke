@@ -1776,6 +1776,11 @@ entry may sit beside a Phase 5 it has not seen.
 - **To do there:** push the four branches. For this one, `git pull --rebase` first: this entry
   and the review below only append to the Results log, so they should apply on top of
   `fafc262` without touching Phase 5.
+- **Resolved (2026-11-19, Claude Opus 5.5, Hyper-V VM):** the four branches' commits were on the
+  VM. Here the review was cherry-picked onto `fafc262` rather than `fafc262` rebased, so `dev`'s
+  citation of `fafc262` still resolves; origin's `18968de` was replaced by that copy. All four
+  branches pushed (`browse_phone` and `queue_phone` forced: the VM had rebased them onto newer
+  `dev`, origin held the older copies).
 
 ### Review of Phase 4 (2026-11-18, Claude Opus 5.5)
 
