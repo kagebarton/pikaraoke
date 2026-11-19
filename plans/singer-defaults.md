@@ -1975,3 +1975,42 @@ ruled.
   enough alone; a `/code-review` over both commits is due.
 - **Not done:** `graphify update .` (no `graphify-out/` on this box); not pushed; Phase 6 not
   started.
+
+### Review of Phase 5 (2026-11-19, Claude Opus 5.5, Hyper-V VM)
+
+`/code-review c6033b4f..89c542e6`, `bulma-dark.css`, `custom.css`, `base.html`,
+`spa-navigation.js`, three finders (correctness: the disabled look and raised fill on every
+button colour and the lyric buttons, the pill, its tap and the burger at 360/390 px and
+desktop; simplicity: the doubled-attribute rule, the new tokens, the inline SVG macro,
+duplicated colour definitions; robustness: a long or unusual name, the template on every
+page, an old page across the upgrade, `color-mix` support). 15 findings. Recorded in a hurry
+(usage running out): "Checked" says how far each was checked against `89c542e` by hand;
+"finder" means the finder's own browser measurement, not repeated. Dispositions are proposed,
+not ruled. **Checks left for later:** repeat the finders' measurements for 4-7 and 9-11 in
+ui-check, and confirm the fix for 1 restores is-danger and is-light.
+
+| # | Finding | Checked | Proposed |
+|---|---|---|---|
+| 1 | The raised fill on `.button` overrides the fill Bulma derives for every colour; any colour `bulma-dark.css` does not restate loses it: solid `is-danger` (its fill is commented out), `is-light`, `is-dark`. Finder: `is-danger` went from `rgb(255,102,133)` to `rgb(67,77,78)` with Bulma's near-black danger-invert label; `edit.html`'s `is-light` Cancel about 1.4:1. | Code: Bulma's colour fill comes only from `.button`'s `hsl(var(--bulma-button-*))`; `.button.is-danger` here sets no fill. Solid `is-danger` in `processing.html:155,506,510,645` and `library_run.html:288` (Discard run, Yes cancel, Delete song); `is-light` in `edit.html:93`. Outlined buttons not affected. | Critical. Fix with 4 (variable-level fill). |
+| 2 | A colour button disabled while loading loses its fill, and Bulma draws its spinner in the colour's dark invert, so on the dark card the spinner can't be seen (finder: about 1.3:1). | Code: `spa-navigation.js:193` (Save), `info.html:128,144` (Sync library), `search.html:531,582` set `is-loading` plus `disabled`. | Critical (no feedback on Save). Decide with 3: exempt `.is-loading` from the disabled look, or keep the fill while loading. Ken's call against L16's wording. |
+| 3 | Search keeps its buttons `disabled` through the 3 s result flash, so the green / amber "Already queued" / red "!" all draw as the same transparent box. Same for the lyrics modal's "Added for processing..." (`search.html` 825, 845). | Code: `search.html:543-605` add the colour and leave `disabled` for 3 s. | Critical (a queued song and a failed one look alike). With 2; L16 says "whatever its colour", so the exemption is Ken's to rule. |
+| 4 | A literal fill on `.button` goes around Bulma's lightness deltas: plain buttons no longer change on hover or press. Setting `--bulma-button-h/-s/-background-l/-border-l` on `.button` gives the same grey, keeps hover/press, and leaves colour classes alone (they set those at higher weight). | Hover loss already measured in Phase 5 (left for Ken, item 1). Mechanism read in `bulma.min.css`. | Worthwhile, do now: it is the fix for 1. |
+| 5 | `--dark-border-faded` uses `color-mix()` for a fixed colour; without it (Safari < 16.2, Chrome < 111) the border is invalid at computed time and falls back to `currentColor`, the `#8c9b9d` label, brighter than an enabled border. | Mechanism as stated; Phase 5 noted the fallback (item 7) but not that it reverses the cue. | Easy: `rgba(94, 109, 111, 0.5)`. |
+| 6 | At 320 px the name box is 0 px wide (icon only); at 280 px the icon overlaps the burger and the page scrolls 20 px sideways (finder). | Consistent with Phase 5's 33 px at 360 px. Not measured. | Worthwhile: hide the name below a width, or shrink the icons further; L14 (`queue_phone`) hiding Processing from guests frees an icon. |
+| 7 | At 1089 px and up (labels showing) the 12 rem cap doesn't keep the bar inside the 900 px container: with a 20-character name the Pikaraoke link ends about 89 px past the bar (finder). | Code: Bulma's `.navbar-brand` and desktop `.navbar-menu` are both `flex-shrink: 0`; container `max-width: 900px` (`base.html:260`). | Easy: a smaller desktop cap, or let the brand shrink with `min-width: 0`. |
+| 8 | The pill's tap area is about 30 px tall in a 52 px bar (`align-self: center`, 3 px padding); a tap just above or below does nothing. | CSS as stated. | Easy: stretch the link to the bar height and draw the outline on an inner span. |
+| 9 | Lyric buttons' hover (`#343c3d`) is now darker than their fill; unselected label equals the disabled label. | Same as Phase 5 left-for-Ken items 2 and 3. | Drop as duplicate; stays with `now_playing_remote` (L5). |
+| 10 | The name span has no `dir="auto"`, so a right-to-left name is cut at its start (finder: "אברהם יצחק" shows "…ם יצחק"). | Markup: no `dir`; `spa-navigation.js:160` sets only the text. | Easy: `dir="auto"` on the span. |
+| 11 | The 70 px cap binds at every width below 1024 px, cutting names on large phones and tablets while the bar is empty (finder: 800 px, about 400 px unused); at 390 px it doesn't bind (63 px). | CSS as stated. | Easy: drop the cap below 1024 px, `min-width: 0` already does the cutting. |
+| 12 | The disabled look is written three times: `--bulma-button-disabled-*` on `.button`, the doubled rule reading them back, and `custom.css`'s `--button-disabled-*`. The variables only serve `fieldset[disabled]`, which no template uses (and there colour buttons draw full colour). | No `fieldset` in `templates/`. Note: `--bulma-button-disabled-opacity: 1` is not dead, Bulma's `.button[disabled]` reads it; `custom.css`'s opacity line is redundant. | Worthwhile, with 4: one definition. |
+| 13 | `sliders_icon` is defined in `base.html` above `<!DOCTYPE html>`, not in `singer_tips.html` (already imported, the form's shared pieces); output now starts with blank lines, and other pages can't import it. | Code as stated. | Easy: move it to `singer_tips.html`. |
+| 14 | The selected lyric button uses `--bulma-success-dark-invert` (`rgb(59,211,124)`), a second green next to Save; `bulma-dark.css` keeps `.checkbox` accent `hsl(141,71%,48%)` and `.input.is-warning` `#ffb70f`. | Lyric part is Phase 5 item 6 (L5 turns it blue). Checkbox (line 228) and input (240) predate the branch. | Easy for checkbox and input (point at `--dark-success` / `--dark-warning`); lyric part drop (L5). |
+| 15 | No test covers the join line (svg unescaped through `%(icon)s`) or `#current-user` sitting outside `.navbar-menu`. | No test in `tests/` renders the guest form. | Easy: one render test. |
+
+- **Triage:** Critical 1, 2, 3 (1 fixed by 4; 2 and 3 need Ken's ruling on whether a loading
+  or result-flash button keeps its colour). Easy 5, 7, 8, 10, 11, 13, 14 (checkbox, input),
+  15: fold into the fix commit. Worthwhile 4 and 12 (one change, fix now), 6 (wait for L14
+  on `queue_phone`, or hide the name below 340 px). Dropped: 9 and 14's lyric part, both
+  already logged and owned by `now_playing_remote`.
+- **`plans/open-issues.md` entries in these files that are now easy:** none.
+- **Not done:** no fixes; the checks named above; Phase 6 not started.
