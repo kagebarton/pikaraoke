@@ -14,6 +14,8 @@
 	--dark-bg-primary: #1f2424;
 	--dark-bg-secondary: #282f2f;
 	--dark-bg-tertiary: #343c3d;
+	/* One step above the card (--dark-bg-tertiary), so a button sits raised on it */
+	--dark-bg-raised: #434d4e;
 
 	/* Text colors */
 	--dark-text-primary: #ffffff;
@@ -24,15 +26,26 @@
 	/* Border colors */
 	--dark-border: #5e6d6f;
 	--dark-border-light: #8c9b9d;
+	--dark-border-faded: color-mix(in srgb, var(--dark-border) 50%, transparent);
 
 	/* Accent colors */
 	--dark-primary: #375a7f;
 	--dark-link: #1abc9c;
 	--dark-link-hover: #1dd2af;
 	--dark-info: #3298dc;
-	--dark-success: #2ecc71;
-	--dark-warning: #f1b70e;
 	--dark-danger: #e74c3c;
+
+	/* One green and one amber. Green (#2ecc71) means a tap that queues. Bulma builds
+	   has-text-*, the buttons and their shades from these three parts, so they are the
+	   one definition; the --dark-* names below read from them. */
+	--bulma-success-h: 145.44deg;
+	--bulma-success-s: 63.2%;
+	--bulma-success-l: 49.02%;
+	--bulma-warning-h: 44.67deg;
+	--bulma-warning-s: 89.02%;
+	--bulma-warning-l: 50%;
+	--dark-success: var(--bulma-success);
+	--dark-warning: var(--bulma-warning);
 }
 
 /* ===================================
@@ -100,11 +113,13 @@ hr {
    BUTTONS
    =================================== */
 .button {
-	/* transition: all 200ms ease;
-	border-width: 2px;
-	color: var(--dark-text-primary);
-	background-color: var(--dark-bg-secondary);
-	border-color: var(--dark-border); */
+	background-color: var(--dark-bg-raised);
+	border-color: var(--dark-border);
+	/* Bulma reads its disabled look from these, and declares them on .button, so :root can't
+	   set them. */
+	--bulma-button-disabled-background-color: transparent;
+	--bulma-button-disabled-border-color: var(--dark-border-faded);
+	--bulma-button-disabled-opacity: 1;
 }
 
 .button:hover {
@@ -129,10 +144,6 @@ hr {
 
 .button.is-primary:hover {
 	background-color: #436d9a;
-}
-
-.button.is-primary[disabled] {
-	background-color: #3e5b7a;
 }
 
 .button.is-link {
@@ -164,6 +175,17 @@ hr {
 .button.is-danger {
 	/* background-color: var(--dark-danger); */
 	/* border-color: transparent; */
+}
+
+/* Disabled, whatever its colour: no fill, a faded border, a muted label. Bulma's colour buttons
+   restate their fill and border when disabled, one class heavier than .button[disabled] and with
+   no border at all (their border width is 0); the doubled attribute lifts this rule to their
+   weight, and it comes later. */
+.button[disabled][disabled] {
+	--bulma-button-border-width: var(--bulma-control-border-width);
+	background-color: var(--bulma-button-disabled-background-color);
+	border-color: var(--bulma-button-disabled-border-color);
+	color: var(--dark-text-muted);
 }
 
 /* ===================================
