@@ -851,6 +851,7 @@ files, and one finder angle per Self-Review axis.
 | 3 `feat(search): the dialog's lyric choice is one list of lyrics with an (i), and its button reads Queue` | `d332dda` | 3867 passed, 0 failed (+3 over commit 2: the `srt` route test, the `raw` refusal replacing the old `raw` test, and two render tests, net +3) | pre-commit passed on the 6 files; import smoke ok; the rendered inline scripts parse (deno); ui-check at 390x844, eight trials of three runs, counts below; one extra look, not counted: the (i) opens on top of the dialog with exactly the two lines for a sparse caption with Genius hits, inside the viewport. Not done: Ken's phone checks; the by-hand 403-link check from "Done when" (trial 4 of commit 2 used a link that answers 404, commit 1 measured the 403 link only on the server side) | Deviations and readings: Queue is the theme's primary blue (`--dark-primary` `#375a7f`, as the old Download button was); the mockup draws it teal `#00d1b2`. The list is 44 px (spec), the mockup's is 48. The search icon is `icon-search-1` (the font has no `icon-search`). The state's `titleAnswer` became `genius`, since a typed answer replaces the Genius group; a typed answer's preselect is forced to null on the page, whatever the server says. A `sent` flag keeps a late answer from relabelling Queue after a tap, and a dialog closed before `/lyrics_select` answers still sends its `/download` (id, link, title taken at the tap). "Preview unavailable" is markup, so it is not in the script's strings object. The translation catalogs are not regenerated, so every new string shows in English |
 | 3a `fix(search): the dialog's lyric list is 48 px tall, level with Queue` | `2aa02ae` | 3867 passed, 0 failed (unchanged) | pre-commit passed; import smoke ok; ui-check trial 7 now measures 48 px (wrapper and select), 3/3, and trials 2 and 3 rerun 3/3; the other trials were not rerun, since only the list's height changed | Decision 16 (Ken): the list stays at the mockup's 48 px. Done as a CSS custom property on the wrapper (`--bulma-control-height`), which the select inherits. Trial 7's raw line below is commit 3's run at 44 px, before this ruling |
 | 3b `fix(search): the dialog's Queue is green, like every Queue` | `def8493` | 3868 passed, 0 failed (+1: the render test that pins the button's markup and the two places the script sets the class) | pre-commit passed on the 2 files; ui-check at 390x844, three runs of seven checks, 21/21 on the third version of my check (raw below, with the two earlier reads that failed and why); Ken's phone checks not done | `search.html` only: the markup loses `is-primary`; `syncQueue()` and the `/lyrics_select` answer set `is-success` from the box beside the label (`toggleClass("is-success", queued)`). Ticked, the enabled button computes `#2ecc71`; unticked it has no colour class and reads "Add to library", `rgb(20, 22, 26)` until `singer_defaults` Phase 5 puts its `#434d4e` fill on `dev`. Disabled and after a tap the button takes Bulma's disabled look (`rgb(72, 199, 142)` ticked): decision 17 builds nothing for that, L16's look comes from `bulma-dark.css`. Side effect, not asked for: a failed `/lyrics_select` now shows its "!" red (`rgb(255, 102, 133)`) in both states; the old build's disabled `is-primary` beat `is-danger` and showed `rgb(62, 91, 122)`. Review line: `/code-review` now takes in 3a and 3b, range `9110167..def8493` |
+| review fixes `fix(search): the dialog's late answers, refused play and failed sends after review`; `fix(search): a caption check that fails after the lookup printed the link keeps the preview` | `13ebc44`, `dce7598` | the four touched test files only: 365 passed, 0 failed (full suite not run) | pre-commit passed on the 6 files; ui-check at 390x844, ten checks, three runs on each of the fixed tree and `def8493` (raw below); Ken's phone checks not done | `/code-review` of `9110167..def8493` (Opus, 2026-11-19), 14 findings: fixed 1-5 and 7-13; 6 (the link's client also picks the caption track) logged in `plans/open-issues.md` on `dev`; 14 (test indirection) dropped. Deviation: for 3 the list is disabled at the tap rather than its change handler guarded. One record left stale: open-issues' "Download dialog as built on `download_modal_speed`" still calls Queue blue `is-primary` |
 | manual checks (Ken) | | n/a | | |
 
 ### Commit 1 measurement (raw)
@@ -978,3 +979,26 @@ Not counted, one look each: a failed `/lyrics_select` (500) settles on "!" with 
 background `rgb(255, 102, 133)` both ticked (beside `is-success`) and unticked; a disabled throwaway
 button with the old `is-primary is-danger` computed `rgb(62, 91, 122)` in the same page. The
 app was stopped afterwards; nothing listens on 5871.
+
+### Review fixes ui-check (raw)
+
+Script `review_fixes.py` (async Playwright) in the session scratchpad, not committed. Port 5793 the
+worktree at `13ebc44`'s tree before commit, 5794 `def8493` from `git archive`; listeners checked by
+`PYTHONPATH`. A real YouTube search ("adele hello") per run, then each check on a full reload of
+`/search` (restored cards); `/caption_check`, `/lyrics_search`, `/lyrics_select`, `/download` and the
+preview video answered by the script. The console errors seen are the faked 500s.
+
+| check | fixed | `def8493` |
+| ----- | ----- | --------- |
+| unchanged flow: captions view, Queue green, Queued, fades and closes, one select, `queue: true` | 3/3 | 3/3 |
+| 2: card A's Genius answer (6 s) lands after Search was left and card B opened: list `[222]`, sends 222 | 3/3 | 0/3 (list `[111]`, sends 111) |
+| 3: list view, Queue tapped: list disabled, a pick refused, Queue stays off, sends X | 3/3 | 0/3 |
+| 3: captions view, Queue then Other lyrics, send fails: back on the captions view, Queue armed | 3/3 | 0/3 |
+| 4: play refused (stubbed): Play stops waiting; the next tap plays again | 3/3 | 0/3 |
+| 5: `/lyrics_select` 500 after the dialog closed: a notice, no download | 3/3 | 0/3 |
+| 5: `/download` 500 after Queued: a notice | 3/3 | 0/3 |
+| 7: box unticked after the tap: `/download` sends `queue: true` | 3/3 | 0/3 |
+| 8: Enter in the typed search searches; Enter on the close button closes, no page search | 3/3 | 0/3 (a page search starts) |
+| 9: A's failure timer at 3 s leaves B's red "!" | 3/3 | 0/3, but my check: the page search check 8 started raced the reload |
+
+Both apps stopped afterwards.
