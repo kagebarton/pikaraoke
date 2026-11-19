@@ -303,9 +303,9 @@
 		//START SELECTIZE CHANGES
 
 //if enter key press, by default search button is click
-// (but not when focus is inside the lyrics custom search input)
+// (but not inside the download dialog, whose controls answer Enter themselves)
 $(document).keypress(function (event) {
-if (event.which == "13" && !$(event.target).is("#lyrics-custom-input")) {
+if (event.which == "13" && !$(event.target).closest("#modal-js-example").length) {
 event.preventDefault();
 
 if ($(".search-selectize .selectize-input input").val()) {
@@ -601,16 +601,15 @@ $("#add-queue-link").trigger("click");
 			});
 		}
 
-		// The box postDownload sends and the dialog's button label reads, so what the button says
-		// and what happens cannot disagree.
+		// The box the dialog's button label reads and its tap sends, so what the button says and
+		// what happens cannot disagree.
 		function queueAfterDownload() {
 			return $("#add-to-queue-search").is(":checked");
 		}
 
-		function postDownload(songUrl, songTitle) {
-			// Fire-and-forget /download POST without touching any button — used
-			// by the modal flow where the button already shows "Added for
-			// processing..." and we don't want is-loading to clobber it.
+		// The dialog's /download POST. It touches no button: by the time it is sent the dialog's
+		// Queue says Queued or Added, or the dialog has closed, so a failure can only be a notice.
+		function postDownload(songUrl, songTitle, queue) {
 			$.ajax({
 				url: "{{ url_for('search.download') }}",
 				type: "POST",
@@ -619,8 +618,12 @@ $("#add-queue-link").trigger("click");
 					song_url: songUrl,
 					song_title: songTitle || "",
 					song_added_by: getUserCookie() || "",
-					queue: queueAfterDownload(),
+					queue: queue,
 				}),
+				error: function (xhr) {
+					console.warn("Download failed:", xhr && xhr.responseText ? xhr.responseText : "network error");
+					showNotification({{ _("Could not start the download.") | tojson }}, "is-danger");
+				},
 			});
 		}
 
@@ -728,8 +731,13 @@ var _dialog = null;
 // Bumped by every open and every close. A slow answer must not fill a closed dialog or the
 // next card's, so an answer is shown only while its dialog's number is still this one.
 var _openSeq = 0;
+// This visit's dialog. SPA navigation runs this script again on every visit, each run with its
+// own state, and nothing closes a dialog the page swap took away; its answers would draw into
+// the next visit's dialog, found by the same ids. Once the element is gone they are dropped.
+var _modal = document.getElementById("modal-js-example");
+var modalVideo = document.getElementById("modal-video");
 function isCurrent(d) {
-  return d.open === _openSeq;
+  return d.open === _openSeq && _modal.isConnected;
 }
 
 var TEXT = {
@@ -743,14 +751,14 @@ var TEXT = {
   addToLibrary: {{ _("Add to library") | tojson }},
   queued: {{ _("Queued") | tojson }},
   added: {{ _("Added") | tojson }},
+  lyricsSelectFailed: {{ _("Could not save the lyric choice, so the song was not downloaded.") | tojson }},
 };
 
 // Puts back every element the dialog changes, on open and on close.
 function resetDialog() {
-  var video = document.getElementById("modal-video");
-  video.pause();
-  video.removeAttribute("src");
-  video.load();
+  modalVideo.pause();
+  modalVideo.removeAttribute("src");
+  modalVideo.load();
   $("#modal-video-title").text("");
   $("#modal-video-meta").text("").addClass("is-hidden");
   $("#modal-thumb").removeAttr("src");
@@ -763,7 +771,7 @@ function resetDialog() {
   $("#lyrics-select-wrap").removeClass("is-hidden");
   $("#lyrics-empty, #lyrics-custom-search, #lyrics-search-none").addClass("is-hidden");
   $("#lyrics-search-open").removeClass("is-hidden");
-  $("#lyrics-dropdown").empty();
+  $("#lyrics-dropdown").empty().prop("disabled", false);
   $("#lyrics-custom-input").val("");
   $("#modal-js-example .info-tip").removeClass("is-open is-pinned")
     .find(".info-tip-btn").attr("aria-expanded", "false");
@@ -772,6 +780,11 @@ function resetDialog() {
     .removeClass("is-success is-danger")
     .prop("disabled", false)
     .text(TEXT.queue);
+}
+
+// Whether the captions view shows: the caption passed and the guest has not asked for the list.
+function inCaptionsView(d) {
+  return d.caption === "passed" && d.view === "captions";
 }
 
 // Whether the list offers anything to pick: the YouTube group (only when the caption passed)
@@ -832,7 +845,7 @@ function renderList(d) {
 // button when it only adds to the library. It is off in the list view until something is picked.
 function syncQueue() {
   var d = _dialog;
-  var captions = d.caption === "passed" && d.view === "captions";
+  var captions = inCaptionsView(d);
   var queued = queueAfterDownload();
   $("#lyrics-queue-btn")
     .text(queued ? TEXT.queue : TEXT.addToLibrary)
@@ -845,7 +858,7 @@ function syncQueue() {
 function renderLyrics() {
   var d = _dialog;
   if (!d || d.sent) return;
-  var captions = d.caption === "passed" && d.view === "captions";
+  var captions = inCaptionsView(d);
   var listReady = d.caption !== "pending" && !captions && d.genius !== null;
   var waiting = null;
   if (d.caption === "pending") waiting = TEXT.checkingCaptions;
@@ -905,7 +918,7 @@ function askTitleLyrics(d) {
   });
 }
 
-// Queue is off until the list has a pick.
+// Queue is off until the list has a pick. The list is disabled once Queue is tapped.
 $(document).on("change.search", "#lyrics-dropdown", function () {
   if (_dialog) syncQueue();
 });
@@ -913,7 +926,7 @@ $(document).on("change.search", "#lyrics-dropdown", function () {
 // Searching for other lyrics: the button gives way to the box.
 $(document).on("click.search", "#lyrics-search-open", function () {
   var d = _dialog;
-  if (!d) return;
+  if (!d || d.sent) return;
   d.searchOpen = true;
   renderLyrics();
   $("#lyrics-custom-input").focus();
@@ -964,49 +977,51 @@ $(document).on("keydown.search", "#lyrics-custom-input", function (e) {
 // "Other lyrics…" on the captions view shows the held Genius list, with YouTube captions kept
 // in it. It does not search again.
 $(document).on("click.search", "#lyrics-other", function () {
-  if (!_dialog) return;
+  if (!_dialog || _dialog.sent) return;
   _dialog.view = "list";
   renderLyrics();
 });
 
-// Queue: write the lyric choice, then send the download. The video's id, link and title are
-// taken now, so a dialog that closes before the answer still sends what was tapped.
+// Queue: write the lyric choice, then send the download. Everything sent is taken now, the
+// queue box included, so a dialog that closes before the answer still sends what was tapped;
+// the list is held still so it keeps showing it.
 $(document).on("click.search", "#lyrics-queue-btn", function () {
   var d = _dialog;
   var $btn = $(this);
   if (!d || d.sent || $btn.is(":disabled")) return;
-  var captions = d.caption === "passed" && d.view === "captions";
-  var picked = captions ? "__srt__" : $("#lyrics-dropdown").val();
+  var picked = inCaptionsView(d) ? "__srt__" : $("#lyrics-dropdown").val();
   if (!picked) return;
   var id = d.id;
   var title = d.title;
   var url = d.url;
+  var queued = queueAfterDownload();
   var choice = picked === "__srt__" ? { mode: "srt" } : { genius_id: parseInt(picked, 10) };
   d.sent = true;
   $btn.prop("disabled", true);
+  $("#lyrics-dropdown").prop("disabled", true);
   $.ajax({
     url: "{{ url_for('search.lyrics_select') }}",
     type: "POST",
     contentType: "application/json",
     data: JSON.stringify($.extend({ yt_id: id, yt_title: title }, choice)),
     success: function () {
-      postDownload(url, title);
+      postDownload(url, title, queued);
       if (!isCurrent(d)) return;
-      var queued = queueAfterDownload();
       $btn.toggleClass("is-success", queued).html('<i class="icon icon-ok"></i>')
         .append(document.createTextNode("  " + (queued ? TEXT.queued : TEXT.added)));
-      fadeOutPreviewModal(d.open, 1000);
+      fadeOutPreviewModal(d, 1000);
     },
     error: function (xhr) {
       console.warn("Lyrics select failed:", xhr && xhr.responseText ? xhr.responseText : "network error");
+      showNotification(TEXT.lyricsSelectFailed, "is-danger");
       if (!isCurrent(d)) return;
       $btn.addClass("is-danger").text("!");
       setTimeout(function () {
+        if (!isCurrent(d)) return;
         $btn.removeClass("is-danger");
-        if (isCurrent(d)) {
-          d.sent = false;
-          renderLyrics();
-        }
+        $("#lyrics-dropdown").prop("disabled", false);
+        d.sent = false;
+        renderLyrics();
       }, 3000);
     },
   });
@@ -1017,26 +1032,32 @@ $(document).on("click.search", "#lyrics-queue-btn", function () {
 function closePreviewModal() {
   _openSeq++;
   _dialog = null;
-  document.getElementById("modal-js-example").classList.remove("is-active", "is-fading-out");
+  _modal.classList.remove("is-active", "is-fading-out");
   resetDialog();
 }
 
-// Fades out the dialog with this open number; a dialog closed or replaced since is left alone.
-function fadeOutPreviewModal(open, delay) {
+// Fades out this dialog; one closed, replaced or swapped away since is left alone.
+function fadeOutPreviewModal(d, delay) {
   setTimeout(function () {
-    if (open !== _openSeq) return;
-    document.getElementById("modal-js-example").classList.add("is-fading-out");
+    if (!isCurrent(d)) return;
+    _modal.classList.add("is-fading-out");
     setTimeout(function () {
-      if (open === _openSeq) closePreviewModal();
+      if (isCurrent(d)) closePreviewModal();
     }, 2000);
   }, delay || 0);
 }
 
+// A refused play (an autoplay block outside the tap) gives Play back, so the next tap, a fresh
+// gesture, tries again.
 function startVideo(d) {
-  var video = document.getElementById("modal-video");
-  video.src = d.link;
-  video.load();
-  video.play().catch(function () {});
+  modalVideo.src = d.link;
+  modalVideo.load();
+  modalVideo.play().catch(function (err) {
+    console.warn("Preview play failed:", err);
+    if (!isCurrent(d)) return;
+    d.playWaits = false;
+    $("#modal-play").removeClass("is-waiting");
+  });
 }
 
 function showPreviewUnavailable() {
@@ -1047,7 +1068,6 @@ function showPreviewUnavailable() {
 
 // Bound once, not per open: the layer goes when the video plays, and comes back with the
 // notice when a video that was given a source cannot play.
-var modalVideo = document.getElementById("modal-video");
 modalVideo.addEventListener("playing", function () {
   $("#modal-thumb-layer").addClass("is-hidden");
 });
@@ -1056,7 +1076,8 @@ modalVideo.addEventListener("error", function () {
 });
 
 // Play: only a tap may start the video, and iOS Safari ties .play() to the tap itself, so a
-// tap before the link arrives plays the empty video once to keep that permission.
+// tap before the link arrives plays the empty video once to keep that permission. That play
+// never starts: the link's load() aborts it, so its rejection is expected and not an error.
 $(document).on("click.search", "#modal-play", function () {
   var d = _dialog;
   if (!d || d.playWaits) return;
@@ -1067,7 +1088,6 @@ $(document).on("click.search", "#modal-play", function () {
 });
 
 function openPreviewModal($li) {
-  var modal = document.getElementById("modal-js-example");
   var d = (_dialog = {
     open: ++_openSeq,
     id: $li.attr("data-ytid") || "",
@@ -1094,12 +1114,12 @@ function openPreviewModal($li) {
   $("#modal-video-meta").text(meta).toggleClass("is-hidden", !meta);
   $("#modal-thumb").attr("src", $li.find(".img-frame img").attr("src"));
 
-  modal.classList.remove("is-fading-out");
-  modal.classList.add("is-active");
-  var closeButton = modal.querySelector(".modal-close");
+  _modal.classList.remove("is-fading-out");
+  _modal.classList.add("is-active");
+  var closeButton = _modal.querySelector(".modal-close");
   closeButton.focus();
   closeButton.onclick = closePreviewModal;
-  modal.querySelector(".modal-background").onclick = closePreviewModal;
+  _modal.querySelector(".modal-background").onclick = closePreviewModal;
 
   renderLyrics();
   askCaptionCheck(d);
