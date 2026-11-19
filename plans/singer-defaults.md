@@ -1857,3 +1857,121 @@ ruled.
 - **Self-review:** two small commits, each read in one pass, the fold checked in the browser
   above; self-review covers both. No review is due.
 - **Not done:** `graphify update .` (no `graphify-out/` on this box). Phase 5 not started.
+
+### Phase 5: one look (executed 2026-11-19, Claude Sonnet 5.5, Hyper-V VM)
+
+- **Commits:** `ecc15c0` `fix(theme): one green and one amber; grey buttons sit raised on the
+  card; disabled buttons lose their fill`; `89c542e` `feat(ui): the singer's name sits in the
+  nav bar on phones, behind a sliders icon`. Worktree `.claude/worktrees/singer_defaults`, on
+  `c6033b4`. Full suite 3525 passed (before and after; no test pinned the old title, the mic
+  icon or any of these CSS names, so none was changed or added).
+- **Commit 1 (`bulma-dark.css`, `custom.css`):**
+  - L1: Bulma builds `has-text-*`, the colour buttons and their shades from `-h`, `-s`, `-l`
+    parts, so those are set. No whole-number triple round-trips to `#2ecc71` or `#f1b70e`, so
+    they are decimals: success `145.44deg 63.2% 49.02%`, warning `44.67deg 89.02% 50%`.
+    `--dark-success` and `--dark-warning` now read from the parts (`var(--bulma-success)`) so
+    there is one definition.
+  - L15: `--dark-bg-raised: #434d4e` (the name is the plan's suggestion) is the plain `.button`
+    fill, with a `--dark-border` border.
+  - L16: Bulma declares `--bulma-button-disabled-*` on `.button` itself, so they are set in
+    the `.button` rule, not on `:root`: transparent fill, `--dark-border-faded`
+    (`color-mix(in srgb, var(--dark-border) 50%, transparent)`), opacity 1. Bulma's colour
+    buttons restate fill and border when disabled at one class more, and have border width 0,
+    so a faded border would not show: `.button[disabled][disabled]` (the doubled attribute
+    lifts it to their weight, and it comes later) sets the fill, border, label `#8c9b9d` and
+    a 1 px border width. `.button.is-primary[disabled]` (`#3e5b7a`) is deleted.
+  - **Deviation (Ken, 2026-11-19):** `custom.css`'s `--button-normal-bg` and
+    `--button-disabled-*` (what `.subtitle-mode-btn` reads, with `!important`) point at the
+    same raised fill and disabled look; a new `--button-disabled-border` holds the faded
+    border.
+- **Commit 2 (`base.html`, one comment in `spa-navigation.js`):**
+  - `#current-user` moved from `.navbar-menu` into `.navbar-brand` after `#processing`, as
+    `a.singer-pill` (not a `.navbar-item`, so Bulma's hover colour and the link colour stay
+    off it). The click handler is unchanged (`#current-user` is still its selector);
+    `closeBurgerMenu()` stays, for a menu the guest left open, and its comment says so.
+  - The icon font has no sliders glyph, so `sliders_icon()` in `base.html` draws one SVG,
+    used by the pill and by the join line. Other templates already draw inline SVGs the same
+    way (`song_repair.html`).
+  - Nav icons: 12 px side padding becomes 9 px (50 to 44 px), inside the existing
+    `max-width: 1088px` block (the width where the labels already hide).
+  - Desktop (1024 px up): `.navbar-brand` grows and `.navbar-menu` doesn't, so the pill sits
+    at the right beside the Pikaraoke link, where the name was; its icon is the sliders icon.
+  - Title: "Your singer settings". New line, join mode only, under the lyric buttons: "Change
+    these any time from [icon] your name at the top of the page." (`singer-join-only`).
+  - `pybabel extract -c MSG:` on `base.html` picks up both new msgids with their comments. The
+    catalogs are **not** updated: "Your singer settings" and the join line show in English
+    until the next catalog regen, and "Your name and settings" is now an unused msgid.
+- **Spec choices made (the plan left them to the executor):** pill outline
+  `rgba(255,255,255,0.6)` 1 px, font `0.9rem`, padding `3px 7px`, margin `0 2px`; name cap
+  70 px (12 rem at desktop width); the two new tokens' names; the SVG's shape (three tracks,
+  three knobs, stroke 2.2 like the other inline icons).
+- **ui-check** (`scratchpad/check_c1.py` 50 checks, `check_c2.py` 53 checks, helpers in
+  `scratchpad/p5common.py`; 390 and 360 px, touch, `device_scale_factor` 2; desktop 1280 px
+  mouse; the worktree on port 5841, the commit before this phase exported from `c6033b4` on
+  port 5842 for the "before" values; both stopped after). Every check printed PASS; console
+  errors: none at either width or at 1280.
+
+  | Computed value | After | Before (`c6033b4`) |
+  |---|---|---|
+  | Singer name on Queue (`has-text-success`) | `rgb(46, 204, 113)` | `rgb(72, 199, 142)` |
+  | Save (`is-success` fill) | `rgb(46, 204, 113)` | same |
+  | `has-text-warning` (empty-queue line; Now Playing line for "before") | `rgb(241, 183, 14)` | `rgb(255, 183, 15)` |
+  | Selected lyric button fill (`--bulma-success-dark-invert`, derived) | `rgb(59, 211, 124)` | `rgb(72, 199, 142)` |
+  | Cancel, key −, key +, unselected lyric button: fill / border | `rgb(67, 77, 78)` / `rgb(94, 109, 111)` | `rgb(20, 22, 26)` / `rgb(53, 58, 70)` (lyric: `rgb(40, 47, 47)` / `rgb(94, 109, 111)`) |
+  | Disabled: key − (plain), Save (`is-success`), a lyric button: fill / border / border width / label / opacity | `rgba(0, 0, 0, 0)` / `#5e6d6f` at 0.5 / 1px / `rgb(140, 155, 157)` / 1, all three | not measured |
+
+  | Nav | 390 px | 360 px |
+  |---|---|---|
+  | Nav icon width; bar height | 44 px; 52 px | 44 px; 52 px |
+  | Pill, a 10-character name (box left to right) | 237 to 337, burger starts at 339 | 237 to 307 |
+  | Pill inside `.navbar-menu` | no | no |
+  | Mic icon in the nav bar | none | none |
+  | 20 × "W" (widest letter): name box width, cut with an ellipsis | 62.7 px, yes | 32.7 px, yes |
+  | Pill ends before the burger; bar height 52; `scrollWidth` = `clientWidth` | all true, short and long name | all true, short and long name |
+  | Tap on the pill | form opens, one visible title: "Your singer settings"; join line hidden | same |
+  | Burger tap | menu opens, Pikaraoke link visible; a tap on the pill closes the menu and opens the form | same |
+  | Join form on a first visit | line visible, below the lyric buttons, one `svg.sliders-icon`, text as above | same |
+  | 1280 px | pill has the sliders icon, no mic, ends before the Pikaraoke link, in the right half; no sideways scroll | |
+
+  Plain-button hover, desktop, measured on both trees (Cancel, key +): before, fill
+  `rgb(20, 22, 26)` to `rgb(31, 34, 41)` and border `rgb(53, 58, 70)` to `rgb(75, 82, 99)`;
+  after, no change in either. Unselected lyric button: before `rgb(40, 47, 47)` to
+  `rgb(52, 60, 61)`; after `rgb(67, 77, 78)` to `rgb(52, 60, 61)`.
+- **Screenshots** (session scratchpad, which a reboot can clear; the folder is
+  `/tmp/claude-1000/-home-ken-pikaraoke/ff54e10f-23b1-4cf0-b878-fc726e9bd8cb/scratchpad/p5shots/`):
+  - Commit 1: `c1-join-390.png`, `c1-join-360.png`, `c1-edit-390.png`, `c1-edit-360.png`,
+    `c1-disabled-390.png`, `c1-disabled-360.png` (key −, Save and Subtitles disabled),
+    `c1-queue-390.png`, `c1-queue-360.png`; Now Playing, Queue, Browse and Info before and
+    after: `pages-old-{home,queue,browse,info}.png`, `pages-new-{home,queue,browse,info}.png`
+    (390 px).
+  - Commit 2: `c2-join-390.png`, `c2-join-360.png` (the new line); `c2-nav-short-{390,360}.png`,
+    `c2-nav-long-{390,360}.png` (20 "W"); `c2-edit-{390,360}.png` (new title);
+    `c2-burger-{390,360}.png` (menu open); `c2-desktop.png` (1280 px).
+- **Left for Ken or the next branch (not decided here):**
+  1. **Plain buttons no longer lighten on hover or press.** Bulma's lightening works on the
+     colour its own fill uses, and the fixed raised fill replaces it (the coloured buttons
+     here never had it either). The line `.button:hover { border-color:
+     var(--dark-border-light) }` was already in `bulma-dark.css` as a comment; restoring it is
+     the cheapest cue. Not ruled, so not done.
+  2. **The lyric buttons' hover fill (`--button-hover-bg`, `#343c3d`) is now darker than their
+     raised fill** (it was lighter than the old fill). `now_playing_remote` owns those
+     variables (L5), so it may be the place to fix it.
+  3. **The unselected lyric buttons' label (`--button-normal-text`, `#8c9b9d`) is the
+     disabled label colour.** L16's "a white label always means a tap works" doesn't hold for
+     them; they differ from a disabled button by fill and border only. Same owner as 2.
+  4. **`<name>` in the join line** is written as the words "your name": there is no name yet
+     on a first visit. The alternative is the typed name, live, with these words as the
+     fallback.
+  5. **The name box is about 63 px at 390 px, not 70**, with the burger left at its 40 px; a
+     narrower burger or a tighter pill would add a few. At 360 px it is about 33 px.
+  6. The new green also moves the derived shades: the selected lyric button (table above)
+     and Now Playing's control hover (`--controls-link-hover` in `home.html`, built from
+     `--bulma-success-dark-invert`). L5 turns the selected lyric style blue anyway.
+  7. `color-mix()` (the faded border) needs Chrome 111, Safari 16.2 or Firefox 113; on an
+     older phone the disabled border falls back to the element's text colour.
+- **Self-review:** commit 1 is two stylesheets read in one pass and checked in the browser on
+  Queue, Now Playing, the form and the lyric buttons; the doubled attribute is the one
+  non-obvious line and says why. Commit 2 is the nav bar on every page, so its read is not
+  enough alone; a `/code-review` over both commits is due.
+- **Not done:** `graphify update .` (no `graphify-out/` on this box); not pushed; Phase 6 not
+  started.
