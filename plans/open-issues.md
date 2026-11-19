@@ -340,7 +340,13 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
 - **A restored search page can show a stuck card.** After Show more, the page saves the cards
   so coming back to Search restores them. The copy can catch a card's loading state or the
   preview modal's last contents, and the restored card then keeps a stuck loading button.
-  Left by Ken 2026-11-08.
+  Left by Ken 2026-11-08. The same copy also shows the library as it was at that render: a
+  song downloaded from the page since still offers Queue… (the download dialog) on its card,
+  not the in-library Queue, so it is easy to download twice, and no "In library" note shows
+  it. Both want the restore to re-check the cards (a small server call, or running the
+  search again) rather than put back the saved HTML. Found in the `/code-review` of
+  `search_official_captions` commits 5-9, 2026-11-19 (Results log on that branch). Not
+  ruled.
 - **A "Song - Artist" title is read the wrong way round** when the query also names the
   artist: for "queen bohemian rhapsody", "Bohemian Rhapsody - Queen" credits the song name as
   the artist. Official uploads are nearly always "Artist - Song". Left by Ken 2026-11-08.
@@ -459,8 +465,8 @@ Stage 1, can run now, side by side:
   checks.
 - `download_modal_speed` (`d3128ba`): commit 3b (L7), `/code-review`, Ken's phone checks. Its
   grey and disabled looks arrive with the theme; no build dependency on `singer_defaults`.
-- `search_official_captions` Parts 1-2 (`5f1b446`): commit 9 (L11), the review of commits 5-8,
-  Ken's manual checks.
+- `search_official_captions` Parts 1-2 (`5c4e410`): commit 9 (L11) and the review of commits
+  5-9 done (fixes `af48f5a`); Ken's manual checks.
 - `queue_phone` (`0439038`): spec and phases written 2026-11-18. Its Phase 1 (server only:
   the failed row, the pause route, song and artist on queue rows) needs nothing from
   `singer_defaults` and can run now; Phases 2-3 wait for stage 3.
