@@ -664,15 +664,15 @@ def check_video_caption(video_id: str) -> tuple[CaptionCheck, str | None]:
     """:func:`check_caption` for a video not downloaded yet (the search page's dialog).
 
     The same single yt-dlp call returns YouTube's length for the video, which stands in for the
-    file's, and a link the browser can play (None when there is none, and when the check
-    couldn't run).
+    file's, and a link the browser can play (None when there is none). A check that couldn't
+    run still returns the link when yt-dlp printed one.
     """
     with _caption_scratch() as scratch:
         try:
             lookup = lookup_video(watch_url(video_id), str(scratch), video_id)
         except CaptionDownloadFailed as e:
             logger.warning("Caption check of %s couldn't run: %s", video_id, e)
-            return _COULD_NOT_CHECK, None
+            return _COULD_NOT_CHECK, e.stream_url
         check = _measure_caption(lookup.srt_path, lambda: lookup.duration_s, video_id)
         return check, lookup.stream_url
 

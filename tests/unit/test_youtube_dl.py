@@ -567,8 +567,20 @@ class TestLookupVideo:
     )
     def test_a_lookup_that_fails_raises_with_the_reason(self, tmp_path, run, reason):
         with _default_patches()[0], _default_patches()[1], patch("subprocess.run", **run):
-            with pytest.raises(CaptionDownloadFailed, match=reason):
+            with pytest.raises(CaptionDownloadFailed, match=reason) as failed:
                 lookup_video("https://yt/watch?v=abc", str(tmp_path / "scratch"), "abc")
+        assert failed.value.stream_url is None
+
+    def test_a_caption_that_fails_after_the_link_was_printed_keeps_the_link(self, tmp_path):
+        """yt-dlp prints the link before it fetches the caption, so a caption error (a 429)
+        exits with an error after the link is out."""
+        run = MagicMock(returncode=1, stdout=b"https://example.test/v.mp4\n213\n", stderr=b"429")
+        with _default_patches()[0], _default_patches()[1], patch(
+            "subprocess.run", return_value=run
+        ):
+            with pytest.raises(CaptionDownloadFailed, match="lookup failed .*429") as failed:
+                lookup_video("https://yt/watch?v=abc", str(tmp_path / "scratch"), "abc")
+        assert failed.value.stream_url == self.LINK
 
 
 class TestSelectEnSrt:

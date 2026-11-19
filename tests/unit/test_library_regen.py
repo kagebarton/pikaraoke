@@ -916,20 +916,26 @@ class TestCheckVideoCaption:
         assert check == lr.CaptionCheck(found=True, wpm=60.0, passed=True)
         assert link is None
 
-    def test_a_lookup_that_fails_is_a_check_that_could_not_run(self, tmp_path, monkeypatch):
+    @pytest.mark.parametrize("printed", [None, LINK], ids=["no link", "link printed first"])
+    def test_a_lookup_that_fails_is_a_check_that_could_not_run(
+        self, tmp_path, monkeypatch, printed
+    ):
+        """A caption that failed after yt-dlp printed the link keeps the preview."""
         root = tmp_path / "pk_tmp"
         root.mkdir()
         monkeypatch.setattr(lr, "get_temp_directory", lambda: str(root))
 
         def fail(url, dest, stem):
-            raise lr.CaptionDownloadFailed("timed out")
+            failed = lr.CaptionDownloadFailed("HTTP Error 429")
+            failed.stream_url = printed
+            raise failed
 
         monkeypatch.setattr(lr, "lookup_video", fail)
 
         check, link = lr.check_video_caption("dQw4w9WgXcQ")
 
         assert check == lr.CaptionCheck(found=False, wpm=None, passed=False, failed=True)
-        assert link is None
+        assert link == printed
         assert list(root.iterdir()) == []
 
 

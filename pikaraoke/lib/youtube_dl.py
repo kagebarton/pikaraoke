@@ -291,16 +291,27 @@ def _select_en_srt(dest_dir: str, stem: str) -> str | None:
 
 
 class CaptionDownloadFailed(Exception):
-    """yt-dlp couldn't answer whether the video has a caption (timeout, not runnable, error)."""
+    """yt-dlp couldn't answer whether the video has a caption (timeout, not runnable, error).
+
+    ``stdout`` is what yt-dlp printed before an error exit. From :func:`lookup_video`,
+    ``stream_url`` is the preview link found in it, since yt-dlp prints the link before it
+    fetches the caption.
+    """
+
+    def __init__(self, message: str, stdout: bytes = b"") -> None:
+        super().__init__(message)
+        self.stdout = stdout
+        self.stream_url: str | None = None
 
 
 def _run_caption_command(
-    video_url: str, dest_dir: str, stem: str, extra_args: list[str], timeout: float
+    what: str, video_url: str, dest_dir: str, stem: str, extra_args: list[str], timeout: float
 ) -> bytes:
     """Run yt-dlp for the video's manual English caption into ``<dest_dir>/<stem>.*``.
 
-    Returns yt-dlp's stdout. Raises :class:`CaptionDownloadFailed` when yt-dlp timed out,
-    couldn't be run or exited with an error. No media is downloaded.
+    ``what`` names the run in the log and in errors. Returns yt-dlp's stdout. Raises
+    :class:`CaptionDownloadFailed` when yt-dlp timed out, couldn't be run or exited with an
+    error. No media is downloaded.
     """
     os.makedirs(dest_dir, exist_ok=True)
     cmd = (
@@ -316,17 +327,18 @@ def _run_caption_command(
         + _impersonate_args()
         + [video_url]
     )
-    logging.debug(f"yt-dlp subtitle download command: {' '.join(cmd)}")
+    logging.debug(f"yt-dlp {what} command: {' '.join(cmd)}")
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired as e:
-        raise CaptionDownloadFailed(f"yt-dlp subtitle download timed out for: {video_url}") from e
+        raise CaptionDownloadFailed(f"yt-dlp {what} timed out for: {video_url}") from e
     except (FileNotFoundError, PermissionError) as e:
         raise CaptionDownloadFailed(f"Could not run yt-dlp: {e}") from e
     if result.returncode != 0:
         raise CaptionDownloadFailed(
-            f"yt-dlp subtitle download failed for {video_url}: "
-            f"{result.stderr.decode('utf-8', 'ignore').strip()}"
+            f"yt-dlp {what} failed for {video_url}: "
+            f"{result.stderr.decode('utf-8', 'ignore').strip()}",
+            stdout=result.stdout,
         )
     return result.stdout
 
@@ -341,7 +353,7 @@ def download_manual_en_subs(video_url: str, dest_dir: str, stem: str) -> str | N
     ask". Auto-generated (ASR) captions are never fetched and no media is
     downloaded.
     """
-    _run_caption_command(video_url, dest_dir, stem, [], 60)
+    _run_caption_command("subtitle download", video_url, dest_dir, stem, [], 60)
     return _select_en_srt(dest_dir, stem)
 
 
@@ -361,30 +373,39 @@ def lookup_video(video_url: str, dest_dir: str, stem: str) -> VideoLookup:
     because ``--print`` alone implies a simulation, which writes no caption;
     ``--ignore-no-formats-error`` lets a video with no playable format still answer its
     caption, with no link. Raises :class:`CaptionDownloadFailed` as
-    :func:`download_manual_en_subs` does.
+    :func:`download_manual_en_subs` does, carrying the link when yt-dlp printed one before
+    the caption failed (an HTTP 429, say), so the preview survives.
     """
-    stdout = _run_caption_command(
-        video_url,
-        dest_dir,
-        stem,
-        [
-            "--no-simulate",
-            "-f",
-            "18/worst[ext=mp4][protocol*=http]/worst[protocol*=http]",
-            "--ignore-no-formats-error",
-            "--print",
-            "url",
-            "--print",
-            "duration",
-            # The browser fetches this URL itself, so the client must hand out
-            # format-18 links that play without yt-dlp's headers or a PO token.
-            # tv_simply does (2026.10); the default client's tv links 403 at
-            # random and mweb's almost always do. default stays as a fallback.
-            "--extractor-args",
-            "youtube:player_client=tv_simply,default",
-        ],
-        30,  # one lookup measures 4-6 s; 30 outlasts a slow day, and a guest waits no minute
+    lookup_args = [
+        "--no-simulate",
+        "-f",
+        "18/worst[ext=mp4][protocol*=http]/worst[protocol*=http]",
+        "--ignore-no-formats-error",
+        "--print",
+        "url",
+        "--print",
+        "duration",
+        # The browser fetches this URL itself, so the client must hand out
+        # format-18 links that play without yt-dlp's headers or a PO token.
+        # tv_simply does (2026.10); the default client's tv links 403 at
+        # random and mweb's almost always do. default stays as a fallback.
+        "--extractor-args",
+        "youtube:player_client=tv_simply,default",
+    ]
+    try:
+        # one lookup measures 4-6 s; 30 outlasts a slow day, and a guest waits no minute
+        stdout = _run_caption_command("lookup", video_url, dest_dir, stem, lookup_args, 30)
+    except CaptionDownloadFailed as e:
+        e.stream_url, _ = _parse_lookup_print(e.stdout)
+        raise
+    stream_url, duration_s = _parse_lookup_print(stdout)
+    return VideoLookup(
+        srt_path=_select_en_srt(dest_dir, stem), duration_s=duration_s, stream_url=stream_url
     )
+
+
+def _parse_lookup_print(stdout: bytes) -> tuple[str | None, float | None]:
+    """The link and the length :func:`lookup_video` has yt-dlp print, each None when absent."""
     lines = [line.strip() for line in stdout.decode("utf-8", "ignore").splitlines() if line.strip()]
     stream_url = lines[0] if lines and lines[0].startswith("http") else None  # "NA": no format
     duration_s = None
@@ -393,9 +414,7 @@ def lookup_video(video_url: str, dest_dir: str, stem: str) -> VideoLookup:
             duration_s = float(lines[1])
         except ValueError:  # "NA" for a live stream
             pass
-    return VideoLookup(
-        srt_path=_select_en_srt(dest_dir, stem), duration_s=duration_s, stream_url=stream_url
-    )
+    return stream_url, duration_s
 
 
 # Canonical name for the selected real-ASR track. The ``.en.asr.json3`` suffix
