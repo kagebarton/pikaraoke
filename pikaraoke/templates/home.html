@@ -65,6 +65,17 @@ function sendOnChange(selector, key, url) {
   });
 }
 
+// A push moves a stepper only when the server's value differs from the last push. Every push
+// repeats the server's state (another phone queued a song, say), and applying a repeat would
+// snap the knob back to the old value while a drag is on or a request is still waiting out its
+// debounce, and Volume would then send that old value.
+var _pushed = {};
+function syncStepper(id, value) {
+  if (_pushed[id] === value) return;
+  _pushed[id] = value;
+  stepperSet(document.getElementById(id), value);
+}
+
 // A button names what a tap does, so Pause reads Resume while the song is paused. The two
 // labels ride on the button (data-label-*), where Jinja translates them.
 var _paused = false;
@@ -130,17 +141,17 @@ function handleNowPlaying(np) {
   }
 
   // Sync the steppers with the server's state
-  stepperSet(document.getElementById("transpose"), np.now_playing_transpose);
-  stepperSet(document.getElementById("volume-slider"), Math.round(np.volume * 100));
+  syncStepper("transpose", np.now_playing_transpose);
+  syncStepper("volume-slider", Math.round(np.volume * 100));
   if (np.subtitle_delay !== undefined) {
-    stepperSet(document.getElementById("subtitle-delay-slider"), np.subtitle_delay);
+    syncStepper("subtitle-delay-slider", np.subtitle_delay);
   }
 
   // Vocal volume section visibility and sync
   if (np.dual_stem) {
     $("#vocal-volume-section").show();
     if (np.vocal_volume !== undefined) {
-      stepperSet(document.getElementById("vocal-volume-slider"), Math.round(np.vocal_volume * 100));
+      syncStepper("vocal-volume-slider", Math.round(np.vocal_volume * 100));
     }
   } else {
     $("#vocal-volume-section").hide();
