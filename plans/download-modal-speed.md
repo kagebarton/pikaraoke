@@ -836,6 +836,16 @@ files, and one finder angle per Self-Review axis.
 
 ### At landing (not this run)
 
+- Ken ruled 2026-11-21: this branch lands before `search_official_captions` Parts 1-2 (its manual
+  checks are open and it has drifted); that branch rebases over this one.
+- Copy `e808de92` (the raised grey) without its new rules. `dev`'s theme (`bulma-dark.css`, from
+  `singer_defaults`) already makes a plain `.button` the raised grey and gives `[disabled]` its
+  look, so only the deletion of `#lyrics-search-open`'s transparent background and border stays:
+  left in, it would beat the theme. After copying, check on `dev` that Add to library and Search
+  for other lyrics... come out grey from the theme alone.
+- Add `is-flash` to each result flash in the dialog's script (the `d7d5b5ff` ones): a button
+  disabled only while it shows its result takes the theme's grey disabled look otherwise.
+
 - `plans/open-issues.md` on `dev`: reword "A restored search page can show a stuck card" to
   the card's half only (O11), in a plan-only commit.
 - Whichever of this branch and `search_official_captions` Part 2 lands second points
