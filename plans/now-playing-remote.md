@@ -323,3 +323,66 @@ vocals, the guest form, and the admin's view from the host's phone.
 
 (Executor: one row per phase: commit hashes, test counts, the ui-check outcome per check,
 anything that deviated from this plan and why.)
+
+### Phase 1: build (Sonnet 5.5, 2026-11-21)
+
+**Commits** on `now_playing_remote`, on plan `277ba5be`: `a9d38a95` (1, steppers), `1bbacd87`
+(2, transport), `8d23f10f` (3, admin-only blocks, `ADMIN_KEY_LIMIT`, `test_home_page.py`),
+`77a06988` (4, guest form), then `6113ec99` (fix found by the ui-check, below).
+
+**Suite:** 4263 passed at `77a06988` and again at `6113ec99`.
+
+**Harness.** No `ui-check` skill and no `launch.sh` exist on this machine (not in the repo,
+`~/.claude/skills`, or the plugin folders; `FAKE_JOB_S` appears only in this plan). The check ran
+on a scratchpad harness, not in the repo: `np_app.py` serves the worktree's real routes,
+templates, `SingerRegistry`, `PreferenceManager` and `QueueManager` around a fake Karaoke that
+plays nothing (each control route changes the fake's state and pushes `now_playing` at once, as
+`Karaoke.update_now_playing_socket` does; `ADMIN_PASSWORD` set to `pw` on the app config, not an
+instance config file); `np_check.py` drives it in Chromium (Playwright) with touch + mobile
+contexts at 390 and 360 px. No mpv, no fake jobs, no real song. Joined guests: Alice (the playing
+song's singer, saved key +2, Original vocals 60%), Carol (third context), Host (admin cookie).
+Files: `/tmp/claude-1000/-home-ken-projects-pikaraoke/a595648f-ce54-46a8-9e59-03a9fffed5f9/scratchpad/np_app.py`
+and `.../np_check.py`. Screenshots and `results.json` (89 assertions): worktree
+`.claude/ui-check/now_playing_remote/` (gitignored); `390-form.png` is the form after Save
+(70% / +3), the width pass overwrote check 7's shot of the saved 60% / +2.
+
+| # | Check | Outcome |
+|---|-------|---------|
+| 1 | Guest view | pass. Visible: `#restart`, `#pause-resume`, `#skip`, `#transpose`, Lyrics. Not in the DOM: `#seek-bar`, `#volume-slider`, `#subtitle-delay-slider`, `#subtitle-delay-section`, also with the song in Subtitles mode. Key `min=-3 max=3`. Original vocals hidden: the fake song is not dual-stem. No `<hr>`, no "Player Control". |
+| 2 | Key taps | pass. Three + taps: knob `+3`, + disabled, requests `['/transpose/3']`. |
+| 3 | Key drag | pass. Finger to the left end: knob `-3`, no request while the finger is down, `['/transpose/-3']` after release; range value `-3`. |
+| 4 | Pause | pass. Singer's tap: button `Resume`, Paused tag shown. Carol (third context): control box hidden, Paused tag shown, `#pause-resume` text `Resume`. Resume tap: both back to `Pause`, tag hidden on both. `/pause` twice, one per tap. |
+| 5 | Confirms | pass. Dialogs `Restart this song?` then `Skip this song?`, both dismissed; no `/restart` or `/skip` request. |
+| 6 | Admin view | pass. Seek bar shown. Volume `80%`, one − tap: `70%`, `['/volume/0.7']`. Key `min=-12 max=12`; 12 + taps: `+12`, last request `/transpose/12`. Karaoke mode: no Subtitle delay; Subtitles: section shown; + tap: `+0.1 s`, `['/subtitle_delay/0.1']`. With the fake's `dual_stem` set true (a flag, not a dual-stem song): Original vocals shown; + tap: `50%`, `['/vocal_volume/0.5']`. |
+| 7 | Guest form | pass. Opened from the navbar name: Original vocals `60%`, Key `+2` (the saved values), Key has one (i), Key `min=-3 max=3`. Changed to `70%` / `+3`, Save, reopened: `70%` / `+3`. |
+| 8 | Navigation | pass. Queue and back twice, then one Key tap: `0` to `+1`, `['/transpose/1']`; one Pause tap: `['/pause']`. Page errors 0. |
+| 9 | Width | pass. `scrollWidth == innerWidth` on guest Now Playing, admin Now Playing (every section shown: fake dual-stem, Subtitles) and the form, at 360 and 390 px. Form track 124 px at 360 (card 324, stepper 260) and 151 px at 390 (card 351, stepper 287); knob 68 px; each stepper part inside the card. |
+| 10 | Colours | pass. Knob `rgb(55, 90, 127)` on `rgb(255, 255, 255)`; fill `rgb(55, 90, 127)` at opacity `0.5`; chosen lyric button `rgb(55, 90, 127)` on white; all three on Now Playing and on the form. Transport and an enabled −: `rgb(67, 77, 78)` (form − too). Key + at `+3`: background `rgba(0, 0, 0, 0)`, colour `rgb(140, 155, 157)`, opacity `1`, border `rgba(94, 109, 111, 0.5)`. `#now-playing` colour `rgb(241, 183, 14)`. |
+
+**Watch items.**
+
+- *Volume drag vs the server push:* failed at `77a06988`, fixed by `6113ec99`. A `now_playing`
+  push while the finger was down (finger at 24%, server still at 80%) put the range back at 80;
+  the debounced send then read it: `['/volume/0.8']`. A push 150 ms after release did the same
+  (released 24, after push 80, sent `/volume/0.8`). Cause: `handleNowPlaying` called `stepperSet`
+  on every push, and the old `np.volume != volume` compare had gone with `var volume` (as this
+  plan specified). Fix: `syncStepper` in `home.html` applies a push only when the server's value
+  differs from the last push, for all four Now Playing steppers. After: finger 24 / after push
+  24, sent `['/volume/0.24']`; release then push: 24 / 24 / sent `['/volume/0.24']`. Another
+  phone's change still moves the knobs (volume to `50%`, key to `-4`, then back to `80%` / `0`).
+  The plan's Design says "`handleNowPlaying` syncs every stepper through `stepperSet`"; it now goes
+  through `syncStepper`, which calls it.
+- *Rail on the form's card:* drawn, rail `rgb(52, 60, 61)` on the form's card `rgb(40, 47, 47)`,
+  contrast 1.21:1; the fill and the zero tick show in `390-form.png` and `360-form.png`. On
+  Now Playing it sits on the control box's near-black.
+- *360 px form width:* see check 9.
+
+**Deviations from the plan.**
+
+- `.control-box a` / `--controls-link-color` / `--controls-link-hover` removal landed in commit 2
+  (`1bbacd87`), not commit 1 (the plan's list of commit 1's deletions). Commit 1 (`a9d38a95`)
+  removed the `#vol-up`/`#vol-down` rules and `--controls-header-size`/`--controls-icon-size`, and
+  trimmed `.control-box a` to its own selector.
+- One commit beyond the plan's four: `6113ec99`, above.
+- The ui-check ran on the scratchpad harness described above, not on `launch.sh` with
+  `FAKE_JOB_S=5`; the admin password was set on the app config, not in an instance config.
