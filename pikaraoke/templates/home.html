@@ -1,14 +1,12 @@
 {% extends 'base.html' %}
-{% from 'singer_tips.html' import lyric_style_buttons, lyrics_tip, original_vocals_tip %}
+{% from 'singer_tips.html' import key_tip, lyric_style_buttons, lyrics_tip, original_vocals_tip %}
+{% from 'info_tip.html' import info_tip %}
+{% from 'stepper.html' import stepper %}
 
 {# ── Control Box Configuration ──────────────────────────────────────── #}
 {% block styles %}
 <style>
   :root {
-    /* Font sizes */
-    --controls-header-size: 1.25rem;        /* h4, section headers */
-    --controls-icon-size: 1.25rem;          /* large icons (play/pause, +/-) */
-
     /* Time display */
     --time-text-size: 1.25rem;
     --time-text-weight: bold;
@@ -26,51 +24,31 @@
   .content h3 { margin-bottom: 0.25rem; }
   .content h3:not(:first-child) { margin-top: 0.25rem; }
   #up-next { margin-bottom: 0.25rem; }
+
+  /* The control box's sections are spaced, not ruled */
+  .control-box .np-section { margin-top: 1.25rem; }
+  .control-box .np-section h4 { margin-bottom: 0.5rem; }
 </style>
 {% endblock %}
 
 {% block scripts %}
 <script>
-var volume = {{ volume|default(0.85) }};
 var isAdmin = {{ admin | tojson }};
 
-// Per-key debounce for step buttons
+// Per-key debounce for the sliders and lyric style buttons
 var _stepTimers = {};
 function debounceStep(fn, key, delay = 300) {
   clearTimeout(_stepTimers[key]);
   _stepTimers[key] = setTimeout(fn, delay);
 }
 
-function stepPitch(delta) {
-  var slider = document.getElementById("transpose");
-  var val = Math.max(-12, Math.min(12, parseInt(slider.value) + delta));
-  slider.value = val;
-  document.getElementById("semitones-label").innerHTML = getSemitonesLabel(val);
-  debounceStep(() => $.get("/transpose/" + val), '_pitch');
-}
-
-function stepSubtitleDelay(delta) {
-  var slider = document.getElementById("subtitle-delay-slider");
-  var val = Math.max(-5, Math.min(5, parseFloat((parseFloat(slider.value) + delta).toFixed(1))));
-  slider.value = val;
-  document.getElementById("subtitle-delay-label").innerHTML = formatSubtitleDelay(val);
-  debounceStep(() => $.get("/subtitle_delay/" + val), '_sub');
-}
-
-function stepVocalVolume(delta) {
-  var slider = document.getElementById("vocal-volume-slider");
-  var val = Math.max(0, Math.min(100, parseInt(slider.value) + delta));
-  slider.value = val;
-  document.getElementById("vocal-volume-label").innerHTML = val + "%";
-  debounceStep(() => $.get("/vocal_volume/" + (val / 100)), '_vocalvol');
-}
-
-// Format subtitle delay display (e.g., "+0.5", "-0.3", "0")
-function formatSubtitleDelay(value) {
-  var num = parseFloat(value);
-  if (num > 0) return "+" + num.toFixed(1);
-  if (num < 0) return num.toFixed(1);
-  return "0";
+// Sends a stepper's value when it settles (a drag's release, or a tap: stepper.js fires change
+// for both), so rapid taps merge into one request.
+function sendOnChange(selector, key, url) {
+  $(selector).on("change", function () {
+    var value = this.value;
+    debounceStep(() => $.get(url(value)), key);
+  });
 }
 
 // Subtitle mode toggle
@@ -128,27 +106,18 @@ function handleNowPlaying(np) {
     $("#up-next").html("{{ _('No song is queued.') }}");
   }
 
-  if (np.now_playing_transpose != 0) {
-    $("#transpose").val(np.now_playing_transpose);
-    $("#semitones-label").html(getSemitonesLabel(np.now_playing_transpose));
-  } else {
-    $("#transpose").val(0);
-    $("#semitones-label").html(getSemitonesLabel(np.now_playing_transpose));
-  }
-
-  // Sync subtitle delay slider with server state
+  // Sync the steppers with the server's state
+  stepperSet(document.getElementById("transpose"), np.now_playing_transpose);
+  stepperSet(document.getElementById("volume-slider"), Math.round(np.volume * 100));
   if (np.subtitle_delay !== undefined) {
-    $("#subtitle-delay-slider").val(np.subtitle_delay);
-    $("#subtitle-delay-label").html(formatSubtitleDelay(np.subtitle_delay));
+    stepperSet(document.getElementById("subtitle-delay-slider"), np.subtitle_delay);
   }
 
   // Vocal volume section visibility and sync
   if (np.dual_stem) {
     $("#vocal-volume-section").show();
     if (np.vocal_volume !== undefined) {
-      var pct = Math.round(np.vocal_volume * 100);
-      $("#vocal-volume-slider").val(pct);
-      $("#vocal-volume-label").html(pct + "%");
+      stepperSet(document.getElementById("vocal-volume-slider"), Math.round(np.vocal_volume * 100));
     }
   } else {
     $("#vocal-volume-section").hide();
@@ -181,13 +150,6 @@ function handleNowPlaying(np) {
     timeElapsed.innerHTML = fmtTime(np.now_playing_position || 0);
   }
 
-  // set the volume slider to the current volume
-  if (np.volume != volume) {
-    volume = np.volume;
-    console.log("setting volume to " + volume);
-    $("#volume-slider").val(volume);
-  }
-
   if (np.is_paused) {
     $("#pause-resume").removeClass("icon-pause");
     $("#pause-resume").addClass("icon-play");
@@ -216,54 +178,16 @@ window.socket.on("playback_position", function (pos) {
 $(function () {
   $(".control-box").hide();
 
-  var slider = document.getElementById("transpose");
-  var output = document.getElementById("semitones-label");
-  if (slider && output) {
-    output.innerHTML = getSemitonesLabel(slider.value);
-    // Update the current slider value (each time you drag the slider handle)
-    slider.oninput = function () {
-      output.innerHTML = getSemitonesLabel(slider.value);
-    };
-  }
-
+  // Volume goes out live while it is dragged
   $("#volume-slider").on(
     "input",
-    debounce(function (event) {
-      const value = this.value;
-      $.get("/volume/" + value);
+    debounce(function () {
+      $.get("/volume/" + this.value / 100);
     }, 500)
   );
-
-  if (slider && output) {
-    slider.onchange = function () {
-      debounceStep(() => $.get("/transpose/" + slider.value), '_pitch');
-    };
-  }
-
-  // Subtitle delay slider handler
-  var subtitleDelaySlider = document.getElementById("subtitle-delay-slider");
-  var subtitleDelayLabel = document.getElementById("subtitle-delay-label");
-  if (subtitleDelaySlider && subtitleDelayLabel) {
-    subtitleDelayLabel.innerHTML = formatSubtitleDelay(subtitleDelaySlider.value);
-    subtitleDelaySlider.oninput = function () {
-      subtitleDelayLabel.innerHTML = formatSubtitleDelay(this.value);
-    };
-    subtitleDelaySlider.onchange = function () {
-      debounceStep(() => $.get("/subtitle_delay/" + subtitleDelaySlider.value), '_sub');
-    };
-  }
-
-  // Vocal volume slider handler
-  var vvSlider = document.getElementById("vocal-volume-slider");
-  var vvLabel = document.getElementById("vocal-volume-label");
-  if (vvSlider && vvLabel) {
-    vvSlider.oninput = function () {
-      vvLabel.innerHTML = vvSlider.value + "%";
-    };
-    vvSlider.onchange = function () {
-      debounceStep(() => $.get("/vocal_volume/" + (vvSlider.value / 100)), '_vocalvol');
-    };
-  }
+  sendOnChange("#transpose", "_pitch", (v) => "/transpose/" + v);
+  sendOnChange("#subtitle-delay-slider", "_sub", (v) => "/subtitle_delay/" + v);
+  sendOnChange("#vocal-volume-slider", "_vocalvol", (v) => "/vocal_volume/" + v / 100);
 
   // Seek bar handlers
   var seekBar = document.getElementById("seek-bar");
@@ -283,14 +207,6 @@ $(function () {
     togglePausePlayButton();
   });
 
-  $("#vol-up").click(function () {
-    $.get("/vol_up");
-  });
-
-  $("#vol-down").click(function () {
-    $.get("/vol_down");
-  });
-
   $("#restart").click(function () {
     r = confirm("Are you sure you want to restart this track?");
     if (r) {
@@ -306,22 +222,6 @@ $(function () {
     if (r) {
       $.get("/skip");
     }
-  });
-
-  $("#semitones-info").click(function () {
-    showNotification(
-      "A semitone is also known as a half-step. It is the smallest interval used in classical Western music, equal to a twelfth of an octave or half a tone.",
-      "is-info",
-      10000
-    );
-  });
-
-  $("#subtitle-delay-info").click(function () {
-    showNotification(
-      "Negative delay = subtitles appear earlier. Positive delay = subtitles appear later.",
-      "is-info",
-      10000
-    );
   });
 
   function togglePausePlayButton() {
@@ -392,126 +292,53 @@ $(function () {
     <span id="time-total" style="width: 40px; font-size: var(--time-text-size); font-weight: var(--time-text-weight); color: var(--time-text-color);">0:00</span>
   </div>
 
-  <div class="is-size-3" style="display: flex; justify-content: space-between">
-    <div class="is-size-3">
-      {# MSG: Title attribute on the button to restart the current song. #}
-      <a title="{{ _('Restart Song') }}" id="restart"><i class="icon icon-to-start"></i> </a>&nbsp;&nbsp; {# MSG:
-      Title attribute on the button to play or pause the current song. #}
-      <a title="{{ _('Play/Pause') }}"><i id="pause-resume" class="icon icon-pause"></i> </a>&nbsp;&nbsp; {# MSG:
-      Title attribute on the button to skip to the next song. #}
-      <a title="{{ _('Stop Current Song') }}" id="skip"><i class="icon icon-to-end"></i> </a>
-    </div>
-    <div class="is-size-3" style="display: flex; align-items: center">
-      <i id="vol-down" class="icon icon-volume-down"></i>
-      <input
-        type="range"
-        min="0"
-        max="1"
-        value="{{ volume|default(0.85) }}"
-        step="0.025"
-        id="volume-slider"
-        style="margin: 0 8px 0px 5px; width: 100px"
-      />
-      <i id="vol-up" class="icon icon-volume-up"></i>
-    </div>
+  <div class="is-size-3">
+    {# MSG: Title attribute on the button to restart the current song. #}
+    <a title="{{ _('Restart Song') }}" id="restart"><i class="icon icon-to-start"></i> </a>&nbsp;&nbsp; {# MSG:
+    Title attribute on the button to play or pause the current song. #}
+    <a title="{{ _('Play/Pause') }}"><i id="pause-resume" class="icon icon-pause"></i> </a>&nbsp;&nbsp; {# MSG:
+    Title attribute on the button to skip to the next song. #}
+    <a title="{{ _('Stop Current Song') }}" id="skip"><i class="icon icon-to-end"></i> </a>
   </div>
-  <hr />
 
-  {# ── Vocal volume section (dual-stem only) ─────────────────────────── #}
-  <div id="vocal-volume-section" style="display: none">
-    <div class="is-flex" style="justify-content: space-between">
-      <div>
-        {# MSG: Heading of Now Playing's slider for how loud the original recording's singer is. Not the guest's own microphone #}
-        <h4>{% trans %}Original vocals{% endtrans %} {{ original_vocals_tip() }}</h4>
-      </div>
-      <div class="is-flex">
-        <h4 id="vocal-volume-label">40%</h4>
-      </div>
-    </div>
-    <div style="width: 100%">
-      <div class="is-flex" style="align-items: center; gap: 8px">
-        <i class="icon icon-minus-circled is-size-3" onclick="stepVocalVolume(-10)" style="cursor: pointer; flex-shrink: 0"></i>
-        <input type="range" min="0" max="100" value="40" step="1"
-          id="vocal-volume-slider" style="flex: 1; min-width: 0" />
-        <i class="icon icon-plus-circled is-size-3" onclick="stepVocalVolume(10)" style="cursor: pointer; flex-shrink: 0"></i>
-      </div>
-    </div>
-    <hr />
+  <div class="np-section">
+    {# MSG: Heading of Now Playing's slider for the speaker volume #}
+    <h4 id="volume-heading">{% trans %}Volume{% endtrans %}</h4>
+    {{ stepper("volume-slider", 0, 100, (volume * 100) | round | int, tap=10, labelled_by="volume-heading") }}
+  </div>
+
+  {# ── Original vocals section (dual-stem only) ──────────────────────── #}
+  <div id="vocal-volume-section" class="np-section" style="display: none">
+    {# MSG: Heading of Now Playing's slider for how loud the original recording's singer is. Not the guest's own microphone #}
+    <h4 id="vocal-volume-heading">{% trans %}Original vocals{% endtrans %} {{ original_vocals_tip() }}</h4>
+    {{ stepper("vocal-volume-slider", 0, 100, 40, tap=10, labelled_by="vocal-volume-heading") }}
   </div>
 
   {% if is_transpose_enabled %}
-  {# ── Change Key section ────────────────────────────────────────────── #}
-  <div class="is-flex" style="justify-content: space-between">
-    <div>
-      {# MSG: Title of a control to change the key/pitch of the playing song. #}
-      <h4>{% trans %}Change Key{% endtrans %}</h4>
-    </div>
-    <div class="is-flex">
-      <h4 id="semitones-label"></h4>
-      <a id="semitones-info"> <i class="icon icon-info-circled-1" title="Info"></i></a>
-    </div>
+  {# ── Key section ───────────────────────────────────────────────────── #}
+  <div class="np-section">
+    {# MSG: Heading of Now Playing's slider that moves the playing song up or down in pitch #}
+    <h4 id="key-heading">{% trans %}Key{% endtrans %} {{ key_tip() }}</h4>
+    {{ stepper("transpose", -12, 12, 0, format="semitones", labelled_by="key-heading") }}
   </div>
-  <div style="width: 100%">
-    <div class="is-flex" style="align-items: center; gap: 8px">
-      <i class="icon icon-minus-circled is-size-3" onclick="stepPitch(-1)" style="cursor: pointer; flex-shrink: 0"></i>
-      <input
-        type="range"
-        min="-12"
-        max="12"
-        value="0"
-        class="transpose-slider"
-        id="transpose"
-        style="flex: 1; min-width: 0"
-      />
-      <i class="icon icon-plus-circled is-size-3" onclick="stepPitch(1)" style="cursor: pointer; flex-shrink: 0"></i>
-    </div>
-  </div>
-  <hr />
   {% endif %}
 
-  {# ── Subtitle mode section ─────────────────────────────────────────── #}
-  <div id="subtitle-mode-section" style="display: none">
-    <div class="is-flex" style="justify-content: space-between">
-      <div>
-        {# MSG: Heading of Now Playing's choice between Karaoke, Subtitles and Off for the words on screen #}
-        <h4>{% trans %}Lyrics{% endtrans %} {{ lyrics_tip() }}</h4>
-      </div>
-    </div>
+  {# ── Lyrics section ────────────────────────────────────────────────── #}
+  <div id="subtitle-mode-section" class="np-section" style="display: none">
+    {# MSG: Heading of Now Playing's choice between Karaoke, Subtitles and Off for the words on screen #}
+    <h4>{% trans %}Lyrics{% endtrans %} {{ lyrics_tip() }}</h4>
     <div class="buttons has-addons is-fullwidth" style="margin-bottom: 0.5rem">
       {{ lyric_style_buttons(onclick="setSubMode") }}
     </div>
-    <hr />
   </div>
 
   {# ── Subtitle delay section (only visible in 'srt' mode) ───────────── #}
-  <div id="subtitle-delay-section">
-    <div class="is-flex" style="justify-content: space-between">
-      <div>
-        {# MSG: Title of a control to adjust subtitle timing. #}
-        <h4>{% trans %}Subtitle Delay{% endtrans %}</h4>
-      </div>
-      <div class="is-flex">
-        <h4 id="subtitle-delay-label"></h4>
-        <span style="margin-left: 5px">sec</span>
-        <a id="subtitle-delay-info" style="margin-left: 8px"> <i class="icon icon-info-circled-1" title="Info"></i></a>
-      </div>
-    </div>
-    <div style="width: 100%">
-      <div class="is-flex" style="align-items: center; gap: 8px">
-        <i class="icon icon-minus-circled is-size-3" onclick="stepSubtitleDelay(-0.1)" style="cursor: pointer; flex-shrink: 0"></i>
-        <input
-          type="range"
-          min="-5"
-          max="5"
-          value="0"
-          step="0.1"
-          id="subtitle-delay-slider"
-          style="flex: 1; min-width: 0"
-        />
-        <i class="icon icon-plus-circled is-size-3" onclick="stepSubtitleDelay(0.1)" style="cursor: pointer; flex-shrink: 0"></i>
-      </div>
-    </div>
-    <hr />
+  <div id="subtitle-delay-section" class="np-section">
+    {# MSG: Heading of Now Playing's slider that moves the on-screen lines earlier or later #}
+    <h4 id="subtitle-delay-heading">{% trans %}Subtitle delay{% endtrans %}
+      {# MSG: Note beside "Subtitle delay", the slider that moves the on-screen lines earlier or later (Now Playing) #}
+      {% call info_tip() %}{% trans %}Below 0 the lines show earlier, above 0 later.{% endtrans %}{% endcall %}</h4>
+    {{ stepper("subtitle-delay-slider", -5, 5, 0, step=0.1, tap=0.1, format="seconds", labelled_by="subtitle-delay-heading") }}
   </div>
 </div>
 

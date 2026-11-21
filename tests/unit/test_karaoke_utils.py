@@ -261,46 +261,6 @@ class TestVolumeChange:
         assert mock_karaoke.volume == 0.0
 
 
-class TestVolUp:
-    """Tests for the vol_up method."""
-
-    def test_increase_volume(self, mock_karaoke):
-        """Test increasing volume by 10%."""
-        mock_karaoke.volume = 0.5
-
-        mock_karaoke.vol_up()
-
-        assert mock_karaoke.volume == 0.6
-
-    def test_increase_near_max(self, mock_karaoke):
-        """Test increasing volume is clamped to 1.0."""
-        mock_karaoke.volume = 0.95
-
-        mock_karaoke.vol_up()
-
-        assert mock_karaoke.volume == 1.0
-
-
-class TestVolDown:
-    """Tests for the vol_down method."""
-
-    def test_decrease_volume(self, mock_karaoke):
-        """Test decreasing volume by 10%."""
-        mock_karaoke.volume = 0.5
-
-        mock_karaoke.vol_down()
-
-        assert mock_karaoke.volume == 0.4
-
-    def test_decrease_near_min(self, mock_karaoke):
-        """Test decreasing volume is clamped to 0.0."""
-        mock_karaoke.volume = 0.05
-
-        mock_karaoke.vol_down()
-
-        assert mock_karaoke.volume == 0.0
-
-
 class TestRestart:
     """Tests for the restart method."""
 

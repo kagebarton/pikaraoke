@@ -13,6 +13,11 @@
 {% call info_tip() %}{% trans %}How loud the recording's singer is. Your microphone isn't changed. 0% leaves just the music.{% endtrans %}{% endcall %}
 {%- endmacro %}
 
+{% macro key_tip() -%}
+{# MSG: Note beside "Key", the slider that moves a song up or down in pitch (the guest form and Now Playing) #}
+{% call info_tip() %}{% trans %}Moves the song up or down in half-steps. 0 is the original key.{% endtrans %}{% endcall %}
+{%- endmacro %}
+
 {% macro lyrics_tip() -%}
 {# MSG: Note beside "Lyrics", the choice between Karaoke, Subtitles and Off (the guest form and Now Playing) #}
 {% call info_tip() %}{% trans %}Karaoke highlights each word as it's sung. Subtitles shows whole lines.{% endtrans %}{% endcall %}

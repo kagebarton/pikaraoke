@@ -164,8 +164,6 @@ class MockKaraoke:
     log_and_send = Karaoke.log_and_send
     update_now_playing_socket = Karaoke.update_now_playing_socket
     volume_change = Karaoke.volume_change
-    vol_up = Karaoke.vol_up
-    vol_down = Karaoke.vol_down
     restart = Karaoke.restart
     stop = Karaoke.stop
     reset_now_playing_notification = Karaoke.reset_now_playing_notification

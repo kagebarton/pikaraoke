@@ -24,20 +24,14 @@
   margin-right: 0;
 }
 
-.control-box a,
-.control-box i[onclick],
-#vol-up,
-#vol-down {
+.control-box a {
   color: var(--controls-link-color);
 }
 
 /* Touch screens keep :hover on the last tapped element, which left an icon
    lit after a tap; only devices with a real pointer get the hover color. */
 @media (hover: hover) {
-  .control-box a:hover,
-  .control-box i[onclick]:hover,
-  #vol-up:hover,
-  #vol-down:hover {
+  .control-box a:hover {
     color: var(--controls-link-hover);
   }
 }
@@ -90,8 +84,8 @@ input {
   --button-hover-bg: var(--dark-bg-tertiary);
   --button-hover-text: var(--dark-text-light);
 
-  --button-selected-bg: var(--bulma-success-dark-invert);
-  --button-selected-text: var(--bulma-dark);
+  --button-selected-bg: var(--dark-primary);
+  --button-selected-text: var(--dark-text-primary);
 }
 
 #subtitle-mode-section .buttons,

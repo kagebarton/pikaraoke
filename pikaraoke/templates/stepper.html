@@ -1,0 +1,19 @@
+{# The shared slider: a - button, a rail with its value on the knob, a + button. stepper.js
+   drives it and stepper.css draws it (base.html loads both on every page). The page keeps the
+   heading above it and passes that heading's id as `labelled_by`.
+
+   `tap` is how far one tap on - or + moves it, `format` how the knob shows the value
+   (percent, semitones or seconds). A stepper with a negative minimum gets a tick at 0. #}
+{% macro stepper(id, min, max, value, step=1, tap=1, format="percent", labelled_by="") -%}
+<div class="stepper{% if min < 0 %} has-zero{% endif %}" role="group" aria-labelledby="{{ labelled_by }}" data-tap="{{ tap }}" data-format="{{ format }}">
+  {# MSG: Name of the button on a slider that lowers its value by one tap (Now Playing's sliders and the guest form's) #}
+  <button type="button" class="stepper-btn" data-dir="-1" aria-label="{{ _('Lower') }}">&minus;</button>
+  <div class="stepper-track">
+    <span class="stepper-fill"></span>
+    <span class="stepper-knob" aria-hidden="true"></span>
+    <input type="range" class="stepper-range" id="{{ id }}" min="{{ min }}" max="{{ max }}" step="{{ step }}" value="{{ value }}" aria-labelledby="{{ labelled_by }}">
+  </div>
+  {# MSG: Name of the button on a slider that raises its value by one tap (Now Playing's sliders and the guest form's) #}
+  <button type="button" class="stepper-btn" data-dir="1" aria-label="{{ _('Raise') }}">+</button>
+</div>
+{%- endmacro %}
