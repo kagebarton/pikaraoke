@@ -34,21 +34,33 @@
 	--dark-border-faded: rgba(94, 109, 111, 0.5);
 
 	/* Accent colors */
-	--dark-primary: #375a7f;
 	--dark-link: #1abc9c;
 	--dark-link-hover: #1dd2af;
-	--dark-info: #3298dc;
-	--dark-danger: #e74c3c;
 
-	/* One green and one amber. Green (#2ecc71) means a tap that queues. Bulma builds
-	   has-text-*, the buttons and their shades from these three parts, so they are the
-	   one definition; the --dark-* names below read from them. */
+	/* Bulma builds has-text-*, tags, notifications, the buttons and every shade of them (hover,
+	   busy, disabled) from each colour's three parts (h, s, l), so the parts are the one
+	   definition of that colour; the --dark-* names below read from them. Blue #375a7f means chosen, info #3298dc, red #e74c3c,
+	   one green #2ecc71 (a tap that queues) and one amber #f1b70e. Blue's label is white (Bulma
+	   picks its label shade from its own default colour, a light turquoise). */
+	--bulma-primary-h: 210.83deg;
+	--bulma-primary-s: 39.56%;
+	--bulma-primary-l: 35.69%;
+	--bulma-primary-invert-l: 100%;
+	--bulma-info-h: 204deg;
+	--bulma-info-s: 70.83%;
+	--bulma-info-l: 52.94%;
+	--bulma-danger-h: 5.61deg;
+	--bulma-danger-s: 78.08%;
+	--bulma-danger-l: 57.06%;
 	--bulma-success-h: 145.44deg;
 	--bulma-success-s: 63.2%;
 	--bulma-success-l: 49.02%;
 	--bulma-warning-h: 44.67deg;
 	--bulma-warning-s: 89.02%;
 	--bulma-warning-l: 50%;
+	--dark-primary: var(--bulma-primary);
+	--dark-info: var(--bulma-info);
+	--dark-danger: var(--bulma-danger);
 	--dark-success: var(--bulma-success);
 	--dark-warning: var(--bulma-warning);
 }
@@ -145,17 +157,9 @@ hr {
 	border-color: var(--dark-border-light); */
 }
 
-/* Colored buttons */
-.button.is-primary {
-	background-color: var(--dark-primary);
-	border-color: transparent;
-	color: var(--dark-text-primary);
-}
-
-.button.is-primary:hover {
-	background-color: #436d9a;
-}
-
+/* Colored buttons. Bulma builds primary, info, success, warning and danger from the colour parts
+   (COLOR VARIABLES); a fill set here would beat its hover, busy and result-flash shades. Link has
+   no parts yet: no page uses an is-link button. */
 .button.is-link {
 	background-color: var(--dark-link);
 	border-color: transparent;
@@ -164,27 +168,6 @@ hr {
 
 .button.is-link:hover {
 	background-color: #1fdeb8;
-}
-
-.button.is-info {
-	background-color: var(--dark-info);
-	border-color: transparent;
-}
-
-.button.is-success {
-	background-color: var(--dark-success);
-	border-color: transparent;
-}
-
-.button.is-warning {
-	background-color: var(--dark-warning);
-	border-color: transparent;
-	color: rgba(0, 0, 0, 0.7);
-}
-
-.button.is-danger {
-	/* background-color: var(--dark-danger); */
-	/* border-color: transparent; */
 }
 
 /* Disabled, whatever its colour: no fill, a faded border, a muted label. A busy button is
@@ -257,7 +240,7 @@ hr {
 .input.is-danger {
 	background: #ffd5de;
 	color: #4d0212;
-	border: 2px solid #ff6685;
+	border: 2px solid var(--dark-danger);
 }
 
 /* ===================================

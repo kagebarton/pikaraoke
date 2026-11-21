@@ -224,7 +224,7 @@
 						{# MSG: Song count display in the library card. #}
 						{% trans %}Songs in library:{% endtrans %} <strong id="library-song-count">...</strong>
 					</p>
-					<button id="sync-library-btn" class="button is-primary is-inverted">
+					<button id="sync-library-btn" class="button is-primary">
 						{# MSG: Button to trigger a background library scan. #}
 						{% trans %}Sync Now{% endtrans %}
 					</button>
@@ -500,7 +500,7 @@
 						If downloads or searches stopped working, updating youtube-dl will probably fix it.<br/>
 						The current installed version is: "{{ youtubedl_version }}".
 					{% endtrans %}</p>
-					<a id="update-ytdl-link" class="button is-primary is-inverted" href="{{ url_for('admin.update_ytdl') }}"
+					<a id="update-ytdl-link" class="button is-primary" href="{{ url_for('admin.update_ytdl') }}"
 						{# MSG: Text for the link which will try and update youtube-dl on the machine running Pikaraoke. #}
 							>{% trans %}Update youtube-dl{% endtrans %}</a
 						>
@@ -533,7 +533,7 @@
 							you may want to expand the filesystem to utilize the remaining space. You only need to do this once.
 							This will reboot the system.
 						{%- endtrans %}</p>
-						<a id="expand-link"  class="button is-primary is-inverted" href="{{ url_for('admin.expand_fs') }}">
+						<a id="expand-link"  class="button is-primary" href="{{ url_for('admin.expand_fs') }}">
 							{# MSG: Text for button#}
 							{% trans %}Expand Raspberry Pi filesystem{% endtrans %}</a>
 					</div>
