@@ -24,18 +24,6 @@
   margin-right: 0;
 }
 
-.control-box a {
-  color: var(--controls-link-color);
-}
-
-/* Touch screens keep :hover on the last tapped element, which left an icon
-   lit after a tap; only devices with a real pointer get the hover color. */
-@media (hover: hover) {
-  .control-box a:hover {
-    color: var(--controls-link-hover);
-  }
-}
-
 .pagination {
   margin-bottom: 7px;
 }

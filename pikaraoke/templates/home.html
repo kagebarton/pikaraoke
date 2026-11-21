@@ -11,10 +11,6 @@
     --time-text-size: 1.25rem;
     --time-text-weight: bold;
     --time-text-color: var(--dark-text-secondary);  /* matches h4 off-white */
-
-    /* Interactive element colors */
-    --controls-link-color: var(--dark-text-light);  /* links, icons (inactive) */
-    --controls-link-hover: var(--bulma-success-dark-invert);         /* hover color (mint) */
   }
 
   /* Tighten vertical rhythm around Now Playing / Next Song */
@@ -28,6 +24,24 @@
   /* The control box's sections are spaced, not ruled */
   .control-box .np-section { margin-top: 1.25rem; }
   .control-box .np-section h4 { margin-bottom: 0.5rem; }
+
+  /* Restart | Pause | Skip: three equal grey buttons, none highlighted */
+  .transport { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .transport button {
+    height: 64px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--dark-bg-raised);
+    color: var(--dark-text-primary);
+    font-size: 20px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  /* Only a real pointer gets the hover tint: a touch screen keeps :hover on the last tapped
+     button. */
+  @media (hover: hover) {
+    .transport button:hover { background: var(--button-hover-bg); }
+  }
 </style>
 {% endblock %}
 
@@ -49,6 +63,15 @@ function sendOnChange(selector, key, url) {
     var value = this.value;
     debounceStep(() => $.get(url(value)), key);
   });
+}
+
+// A button names what a tap does, so Pause reads Resume while the song is paused. The two
+// labels ride on the button (data-label-*), where Jinja translates them.
+var _paused = false;
+function showPaused(paused) {
+  _paused = paused;
+  var button = $("#pause-resume");
+  button.text(button.data(paused ? "labelResume" : "labelPause"));
 }
 
 // Subtitle mode toggle
@@ -150,13 +173,11 @@ function handleNowPlaying(np) {
     timeElapsed.innerHTML = fmtTime(np.now_playing_position || 0);
   }
 
+  showPaused(np.is_paused);
+  $("#paused-tag").toggle(Boolean(np.now_playing && np.is_paused));
   if (np.is_paused) {
-    $("#pause-resume").removeClass("icon-pause");
-    $("#pause-resume").addClass("icon-play");
     $(".playing_gif").attr("src", "{{ url_for('static', filename='images/now-playing.png') }}");
   } else {
-    $("#pause-resume").removeClass("icon-play");
-    $("#pause-resume").addClass("icon-pause");
     $(".playing_gif").attr("src", "{{ url_for('static', filename='images/now-playing.gif') }}");
   }
 }
@@ -202,37 +223,25 @@ $(function () {
     });
   });
 
+  // The button flips at once; the server's push confirms it
   $("#pause-resume").click(function () {
     $.get("/pause");
-    togglePausePlayButton();
+    showPaused(!_paused);
   });
 
   $("#restart").click(function () {
-    r = confirm("Are you sure you want to restart this track?");
-    if (r) {
+    // {# MSG: Confirmation when tapping Restart, which starts the playing song over #}
+    if (confirm({{ _("Restart this song?") | tojson }})) {
       $.get("/restart");
     }
   });
 
   $("#skip").click(function () {
-    r = confirm(
-    // {# MSG: Confirmation message when clicking a button to skip a track. #}
-    `{{ _("Are you sure you want to skip this track? If you didn't add this song, ask permission first!") }}`
-    );
-    if (r) {
+    // {# MSG: Confirmation when tapping Skip, which ends the playing song and starts the next #}
+    if (confirm({{ _("Skip this song?") | tojson }})) {
       $.get("/skip");
     }
   });
-
-  function togglePausePlayButton() {
-    if ($("#pause-resume").hasClass("icon-pause")) {
-      $("#pause-resume").removeClass("icon-pause");
-      $("#pause-resume").addClass("icon-play");
-    } else {
-      $("#pause-resume").removeClass("icon-play");
-      $("#pause-resume").addClass("icon-pause");
-    }
-  }
 
   //for first time load of splash screen
   loadNowPlaying();
@@ -269,7 +278,9 @@ $(function () {
   class="playing_gif control-box"
   width="40"
   src="{{ url_for('static', filename='images/now-playing.png') }}"
-/>{% endblock %}
+/>
+{# MSG: Tag beside the "Now Playing" heading while the song is paused #}
+<span id="paused-tag" class="tag is-medium" style="display: none; margin-left: 12px; vertical-align: middle">{% trans %}Paused{% endtrans %}</span>{% endblock %}
 </h1>
 {% endblock %} {% block content %}
 
@@ -281,9 +292,6 @@ $(function () {
 <hr />
 
 <div class="has-background-black-bis box control-box" style="max-width: 500px; display: none">
-  {# MSG: Title of the box with controls such as pause and skip. #}
-  <h4>{% trans %}Player Control{% endtrans %}</h4>
-
   {# ── Seek bar ──────────────────────────────────────────────────────── #}
   <div class="seek-row" style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.75rem;">
     <span id="time-elapsed" style="width: 40px; text-align: right; font-size: var(--time-text-size); font-weight: var(--time-text-weight); color: var(--time-text-color);">0:00</span>
@@ -292,13 +300,16 @@ $(function () {
     <span id="time-total" style="width: 40px; font-size: var(--time-text-size); font-weight: var(--time-text-weight); color: var(--time-text-color);">0:00</span>
   </div>
 
-  <div class="is-size-3">
-    {# MSG: Title attribute on the button to restart the current song. #}
-    <a title="{{ _('Restart Song') }}" id="restart"><i class="icon icon-to-start"></i> </a>&nbsp;&nbsp; {# MSG:
-    Title attribute on the button to play or pause the current song. #}
-    <a title="{{ _('Play/Pause') }}"><i id="pause-resume" class="icon icon-pause"></i> </a>&nbsp;&nbsp; {# MSG:
-    Title attribute on the button to skip to the next song. #}
-    <a title="{{ _('Stop Current Song') }}" id="skip"><i class="icon icon-to-end"></i> </a>
+  <div class="transport">
+    {# MSG: Button that starts the playing song over from its beginning (Now Playing) #}
+    <button type="button" id="restart">{% trans %}Restart{% endtrans %}</button>
+    {# MSG: Button that pauses the playing song. It reads "Resume" while the song is paused (Now Playing) #}
+    {% set pause_label = _('Pause') %}
+    {# MSG: What the pause button reads while the song is paused, a tap resumes it (Now Playing) #}
+    {% set resume_label = _('Resume') %}
+    <button type="button" id="pause-resume" data-label-pause="{{ pause_label }}" data-label-resume="{{ resume_label }}">{{ pause_label }}</button>
+    {# MSG: Button that skips the playing song and starts the next (Now Playing) #}
+    <button type="button" id="skip">{% trans %}Skip{% endtrans %}</button>
   </div>
 
   <div class="np-section">
