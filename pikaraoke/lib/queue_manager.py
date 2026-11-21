@@ -308,12 +308,15 @@ class QueueManager:
         Turns are taken in queue order. A playable song plays in its own turn.
         An unpaused held song's turn goes to its singer's first later playable
         song, which swaps places with it: turns belong to singers, so the ready
-        song plays now and the held one moves back to its slot.
+        song plays now and the held one moves back to its slot. A failed song,
+        like a paused one, has no turn: it stays where it is, so a retry that
+        works finds it in its place.
         """
         for turn, item in enumerate(queue):
             if QueueManager.is_playable(item):
                 return queue.pop(turn)
-            if item.get("waiting") and not item.get("paused", False):
+            waiting = item.get("waiting")
+            if waiting and waiting != "failed" and not item.get("paused", False):
                 later = next(
                     (
                         idx
@@ -352,16 +355,16 @@ class QueueManager:
         """Toggle pause on all queued songs for a user (step-away mode).
 
         Pauses all if any are unpaused; unpauses all if all are paused. A failed
-        song is left out of both: it never plays, so pausing it means nothing.
-        Returns False if the user has no such songs in the queue.
+        song is left out of that check, since it cannot play either way, but is
+        flipped with the rest, so a retry while its singer is away stays paused.
+        Returns False if the user has no song that can play in the queue.
         """
-        user_items = [
-            item for item in self.queue if item["user"] == user and item.get("waiting") != "failed"
-        ]
-        if not user_items:
+        user_items = [item for item in self.queue if item["user"] == user]
+        counted = [item for item in user_items if item.get("waiting") != "failed"]
+        if not counted:
             logging.error(f"No queued songs found for user: {user}")
             return False
-        new_state = not all(item.get("paused", False) for item in user_items)
+        new_state = not all(item.get("paused", False) for item in counted)
         for item in user_items:
             item["paused"] = new_state
         logging.info(f"All songs for {user} {'paused' if new_state else 'unpaused'}")

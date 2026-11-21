@@ -1,5 +1,6 @@
 import json
 from unittest.mock import MagicMock, patch
+from urllib.parse import quote
 
 import pytest
 import werkzeug
@@ -203,6 +204,33 @@ class TestQueueEditSocketUpdates:
         assert response.status_code == 302
         assert len(queue_updates) >= 1, "queue_update event should be emitted"
         assert len(now_playing_updates) >= 1, "now_playing_update event should be emitted"
+
+    @patch("pikaraoke.routes.queue.is_admin", return_value=True)
+    @patch("pikaraoke.routes.queue.get_karaoke_instance")
+    @patch("pikaraoke.routes.queue.broadcast_event")
+    @patch("pikaraoke.routes.queue._", side_effect=lambda x: x)
+    def test_queue_edit_finds_a_song_whose_name_holds_a_percent_sequence(
+        self,
+        mock_gettext,
+        mock_broadcast,
+        mock_get_instance,
+        mock_is_admin,
+        client_with_session,
+        queue_env,
+    ):
+        """The page encodes the path once; the route must not decode it a second time."""
+        qm, mock_karaoke, _, _ = queue_env
+        song = "/songs/100%25 Hits---abcdefghijk.mp4"
+        qm.queue = [{**_make_queue_item(1), "file": song}]
+        mock_get_instance.return_value = mock_karaoke
+
+        response = client_with_session.get(
+            f"/queue/edit?action=delete&song={quote(song, safe='')}",
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        assert json.loads(response.data)["success"] is True
+        assert qm.queue == []
 
     @pytest.mark.parametrize(
         "action,song_param,expected_new_index",

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from urllib.parse import unquote
 
 import flask_babel
 from flask import flash, redirect, render_template, request, url_for
@@ -72,9 +71,11 @@ def get_queue():
     """Get the current song queue, each item with its title split into ``artist`` and ``song``."""
     k = get_karaoke_instance()
     items = []
-    for item in k.queue_manager.queue:
-        artist, song = split_title(item["title"])
-        items.append({**item, "artist": artist, "song": song})
+    # Worker threads change the queue and its items; copy them under its lock
+    with k.queue_manager.lock:
+        for item in k.queue_manager.queue:
+            artist, song = split_title(item["title"])
+            items.append({**item, "artist": artist, "song": song})
     return json.dumps(items)
 
 
@@ -140,7 +141,8 @@ def queue_edit(query):
         broadcast_event("skip", "clear queue")
         success = True
     else:
-        song = unquote(query.get("song", ""))
+        # Flask has already decoded the query string; decoding again breaks a literal "%XX"
+        song = query.get("song", "")
         song_title = k.song_manager.filename_from_path(song)
 
         # MSG labels for each action

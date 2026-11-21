@@ -691,13 +691,17 @@ class TestQueueManagerTogglePause:
         assert result is True
         assert [item["paused"] for item in queue_manager.queue] == [False, False]
 
-    def test_toggle_pause_user_never_pauses_a_failed_song(self, queue_manager):
+    def test_toggle_pause_user_pauses_a_failed_song_with_the_rest(self, queue_manager):
+        """A failed song retried while its singer is away must come back paused."""
         queue_manager.enqueue("/songs/song1---abc.mp4", "User1", waiting="failed")
         queue_manager.enqueue("/songs/song2---def.mp4", "User1")
 
         queue_manager.toggle_pause_user("User1")
+        assert [item["paused"] for item in queue_manager.queue] == [True, True]
 
-        assert [item["paused"] for item in queue_manager.queue] == [False, True]
+        # The retry works: QueueHold clears `waiting` and nothing else
+        queue_manager.queue[0]["waiting"] = None
+        assert queue_manager.pop_next() is None
 
     def test_toggle_pause_user_with_only_failed_songs_does_nothing(self, queue_manager):
         queue_manager.enqueue("/songs/song1---abc.mp4", "User1", waiting="failed")
@@ -878,17 +882,17 @@ class TestQueueManagerHeldItems:
             "/songs/c1---ddd.mp4",
         ]
 
-    def test_a_failed_item_never_plays_and_its_turn_goes_to_its_singers_next_ready_song(self, qm):
+    def test_a_failed_item_never_plays_has_no_turn_and_keeps_its_place(self, qm):
         qm.enqueue("/songs/failed---fff.mp4", "User1", waiting="failed")
         qm.enqueue("/songs/b1---bbb.mp4", "User2")
         qm.enqueue("/songs/a2---aaa.mp4", "User1")
 
-        assert qm.pop_next()["file"] == "/songs/a2---aaa.mp4"
-        assert [item["file"] for item in qm.queue] == [
-            "/songs/b1---bbb.mp4",
-            "/songs/failed---fff.mp4",
-        ]
         assert qm.pop_next()["file"] == "/songs/b1---bbb.mp4"
+        assert [item["file"] for item in qm.queue] == [
+            "/songs/failed---fff.mp4",
+            "/songs/a2---aaa.mp4",
+        ]
+        assert qm.pop_next()["file"] == "/songs/a2---aaa.mp4"
         assert qm.pop_next() is None
         assert [item["file"] for item in qm.queue] == ["/songs/failed---fff.mp4"]
         assert qm.has_playable_song() is False
