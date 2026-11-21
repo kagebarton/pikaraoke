@@ -2077,7 +2077,7 @@ ui-check, and confirm the fix for 1 restores is-danger and is-light.
     at the bar's right edge, name 119 px (7). A Hebrew name at 390 px keeps its start and
     cuts its end (10).
   - No page errors (the socket.io 404s are the fixture having no server).
-- **Self-review:** one commit, CSS plus a markup move, each part checked in the browser
-  above; self-review covers it. No review is due.
+- **Self-review:** one commit, but across 7 files and the cascade every page loads, where the
+  last review found 15; pending a review (the checkpoint gives the line).
 - **Not done:** `graphify update .` (no `graphify-out/` on this box). The rebase onto `dev`
   (151 behind). Phase 6.
