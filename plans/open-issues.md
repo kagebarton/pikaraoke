@@ -481,8 +481,9 @@ Stage 1, can run now, side by side:
 - `singer_defaults` (`fafc262`): Phase 5 (commit 1 the theme, `bulma-dark.css` only; commit 2
   L6, the name in the nav bar), the `/code-review` of Phase 4 that is due, Ken's Phase 6
   checks.
-- `download_modal_speed` (`d3128ba`): commit 3b (L7), `/code-review`, Ken's phone checks. Its
-  grey and disabled looks arrive with the theme; no build dependency on `singer_defaults`.
+- `download_modal_speed` (`d3128ba`): ~~commit 3b (L7)~~ (done, `def8493b`), `/code-review`,
+  Ken's phone checks. Its grey and disabled looks arrive with the theme; no build dependency
+  on `singer_defaults`.
 - `search_official_captions` Parts 1-2 (`5c4e410`): commit 9 (L11) and the review of commits
   5-9 done (fixes `af48f5a`); Ken's manual checks.
 - `queue_phone` (`0439038`): spec and phases written 2026-11-18. Its Phase 1 (server only:
@@ -523,12 +524,6 @@ Stage 4, after `queue_phone` lands, side by side:
 
 Independent of the phone order:
 
-- `lrclib_fit_pick`: landed on `dev` 2026-11-18 (`0d203816`..`ee7062af`), retired as
-  `archive/lrclib_fit_pick`. It changed
-  `processing.html` and `routes/processing.py`, which `processing_phone` rewrites, so that
-  branch writes its code on top of this `dev`. Its other overlaps (`routes/processing.py`
-  with `singer_defaults`, `library_regen.py` with `download_modal_speed`) are in different
-  functions.
 - `defer_timing` (`9e7f6da`): plan only, parked behind `lrclib_fit_pick` (Ken, 2026-11-10),
   which has now landed.
 - `chinese_karaoke` (`9900277`): probe scripts under `scripts/zh_probe/` only; research, not a
