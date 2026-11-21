@@ -164,12 +164,19 @@
   }
   /* The link fills the bar's height, so a tap just above or below the outline still opens the
      form; the outline is drawn on the span inside it. min-width: 0 down the chain lets a long
-     name give way to the icons and the burger instead of pushing them off. */
+     name give way to the icons and the burger instead of pushing them off. margin-left: auto
+     puts the pill at the right end at every width, beside the burger or the Pikaraoke link. */
   .singer-pill {
     display: flex;
     align-items: center;
     min-width: 0;
+    margin-left: auto;
     padding: 0 2px;
+  }
+  /* Bulma pushes the burger right with its own auto margin; two would split the free space and
+     park the pill mid-bar. Not joined, the pill is hidden and the burger keeps it. */
+  .singer-pill:not(.is-hidden) + .navbar-burger {
+    margin-inline-start: 0;
   }
   .singer-pill-outline {
     display: flex;
@@ -195,8 +202,8 @@
   .help .sliders-icon {
     vertical-align: -0.3em;
   }
-  /* At desktop width the menu sits beside the icons, not behind the burger: the name stays at the
-     right, beside the Pikaraoke link, where it was before it moved into the brand. Bulma keeps the
+  /* At desktop width the menu sits beside the icons, not behind the burger: the brand grows so the
+     name reaches the Pikaraoke link, where it was before it moved into the brand. Bulma keeps the
      brand and the menu at full width there, so the brand is let shrink to keep the bar inside its
      container with a long name. */
   @media screen and (min-width: 1024px) {
@@ -207,9 +214,6 @@
     }
     .navbar-menu {
       flex-grow: 0;
-    }
-    .singer-pill {
-      margin-left: auto;
     }
     .singer-name {
       max-width: 12rem;
@@ -294,7 +298,10 @@
           </span>
         </a>
 
+        {# Bulma 1.0's burger draws four lines: two stacked in the middle (they cross into the X
+           when open), one above and one below. #}
         <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false">
+          <span aria-hidden="true"></span>
           <span aria-hidden="true"></span>
           <span aria-hidden="true"></span>
           <span aria-hidden="true"></span>
