@@ -697,7 +697,7 @@ besides, in his words, on his own devices. Record: `plans/singer-defaults.md` on
   in `now_playing_remote`'s commit 4 (the form's stepper), so the two say the same thing. The
   spec's inline Now Playing wording is "Moves the song up or down in half-steps. 0 is the
   original key." Needs adding to the spec; Ken has not ruled on it.
-- **The name's pill sits in different places by browser** (L6, `base.html`
+- ~~**The name's pill sits in different places by browser** (L6, `base.html`
   `.singer-pill`). Firefox on desktop: right, beside the Pikaraoke link, as designed. Chrome
   on a phone: next to the Processing icon, not beside the burger. Opera on a tablet: in that
   same spot with no outline. Not diagnosed. `margin-left: auto` is only set from 1024 px up,
@@ -705,7 +705,17 @@ besides, in his words, on his own devices. Record: `plans/singer-defaults.md` on
   `1px rgba(255,255,255,.6)` border. Ken's intent for the phone spot (beside the burger or
   after the icons) is not recorded: ask him, then check at 390, 768 and 1024 px in
   Chromium and Firefox, and Opera if it can be run. The L6 ui-check measured 390 px and 360
-  px only.
+  px only.~~ Fixed 2026-11-21 on `dev` as `a31de3bb`. Not a browser difference: Chromium,
+  Firefox and WebKit measured alike at 390, 768, 820, 1024 and 1280 px, touch and mouse,
+  light and dark (120 runs). Below 1024 px the pill followed Processing and the spare room
+  fell before Bulma's burger (its own `margin-inline-start: auto`): 38 px with "Ken" at
+  390 px, over 400 at 820. The L6 ui-check's 10-letter name filled that gap at 390 px, so it
+  never showed. Ken ruled the pill beside the burger at every width below desktop (option A,
+  over keeping it after the icons). The same commit gives the burger the fourth line Bulma
+  1.0 draws it with (it showed two lines, above centre; from the Bulma upgrade, not L6).
+  Opera on Ken's phone matches Chrome. The tablet's missing outline was not reproduced in any
+  engine and was left there (Ken: a rare combination); untested lead: the pages never declare
+  `color-scheme: dark`, so a browser's forced dark mode would repaint them.
 
 ## Edit words (on `dev`)
 
