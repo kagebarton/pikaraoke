@@ -781,7 +781,7 @@ function resetDialog() {
     .find(".info-tip-btn").attr("aria-expanded", "false");
   $("#lyrics-queue-btn")
     .addClass("is-hidden")
-    .removeClass("is-success is-danger")
+    .removeClass("is-success is-danger is-flash")
     .prop("disabled", false)
     .text(TEXT.queue);
 }
@@ -1011,7 +1011,7 @@ $(document).on("click.search", "#lyrics-queue-btn", function () {
     success: function () {
       postDownload(url, title, queued);
       if (!isCurrent(d)) return;
-      $btn.toggleClass("is-success", queued).html('<i class="icon icon-ok"></i>')
+      $btn.toggleClass("is-success", queued).addClass("is-flash").html('<i class="icon icon-ok"></i>')
         .append(document.createTextNode("  " + (queued ? TEXT.queued : TEXT.added)));
       fadeOutPreviewModal(d, 1000);
     },
@@ -1019,10 +1019,10 @@ $(document).on("click.search", "#lyrics-queue-btn", function () {
       console.warn("Lyrics select failed:", xhr && xhr.responseText ? xhr.responseText : "network error");
       showNotification(TEXT.lyricsSelectFailed, "is-danger");
       if (!isCurrent(d)) return;
-      $btn.addClass("is-danger").text("!");
+      $btn.addClass("is-danger is-flash").text("!");
       setTimeout(function () {
         if (!isCurrent(d)) return;
-        $btn.removeClass("is-danger");
+        $btn.removeClass("is-danger is-flash");
         $("#lyrics-dropdown").prop("disabled", false);
         d.sent = false;
         renderLyrics();
