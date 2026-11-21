@@ -17,15 +17,12 @@ https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL (private to Ken), boards "Now 
 current singer", "Now Playing: admin", "Your singer settings (tap your name)" and "Reference
 palette". For colours and buttons it wins over the mockup; this file wins over both.
 
-Base: `singer_defaults` at `13b96f2` (not on `dev` yet; it owns the "Original vocals" name, the
-(i) notes, the guest form and `KEY_LIMIT`). Branch `now_playing_remote`, worktree
-`.claude/worktrees/now_playing_remote`. `dev` has not touched any file this plan changes since
-`singer_defaults` branched (only five lines of `karaoke.py`), so this lands right after
-`singer_defaults`, by cherry-pick like it.
-
-(L5, L15, L16) **Before Phase 1, rebase onto `singer_defaults` once its Phase 5 is committed.**
-That phase puts L1's green and amber, L15's grey button fill (`--dark-bg-raised`, `#434d4e`)
-and L16's disabled look in `bulma-dark.css`; the Design below uses them.
+Base: `dev` at `e1ac8adf`, which has `singer_defaults` landed (2026-11-21, tag
+`archive/singer_defaults`). It owns the "Original vocals" name, the (i) notes, the guest form,
+`KEY_LIMIT`, and the L1/L15/L16 colours in `bulma-dark.css`. Branch `now_playing_remote`, worktree
+`.claude/worktrees/now_playing_remote`, rebased 2026-11-21 from the old branch (which sat on
+`singer_defaults`' unlanded commits); only this plan's two commits carried over. The old
+`origin/now_playing_remote` (`254bec0`) is superseded.
 
 ## Rulings (Ken, 2026-11-17)
 
@@ -49,7 +46,7 @@ and L16's disabled look in `bulma-dark.css`; the Design below uses them.
    rested on a wrong fact: Save is `is-success`, `#2ecc71`, not `--bulma-success`. The "(mint)"
    comment in `home.html` still goes (it was wrong: `--bulma-success-dark-invert` resolves to
    the same 53% lightness as `--bulma-success`).
-10. **Branch off `singer_defaults`**, not `dev`.
+10. ~~Branch off `singer_defaults`~~ `singer_defaults` has landed; this branch is off `dev`.
 
 ## Rulings (Ken, 2026-11-18): one look
 
@@ -69,7 +66,7 @@ above. Also:
 Not ruled (L5): the mockup's near-black control panel (not in this spec) and the 12-14 px
 corners (in it). The spec stands until Ken rules.
 
-## What the code does today (read 2026-11-17 at `13b96f2`)
+## What the code does today (read 2026-11-17 at `13b96f2`; re-checked 2026-11-21 at `e1ac8adf`)
 
 - `templates/home.html`: one `.control-box`, shown to the admin or the current singer
   (`handleNowPlaying`, `Cookies.get("user") === np.now_playing_user`); everyone else sees only
@@ -104,6 +101,11 @@ corners (in it). The spec stands until Ken rules.
   "(mint)" line) are defined in `home.html`. `--controls-header-size` and `--controls-icon-size`
   are defined there and read nowhere. `--button-selected-bg` (selected lyric button) is
   `var(--bulma-success-dark-invert)`.
+- Re-check 2026-11-21: everything above still holds at `e1ac8adf`. The only `dev` changes since
+  are the name pill and burger in `base.html` (`a31de3bb`), which this plan does not touch. The
+  seek bar's `$(function)` binding (the null check) is still unguarded; the other two uses are
+  guarded. `info_tip()`, `original_vocals_tip()` and `lyrics_tip()` live in `info_tip.html` and
+  `singer_tips.html`; no `key_tip()` exists yet.
 - `tests/unit/test_search_render.py` renders `base.html` without the singer blueprint, so
   `singer` can be undefined in `base.html` (it already guards with `singer or {}`).
 - No test renders `home.html`.
@@ -188,8 +190,10 @@ and no "Player Control" heading:
    The `var volume` compare goes.
 4. **Original vocals** (dual-stem only, as today): heading plus `original_vocals_tip()`, stepper
    `vocal-volume-slider`, 0..100, tap 10.
-5. **Key** (`{% if is_transpose_enabled %}`): heading "Key" plus an (i) note, using
-   `info_tip()` inline: "Moves the song up or down in half-steps. 0 is the original key."
+5. **Key** (`{% if is_transpose_enabled %}`): heading "Key" plus `key_tip()`, a new macro in
+   `singer_tips.html` beside `original_vocals_tip()` and `lyrics_tip()` (commit 1 adds it, with a
+   `{# MSG: ... #}` comment): "Moves the song up or down in half-steps. 0 is the original
+   key." The guest form uses the same macro (commit 4), so the two say the same thing.
    Stepper `transpose`, `-key_limit..key_limit`, tap 1, `semitones`. `routes/home.py` passes
    `key_limit=ADMIN_KEY_LIMIT if admin else KEY_LIMIT`, and drops `transpose_value`.
    `ADMIN_KEY_LIMIT = 12` sits beside `KEY_LIMIT` in `lib/singers.py`, commented as the admin's
@@ -229,7 +233,8 @@ chosen lyric style blue too.
 
 - **Original vocals:** the heading and its tip stay. Stepper `singer-vocal-volume`, 0..100,
   tap 10, `percent`. The `%` label and its `input.singer` handler go.
-- **Key:** the label "Key" stays. Stepper `singer-key`, `-limit..limit`, tap 1, `semitones`,
+- **Key:** the label "Key" stays, now followed by `key_tip()` like Original vocals' label
+  (closes the open-issues entry "The join form's Key has no (i)"). Stepper `singer-key`, `-limit..limit`, tap 1, `semitones`,
   where `limit` is the guest state's `key_limit`, read with the same guard as
   `window.singer` (`test_search_render.py` renders without `singer`). `#singer-key-field`
   still hides when transpose is off.
@@ -251,8 +256,8 @@ Every new string gets a `{# MSG: ... #}` comment, as the branch does. No `.po` u
 3. **A key the admin set past ±3 shows as ±3 on the singer's phone.** The browser clamps the
    range, and the singer's next tap lands inside ±3. The admin rarely sets a guest's key that
    far, and the singer's phone corrects on the next push.
-4. **This branch sits on unlanded `singer_defaults`.** Fixes from its pending review mean
-   rebasing this branch onto them.
+4. **The name pill's place is not this branch's.** `dev` `a31de3bb` moved it beside the burger;
+   this plan does not touch the navbar.
 
 ## Phases
 
@@ -262,7 +267,8 @@ Four commits, in this order. Tests ride with their code. Before each commit run 
 suite, then pre-commit on the changed files, then `git diff --cached` against this plan.
 
 1. `feat(ui): Now Playing's sliders become steppers with the value on the knob`. The three
-   `stepper` files and `base.html` loading them. Now Playing's Volume, Original vocals, Key
+   `stepper` files, `base.html` loading them, and `key_tip()` in `singer_tips.html`. Now
+   Playing's Volume, Original vocals, Key
    (still −12..12 for everyone in this commit) and Subtitle delay. The dead CSS and variables,
    the `--button-selected-bg` change (L5), and the `vol_up`/`vol_down` removal with their
    tests.
@@ -278,7 +284,7 @@ suite, then pre-commit on the changed files, then `git diff --cached` against th
    - transpose disabled: no key stepper;
    - no admin password: the admin page.
 4. `feat(ui): the guest form's Original vocals and Key use the stepper`. `base.html`,
-   `spa-navigation.js`, and the `getSemitonesLabel` removal.
+   `spa-navigation.js`, the `getSemitonesLabel` removal, and `key_tip()` after the form's Key label.
 
 Then **ui-check** (local skill), launched from this worktree (`launch.sh PORT WORKDIR
 <worktree>`, `FAKE_JOB_S=5`) with an admin password set in the instance's config. Use two
