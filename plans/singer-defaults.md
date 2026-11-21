@@ -2014,3 +2014,70 @@ ui-check, and confirm the fix for 1 restores is-danger and is-light.
   already logged and owned by `now_playing_remote`.
 - **`plans/open-issues.md` entries in these files that are now easy:** none.
 - **Not done:** no fixes; the checks named above; Phase 6 not started.
+- **Ruled (Ken, 2026-11-21):** the dispositions above stand. On 2 and 3, L16 means
+  *unavailable*, not *busy*: a button disabled only against a second tap keeps its look, one
+  loading (`.is-loading`) and one showing its result for a moment (a new `.is-flash` class,
+  set beside the colour in `search.html`). Both stay `disabled`, so the lyric handlers' guards
+  and the no-double-download hold. Ruled out: exempting colour classes (it would give a
+  genuinely unavailable green button its fill back) and dropping `disabled` during the flash.
+
+### Phase 5 review fixes (executed 2026-11-21, Claude Opus 5.5, Linux box)
+
+- **Commit:** `5c3d806` `fix(theme): busy buttons keep their
+  look, colour buttons their fill; the name's pill taps full height`. Worktree
+  `.claude/worktrees/singer_defaults`, on `ea66cb0`.
+- **1, 4, 12:** `.button` sets Bulma's `--bulma-button-h/-s/-background-l` from new
+  `--dark-raised-h/-s/-l` parts (`--dark-bg-raised` now reads them) instead of a literal fill;
+  the border stays a literal `--dark-border` (L15's `#5e6d6f`; Bulma's border would take the
+  fill's hue, about `#5f6d6e`). Bulma's own disabled variables now hold the *normal* look,
+  which only a busy grey button shows; the L16 rule is
+  `.button[disabled]:not(.is-loading):not(.is-flash)` with literal tokens, whose two `:not()`s
+  outweigh Bulma's colour `[disabled]` rules, so the doubled attribute is gone. `custom.css`'s
+  lyric-button disabled rule reads the same tokens (its `--button-disabled-*` and its opacity
+  line are gone; Bulma's `.button[disabled]` gives opacity 1).
+- **2, 3:** as ruled. `search.html`: `is-flash` beside the colour at all 8 result spots
+  (download ✓/!, queue ✓/"Already queued"/!, srt and raw/srt "Added for processing...", the
+  Genius pick's ✓ and its `flashError`), removed with the colour. Both lyric resets also drop
+  it; `#lyrics-download-btn`'s reset now drops a leftover `is-success` too (before, after a
+  success its next Download showed green).
+- **5:** `--dark-border-faded: rgba(94, 109, 111, 0.5)`.
+- **7:** at 1024 px and up `.navbar-brand` gets `flex-shrink: 1; min-width: 0`; the 12 rem
+  cap stays.
+- **8:** `#current-user` fills the bar's height; the outline moved to an inner
+  `.singer-pill-outline`. The name span is now `.singer-name` (`spa-navigation.js` selects
+  it; `#current-user span` would now hit the outline span too).
+- **10:** `dir="auto"` on `.singer-name`.
+- **11:** the 70 px cap is gone below 1024 px.
+- **13:** `sliders_icon` moved to `singer_tips.html`; `base.html` imports it and starts on
+  its doctype.
+- **14:** `.checkbox` accent `var(--dark-success)`, `.input.is-warning` border
+  `var(--dark-warning)`.
+- **15:** 3 tests in `test_singer_page.py`: the page starts on `<!DOCTYPE html>`;
+  `#current-user` sits between `#brand` and `#menu`; the join line holds
+  `<svg class="sliders-icon"` and no `&lt;`.
+- **Also:** `base.html`'s `.current-user` rule deleted (no element has that class).
+- **6:** not fixed, as triaged (waits for L14 on `queue_phone`).
+- **Tests:** full suite 3528 passed (3525 + the 3 new).
+- **Browser check** (Playwright Chromium on this box, not the VM's `ui-check`: the test
+  fixture's app with a joined guest and test buttons on a `#343c3d` card;
+  `scratchpad/measure.py`, session scratchpad). Phase 5's left-for-Ken items and the
+  review's "checks left for later":
+  - Plain `#434d4e` / border `#5e6d6f`, hover `rgb(79,91,92)` (was: no change, 4).
+  - Solid `is-danger` `rgb(255,102,133)` with label `rgb(26,0,5)`; `is-light`
+    `rgb(243,244,246)` with label `rgb(46,51,61)`; `is-dark` `rgb(46,51,61)` (1, restored).
+  - Disabled plain, `is-success`, `is-danger` and a lyric button: transparent, border
+    `rgba(94,109,111,0.5)` 1 px, label `#8c9b9d`, opacity 1.
+  - Disabled + loading: `is-success` keeps `#2ecc71` with its spinner `rgb(8,33,18)`; plain
+    keeps `#434d4e` with spinner `rgb(236,238,239)` (2).
+  - Disabled + `is-flash`: `is-warning` `#f1b70e`, `is-danger` `rgb(255,102,133)`, plain
+    `#434d4e` (3).
+  - Nav, name "Alexandra Montgomery": pill link full bar height (52 px; outline 30 px)
+    at every width (8). Name 63 px at 390, 33 px at 360, 0 at 320; 20 px sideways scroll at
+    280 (6, unchanged). 800 px: 148 px, uncut (11). 1100 and 1300 px: the Pikaraoke link ends
+    at the bar's right edge, name 119 px (7). A Hebrew name at 390 px keeps its start and
+    cuts its end (10).
+  - No page errors (the socket.io 404s are the fixture having no server).
+- **Self-review:** one commit, CSS plus a markup move, each part checked in the browser
+  above; self-review covers it. No review is due.
+- **Not done:** `graphify update .` (no `graphify-out/` on this box). The rebase onto `dev`
+  (151 behind). Phase 6.
