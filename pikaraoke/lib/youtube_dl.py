@@ -293,9 +293,9 @@ def _select_en_srt(dest_dir: str, stem: str) -> str | None:
 class CaptionDownloadFailed(Exception):
     """yt-dlp couldn't answer whether the video has a caption (timeout, not runnable, error).
 
-    ``stdout`` is what yt-dlp printed before an error exit. From :func:`lookup_video`,
-    ``stream_url`` is the preview link found in it, since yt-dlp prints the link before it
-    fetches the caption.
+    ``stdout`` is what yt-dlp printed before an error exit or a timeout. From
+    :func:`lookup_video`, ``stream_url`` is the preview link found in it, since yt-dlp prints
+    the link before it fetches the caption.
     """
 
     def __init__(self, message: str, stdout: bytes = b"") -> None:
@@ -331,7 +331,10 @@ def _run_caption_command(
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired as e:
-        raise CaptionDownloadFailed(f"yt-dlp {what} timed out for: {video_url}") from e
+        # The kill keeps what yt-dlp printed (it flushes each line), as an error exit does.
+        raise CaptionDownloadFailed(
+            f"yt-dlp {what} timed out for: {video_url}", stdout=e.stdout or b""
+        ) from e
     except (FileNotFoundError, PermissionError) as e:
         raise CaptionDownloadFailed(f"Could not run yt-dlp: {e}") from e
     if result.returncode != 0:
@@ -374,7 +377,8 @@ def lookup_video(video_url: str, dest_dir: str, stem: str) -> VideoLookup:
     ``--ignore-no-formats-error`` lets a video with no playable format still answer its
     caption, with no link. Raises :class:`CaptionDownloadFailed` as
     :func:`download_manual_en_subs` does, carrying the link when yt-dlp printed one before
-    the caption failed (an HTTP 429, say), so the preview survives.
+    the caption failed (an HTTP 429, say) or stalled past the time limit, so the preview
+    survives.
     """
     lookup_args = [
         "--no-simulate",
