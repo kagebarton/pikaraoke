@@ -76,15 +76,21 @@ var URLS = {
 // SPA navigation re-runs this script on every visit, so the state starts fresh each time.
 window.queuePageState = {
   queue: [],
-  previousQueue: null,
   nowPlaying: null,
-  previousNowPlaying: null,
+  fetchSeq: 0,
+  latestFetch: null,
+  forceDraw: false,
   brbBusy: false
 };
 
 // Ensure global socket exists
 if (typeof window.socket === 'undefined') {
   window.socket = io();
+}
+
+// A failed song never plays: it takes no place number and BRB leaves it out
+function isFailed(e) {
+  return e.waiting === 'failed';
 }
 
 // "song · artist", or the whole title when it has no split
@@ -109,7 +115,7 @@ function generateNowCard(np) {
 
 // One queue row. `place` is its number in line: a failed row never plays, so it takes none.
 function generateQueueRow(e, index, place, me) {
-  var failed = e.waiting === 'failed';
+  var failed = isFailed(e);
   var mine = !!me && e.user === me;
   // Its owner and the admin see the red row; everyone else sees it faded with a dashed slot
   var showsFailure = failed && (isAdmin || mine);
@@ -159,7 +165,7 @@ function generateQueueRow(e, index, place, me) {
 // those is paused.
 function renderBrb(queue, me) {
   var own = (isAdmin || !me) ? [] : queue.filter(function(e) {
-    return e.user === me && e.waiting !== 'failed';
+    return e.user === me && !isFailed(e);
   });
   var allPaused = own.length > 0 && own.every(function(e) { return e.paused; });
   $('#queue-brb').toggleClass('is-hidden', own.length === 0);
@@ -185,14 +191,14 @@ window.queuePage_render = function() {
   var place = 0;
   var rows = '';
   queue.forEach(function(e, index) {
-    if (e.waiting !== 'failed') place++;
+    if (!isFailed(e)) place++;
     rows += generateQueueRow(e, index, place, me);
   });
 
   $('#queue-now').html(playing ? generateNowCard(np) : '');
   $('#queue-up-next')
     .text((place === 1 ? T.upNextOne : T.upNextMany).replace('{n}', place))
-    .toggleClass('is-hidden', queue.length === 0);
+    .toggleClass('is-hidden', place === 0);
   $(list).html(rows);
   // Nothing playing and nothing waiting
   $('#queue-empty').toggleClass('is-hidden', playing || queue.length > 0);
@@ -200,26 +206,31 @@ window.queuePage_render = function() {
   window.initSortable();
 };
 
-window.queuePage_getQueue = function() {
+// Fetch the queue and now playing, and draw them if they changed. `force` draws even if not,
+// and holds until a draw, so a newer fetch that overtakes this one draws instead.
+// The promise settles once the latest fetch has been drawn.
+window.queuePage_getQueue = function(force) {
+  var state = window.queuePageState;
   if ($('#queue-list').length === 0) {
-    return;
+    return $.when();
   }
+  state.forceDraw = state.forceDraw || !!force;
 
-  // Fetch both queue and now_playing data
-  $.when($.get(URLS.queue), $.get(URLS.nowPlaying)).done(function(queueResp, nowPlayingResp) {
+  // Replies can land out of order: only the latest fetch draws, and an older one waits for it
+  var seq = ++state.fetchSeq;
+  state.latestFetch = $.when($.get(URLS.queue), $.get(URLS.nowPlaying)).then(function(queueResp, nowPlayingResp) {
+    if (seq !== state.fetchSeq) {
+      return state.latestFetch;
+    }
     var newQueue = JSON.parse(queueResp[0]);
     var newNowPlaying = nowPlayingResp[0] ? JSON.parse(nowPlayingResp[0]) : null;
-
-    var queueChanged = !isEqual(newQueue, window.queuePageState.previousQueue);
-    var npChanged = !isEqual(newNowPlaying, window.queuePageState.previousNowPlaying);
-    if (!queueChanged && !npChanged) {
+    if (!state.forceDraw && isEqual(newQueue, state.queue) && isEqual(newNowPlaying, state.nowPlaying)) {
       return;
     }
 
-    window.queuePageState.queue = newQueue;
-    window.queuePageState.nowPlaying = newNowPlaying;
-    window.queuePageState.previousQueue = newQueue;
-    window.queuePageState.previousNowPlaying = newNowPlaying;
+    state.forceDraw = false;
+    state.queue = newQueue;
+    state.nowPlaying = newNowPlaying;
     window.queuePage_render();
 
     // Highlight moved row if tracked
@@ -233,6 +244,7 @@ window.queuePage_getQueue = function() {
       });
     }
   });
+  return state.latestFetch;
 };
 
 // Number the rows again after a drag, without waiting for the server. A failed row has no number.
@@ -268,9 +280,8 @@ window.initSortable = function() {
         old_index: evt.oldIndex,
         new_index: evt.newIndex
       }).done(function() {
-        // Force refresh to update the rows' indices
-        window.queuePageState.previousQueue = null;
-        window.queuePage_getQueue();
+        // Draw again even if unchanged: the drag left the rows' indices stale
+        window.queuePage_getQueue(true);
       });
     }
   });
@@ -330,7 +341,9 @@ window.songToRemove = null;
 
 window.openRemoveConfirm = function(e) {
   window.songToRemove = e.file;
-  $('#remove-confirm-line').text(T.removeLine.replace('{song}', songLine(e.artist, e.song)));
+  // A function, so a "$" in the title is not read as a replacement pattern
+  var line = songLine(e.artist, e.song);
+  $('#remove-confirm-line').text(T.removeLine.replace('{song}', function() { return line; }));
   $('#remove-confirm-modal').addClass('is-active');
 };
 
@@ -374,15 +387,18 @@ window.toggleBrb = function() {
   }).fail(function(xhr) {
     console.error('User queue action request failed', xhr.status);
   }).always(function() {
-    window.queuePageState.brbBusy = false;
+    // Hold the button until a queue fetched after the tap is on screen, so its label is true
+    window.queuePage_getQueue().always(function() {
+      window.queuePageState.brbBusy = false;
+    });
   });
 };
 
 // Socket listeners - refresh on queue or now_playing changes
 window.socket.off("queue_update");
-window.socket.on("queue_update", window.queuePage_getQueue);
+window.socket.on("queue_update", function() { window.queuePage_getQueue(); });
 window.socket.off("now_playing");
-window.socket.on("now_playing", window.queuePage_getQueue);
+window.socket.on("now_playing", function() { window.queuePage_getQueue(); });
 
 // Open now-playing options modal
 window.openNowPlayingOptions = function() {
@@ -411,7 +427,7 @@ window.executePlaybackAction = function(action) {
 
 // Initialize
 $(function() {
-  window.queuePage_getQueue();
+  window.queuePage_getQueue(true);
 
   // Close the queue's own modals on background click. Scoped to .box, which navigation
   // replaces: an unscoped selector would also bind base.html's guest form, which it doesn't.
