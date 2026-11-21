@@ -852,6 +852,7 @@ files, and one finder angle per Self-Review axis.
 | 3a `fix(search): the dialog's lyric list is 48 px tall, level with Queue` | `2aa02ae` | 3867 passed, 0 failed (unchanged) | pre-commit passed; import smoke ok; ui-check trial 7 now measures 48 px (wrapper and select), 3/3, and trials 2 and 3 rerun 3/3; the other trials were not rerun, since only the list's height changed | Decision 16 (Ken): the list stays at the mockup's 48 px. Done as a CSS custom property on the wrapper (`--bulma-control-height`), which the select inherits. Trial 7's raw line below is commit 3's run at 44 px, before this ruling |
 | 3b `fix(search): the dialog's Queue is green, like every Queue` | `def8493` | 3868 passed, 0 failed (+1: the render test that pins the button's markup and the two places the script sets the class) | pre-commit passed on the 2 files; ui-check at 390x844, three runs of seven checks, 21/21 on the third version of my check (raw below, with the two earlier reads that failed and why); Ken's phone checks not done | `search.html` only: the markup loses `is-primary`; `syncQueue()` and the `/lyrics_select` answer set `is-success` from the box beside the label (`toggleClass("is-success", queued)`). Ticked, the enabled button computes `#2ecc71`; unticked it has no colour class and reads "Add to library", `rgb(20, 22, 26)` until `singer_defaults` Phase 5 puts its `#434d4e` fill on `dev`. Disabled and after a tap the button takes Bulma's disabled look (`rgb(72, 199, 142)` ticked): decision 17 builds nothing for that, L16's look comes from `bulma-dark.css`. Side effect, not asked for: a failed `/lyrics_select` now shows its "!" red (`rgb(255, 102, 133)`) in both states; the old build's disabled `is-primary` beat `is-danger` and showed `rgb(62, 91, 122)`. Review line: `/code-review` now takes in 3a and 3b, range `9110167..def8493` |
 | review fixes `fix(search): the dialog's late answers, refused play and failed sends after review`; `fix(search): a caption check that fails after the lookup printed the link keeps the preview` | `13ebc44`, `dce7598` | the four touched test files only: 365 passed, 0 failed (full suite not run) | pre-commit passed on the 6 files; ui-check at 390x844, ten checks, three runs on each of the fixed tree and `def8493` (raw below); Ken's phone checks not done | `/code-review` of `9110167..def8493` (Opus, 2026-11-19), 14 findings: fixed 1-5 and 7-13; 6 (the link's client also picks the caption track) logged in `plans/open-issues.md` on `dev`; 14 (test indirection) dropped. Deviation: for 3 the list is disabled at the tap rather than its change handler guarded. One record left stale: open-issues' "Download dialog as built on `download_modal_speed`" still calls Queue blue `is-primary` |
+| review 2 fixes `fix(search): a lookup that times out after printing the link keeps the preview`; `fix(search): one Enter handler per visit; the dialog's late errors, play logs and Queue label` | `b6195986`, `7599f323` | 3871 passed, 0 failed (full suite; +1 over `dce7598`: the link-printed-first lookup test now runs for an error exit and a timeout) | pre-commit passed on the 3 files; import smoke ok; the rendered inline scripts parse (deno, `new Function`); ui-check at 390x844, nine checks, three runs on each of the fixed tree and `dce7598` (raw below); Ken's phone checks not done | `/code-review` of `def8493..dce7598` (2026-11-21), 13 findings. Fixed: 1, 2, 3, 5, 6, 7, 9, 11, 12, and 10's string (moved into `TEXT`). Not done: 10's merge of the two `/download` request bodies (two copies; CLAUDE.md waits for a third); 8 (a lookup-only error class) dropped, the one reader is documented. Logged in `plans/open-issues.md` on `dev`: 4 (Queued shows before `/download` answers, kept from the plan's order) and 13 (no test drives the dialog's script). Added from self-review: the Enter handler also acts only while its page is showing, since a copy left by an SPA move took Enter from every other page |
 | manual checks (Ken) | | n/a | | |
 
 ### Commit 1 measurement (raw)
@@ -1001,4 +1002,29 @@ preview video answered by the script. The console errors seen are the faked 500s
 | 8: Enter in the typed search searches; Enter on the close button closes, no page search | 3/3 | 0/3 (a page search starts) |
 | 9: A's failure timer at 3 s leaves B's red "!" | 3/3 | 0/3, but my check: the page search check 8 started raced the reload |
 
+Both apps stopped afterwards.
+
+### Review 2 fixes ui-check (raw)
+
+Scripts `search_app.py` (Flask: the real search blueprint and template, a mocked karaoke, two
+fixed results; `/__stub/queue.queue` a bare page with a text box and a textarea) and
+`search_checks.py` (async Playwright, Chromium with `--autoplay-policy=no-user-gesture-required`)
+in the session scratchpad, not committed. Port 5141 the worktree at `7599f323`'s tree before
+commit, 5142 `dce7598` from `git archive`. `/caption_check`, `/lyrics_search`, `/lyrics_select`,
+`/download`, `/autocomplete`, the enqueue and the preview video answered by the script; a fresh
+browser context per run.
+
+| check | fixed | `dce7598` |
+| ----- | ----- | --------- |
+| 2: two SPA round trips to the stub page, a library pick, Enter: one enqueue | 3/3 | 0/3 (3 enqueues) |
+| 2 (self-review): after an SPA move off Search, Enter in the stub's textarea types a new line | 3/3 | 0/3 (`ab`) |
+| regression: Enter in the search box searches (`hello`) | 3/3 | 3/3 |
+| 5: dialog open, its title clicked (focus on body), Enter: no page search, the dialog stays | 3/3 | 0/3 (a page search starts) |
+| regression: Enter on the focused close button closes the dialog, no page search | 3/3 | 3/3 |
+| 7: dialog open on the captions view, the box unticked: Queue reads Add to library, not green | 3/3 | 0/3 (Queue, green) |
+| 11: first play refused (stubbed), the retry tap: no second `load()`, two plays | 3/3 | 0/3 (a second `load()`) |
+| 6: Play tapped, the video held loading, the dialog closed: no "Preview play failed" | 3/3 | 0/3 (logs the AbortError) |
+| 3: Play tapped, SPA away and back with the dialog open, a card opened, the old video answers 403: the new dialog keeps Play, no "Preview unavailable" | 3/3 | 0/3 (marked unavailable) |
+
+The refused play logs `Preview play failed: NotAllowedError` once on both trees, as it should.
 Both apps stopped afterwards.
