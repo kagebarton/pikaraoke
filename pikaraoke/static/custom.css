@@ -105,30 +105,26 @@ input {
 }
 
 .subtitle-mode-btn {
-  background-color: var(--button-normal-bg) !important;
-  color: var(--button-normal-text) !important;
-  border-color: var(--button-normal-border) !important;
   font-size: var(--controls-button-size) !important;
   font-weight: var(--controls-button-weight) !important;
 }
 
-.subtitle-mode-btn:hover {
+/* Disabled ones take the theme's disabled look (bulma-dark.css) */
+.subtitle-mode-btn:not(:disabled) {
+  background-color: var(--button-normal-bg) !important;
+  color: var(--button-normal-text) !important;
+  border-color: var(--button-normal-border) !important;
+}
+
+.subtitle-mode-btn:not(:disabled):hover {
   background-color: var(--button-hover-bg) !important;
   color: var(--button-hover-text) !important;
 }
 
-.subtitle-mode-btn.is-selected {
+.subtitle-mode-btn.is-selected:not(:disabled) {
   background-color: var(--button-selected-bg) !important;
   color: var(--button-selected-text) !important;
   border-color: var(--button-selected-bg) !important;
-}
-
-/* The theme's disabled look (bulma-dark.css), restated only to beat the !important above */
-.subtitle-mode-btn:disabled {
-  background-color: transparent !important;
-  color: var(--dark-text-muted) !important;
-  border-color: var(--dark-border-faded) !important;
-  cursor: not-allowed !important;
 }
 
 table {
