@@ -340,7 +340,7 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
 - **A restored search page can show a stuck card.** After Show more, the page saves the cards
   so coming back to Search restores them. The copy can catch a card's loading state (an
   in-library button saved mid-flash), and the restored card then keeps a stuck loading button.
-  The dialog's half is fixed (`download_modal_speed`, O11): the dialog sits outside the saved
+  The dialog's half is fixed (`archive/download_modal_speed`, O11): the dialog sits outside the saved
   element, and a restore drops an older copy's own dialog. Left by Ken 2026-11-08. The same
   copy also shows the library as it was at that render: a song downloaded from the page since
   still offers Queue… (the download dialog) on its card, not the in-library Queue, so it is
@@ -389,23 +389,24 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
   asks the person to choose, with the year and artist shown. Shipped as it is (Ken,
   2026-11-16): no order tried fixes one film title without breaking another. Record:
   as above.
-- **The dialog's caption check reads the preview link's client** (branch
-  `download_modal_speed`). One lookup asks `tv_simply,default` for both the link and the
+- **The dialog's caption check reads the preview link's client** (landed from
+  `archive/download_modal_speed`). One lookup asks `tv_simply,default` for both the link and the
   caption, while a download asks yt-dlp's default clients. If they list different manual
   English tracks, the dialog offers YouTube captions from one track and the download saves
   another, or none (then it transcribes). Five videos agreed when it was built; nothing
-  enforces it. Closing it costs the second call the branch removed. Found in the
-  `/code-review` of `9110167..def8493`, 2026-11-19 (Results log on that branch). Not ruled.
-- **The dialog's Queue says Queued before the download is accepted** (branch
-  `download_modal_speed`). The button turns to Queued or Added and the dialog fades once
+  enforces it. Closing it costs the second call the landing removed. Found in the
+  `/code-review` of `9110167..def8493`, 2026-11-19 (Results log in
+  `plans/download-modal-speed.md` on tag `archive/download_modal_speed`). Not ruled.
+- **The dialog's Queue says Queued before the download is accepted** (landed from
+  `archive/download_modal_speed`). The button turns to Queued or Added and the dialog fades once
   `/lyrics_select` answers, before `/download` has. If `/download` then fails, a 3 s notice
   contradicts the button, an SPA move in that time cuts the notice short, and the lyric
   choice stays written for a video that is never downloaded. The plan kept this order from
   the old dialog. Fixing it means waiting for `/download`'s answer before Queued, with a way
   back on failure and the notice kept for a dialog closed meanwhile. `/download` only adds a
   job, so it rarely fails. Found in the `/code-review` of `def8493..dce7598`, 2026-11-21
-  (finding 4, Results log on that branch). Not ruled.
-- **Nothing tests what the search dialog's script does** (branch `download_modal_speed`).
+  (finding 4, Results log on tag `archive/download_modal_speed`). Not ruled.
+- **Nothing tests what the search dialog's script does** (landed from `archive/download_modal_speed`).
   The render tests check the markup only. Late answers dropped after a close or an SPA
   move, the list held after Queue, a refused play, and the Queue label following the box
   are covered only by the plan's ui-check runs (Playwright scripts kept in session
@@ -449,16 +450,17 @@ script's rules and workflow are in `scripts/movie_split.md`, and this entry is t
 Found 2026-10-27 during the `queue_hold` manual checks on the Windows box.
 Record: `plans/queue-hold.md` on tag `archive/queue_hold`, the manual checks row.
 
-- **A slow Genius pick can download the wrong video.** In the Search preview dialog,
+- ~~**A slow Genius pick can download the wrong video.** In the Search preview dialog,
   the Genius Download's reply reads `_activeYtId` when it arrives, not when it was
   tapped, and `resetLyricsSection` never resets `#lyrics-download-btn`. Close the
   dialog and open another video while the pick is in flight: the old reply downloads
   the second video, unconfirmed, and the first is never sent. Related: switching the
   lyric dropdown during an error flash leaves the button red, and the old flash's timer
   later undoes a newer flash. Found by the `singer_defaults` Phase 5 fix review
-  (2026-11-21, findings 4 and 6). Not fixed: `download_modal_speed` rewrites this
-  dialog and checks every reply against the video still open (`isCurrent(d)`). Fix
-  on `dev` only if that branch is dropped.
+  (2026-11-21, findings 4 and 6).~~ Gone with the dialog rewrite landed on `dev`
+  2026-11-21 (`75c3961d`..`61460808`, from `archive/download_modal_speed`): `_activeYtId`
+  and `resetLyricsSection` no longer exist, and every reply is checked against the video
+  still open (`isCurrent(d)`, O12).
 
 - **Server messages never reach a screen.** `Karaoke.send_notification` emits
   the socket event `notification`, and its only listener was the browser splash
@@ -499,9 +501,11 @@ Stage 1, can run now, side by side:
   L6, the name in the nav bar), the `/code-review` of Phase 4 that is due, Ken's Phase 6
   checks.~~ Landed on `dev` 2026-11-21 (`5c0fdc2a`..`83671246`, as copies), Phase 6 run on
   `dev`; retired as `archive/singer_defaults`. Findings: "Singer defaults: Phase 6 findings".
-- `download_modal_speed` (`d3128ba`): ~~commit 3b (L7)~~ (done, `def8493b`), `/code-review`,
+- ~~`download_modal_speed` (`d3128ba`): commit 3b (L7) (done, `def8493b`), `/code-review`,
   Ken's phone checks. Its grey and disabled looks arrive with the theme; no build dependency
-  on `singer_defaults`.
+  on `singer_defaults`.~~ Landed on `dev` 2026-11-21 (`75c3961d`..`61460808`, as copies, with
+  the review's fixes and the theme's grey); retired as `archive/download_modal_speed`. Its
+  open findings are in "Search results (on `dev`)".
 - `search_official_captions` Parts 1-2 (`5c4e410`): commit 9 (L11) and the review of commits
   5-9 done (fixes `af48f5a`); Ken's manual checks.
 - `queue_phone` (`0439038`): spec and phases written 2026-11-18. Its Phase 1 (server only:
@@ -517,17 +521,14 @@ Stage 2, landing:
    after it. The latter is built on the former: rebase onto `dev` (its 42 commits not on `dev`
    include copies of `singer_defaults`' commits, which will conflict or drop out), then its
    Phases 1-4 (`plans/now-playing-remote.md`).
-2. `search_official_captions` Parts 1-2 and `download_modal_speed`, one after the other: both
-   edit `youtube_dl.py`, `routes/search.py`, `search.html` and `search_result.html`. Proposed:
-   Search first, since its commit 7 makes `#add-to-queue` the surviving box and
-   `plans/download-modal-speed.md` ("At landing") already says how the second one repoints
-   `queueAfterDownload()`. If the dialog clears Ken's checks first, it goes first and the same
-   note applies the other way.
-   Either way, after `singer_defaults`: a button disabled only while it shows its result
-   needs `is-flash`, or it takes the grey disabled look (`singer_defaults` `5c3d806d`).
-   `download_modal_speed`'s result flashes in `search.html` (`d7d5b5ff`) predate it and
-   conflict with that commit's edits to the same lines: keep the dialog's code and add
-   `is-flash` to each of its result flashes.
+2. ~~`download_modal_speed`~~ (landed 2026-11-21, first), then `search_official_captions`
+   Parts 1-2: both edit `youtube_dl.py`, `routes/search.py`, `search.html` and
+   `search_result.html`, so Search rebases over the dialog now on `dev`. As the second to
+   land it points `queueAfterDownload()` at the surviving box: its commit 7 makes
+   `#add-to-queue` the surviving box, and `dev` still reads `#add-to-queue-search`
+   (`plans/download-modal-speed.md`, "At landing", on tag `archive/download_modal_speed`).
+   The dialog's result flashes already carry `is-flash` (`61460808`); keep it when
+   resolving `search.html`.
 
 Stage 3: `queue_phone` code, after `singer_defaults` is on `dev` (it is, since 2026-11-21). It takes L1, L15, L16 from
 `dev`, and its L14 nav half and `singer_defaults`' L6 both rewrite the nav bar in `base.html`;
@@ -538,8 +539,8 @@ Stage 4, after `queue_phone` lands, side by side:
 
 - `browse_phone` Phase 1, after GATE N.
 - `processing_phone` (`f28d582`), after its open question on group order under All is ruled.
-- Search Part 3 (L12, L13), after `download_modal_speed` lands as well: it restyles the
-  dialog's controls.
+- Search Part 3 (L12, L13), after Parts 1-2 land too (`download_modal_speed` is on `dev`
+  already): it restyles the dialog's controls.
 
 Independent of the phone order:
 
@@ -557,7 +558,8 @@ Independent of the phone order:
 Retired 2026-11-18 (every code commit patch-equal to one on `dev`; the rest only plan
 records): `archive/movie_split`, `archive/queue_hold`, `archive/search_caption_check`.
 Retired 2026-11-21: `archive/singer_defaults` (31 code commits copied onto `dev`, plan
-records only on the tag).
+records only on the tag), `archive/download_modal_speed` (11 code commits copied onto `dev`,
+plan, Results log and ui-check records only on the tag).
 
 Not ruled (Ken's calls):
 
@@ -654,7 +656,8 @@ Per page:
    its controls: "Change these any time from [icon] <name> at the top of the page."
 7. `download_modal_speed`: the dialog's Queue is green (`is-success`), now, before Ken's
    phone checks. Its button text stays "Queue" also when opened from "Download…" (13).
-   Unticked, its "Add to library" is the raised grey of 15 (Ken, 2026-11-18).
+   Unticked, its "Add to library" is the raised grey of 15 (Ken, 2026-11-18). Done on `dev`
+   2026-11-21 (`f04a62df`; from `archive/download_modal_speed`).
 8. `browse_phone`: the "Queue / processing" button is green, not info blue `#3298dc`.
    Empty letters take 16's disabled look, not the canvas's dimmer pill (Ken, 2026-11-18).
 9. `queue_phone`: BRB is a grey button when off and blue when on (was teal).
