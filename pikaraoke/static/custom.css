@@ -92,11 +92,6 @@ input {
 
   --button-selected-bg: var(--bulma-success-dark-invert);
   --button-selected-text: var(--bulma-dark);
-
-  --button-disabled-bg: transparent;
-  --button-disabled-text: var(--dark-text-muted);
-  --button-disabled-border: var(--dark-border-faded);
-  --button-disabled-opacity: 1;
 }
 
 #subtitle-mode-section .buttons,
@@ -128,12 +123,12 @@ input {
   border-color: var(--button-selected-bg) !important;
 }
 
+/* The theme's disabled look (bulma-dark.css), restated only to beat the !important above */
 .subtitle-mode-btn:disabled {
-  background-color: var(--button-disabled-bg) !important;
-  color: var(--button-disabled-text) !important;
-  border-color: var(--button-disabled-border) !important;
+  background-color: transparent !important;
+  color: var(--dark-text-muted) !important;
+  border-color: var(--dark-border-faded) !important;
   cursor: not-allowed !important;
-  opacity: var(--button-disabled-opacity) !important;
 }
 
 table {
