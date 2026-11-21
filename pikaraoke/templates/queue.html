@@ -1,464 +1,456 @@
-{% extends 'base.html' %} {% block scripts %}
+{% extends 'base.html' %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='phone-rows.css') }}">
+<style>
+  /* What only the Queue page draws; the rows are phone-rows.css. */
+  .qp-now { display: flex; align-items: center; gap: 8px; min-height: 60px; padding: 8px 10px; border-radius: 8px; background: var(--dark-bg-secondary); }
+  .qp-now .sr-slot { background: var(--dark-bg-tertiary); }
+  /* Three grey bars standing still: the song is playing, and nothing on this page moves. */
+  .qp-bars { display: flex; align-items: flex-end; gap: 2px; height: 18px; }
+  .qp-bars span { width: 3px; border-radius: 1px; background: var(--dark-text-muted); }
+  .qp-bars span:nth-child(1) { height: 10px; }
+  .qp-bars span:nth-child(2) { height: 18px; }
+  .qp-bars span:nth-child(3) { height: 13px; }
+  .qp-up-next { margin: 18px 0 8px; font-size: 13px; font-weight: 700; color: var(--dark-text-muted); }
+  /* The guest's pause button stays at the bottom of the screen while the list scrolls under it. */
+  .qp-brb { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 24px 14px 14px; background: linear-gradient(to top, var(--dark-bg-primary) 65%, transparent); }
+  .qp-brb-btn { display: flex; max-width: 880px; min-height: 56px; margin: 0 auto; font-size: 17px; font-weight: 700; gap: 8px; }
+  /* Room under the list so its last row clears the bar. */
+  #queue-page.has-brb { padding-bottom: 84px; }
+  .qp-footer { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
+  .qp-footer .button { min-height: 48px; font-weight: 700; }
+  .qp-add { display: flex; align-items: flex-end; gap: 10px; }
+  .qp-add .button { flex: 1; }
+  .qp-howmany { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--dark-text-muted); }
+  .qp-howmany .input { width: 64px; height: 48px; text-align: center; }
+  .qp-confirm-title { display: block; margin-bottom: 6px; font-size: 18px; font-weight: 700; color: var(--dark-text-secondary); }
+  .qp-confirm-line { display: block; color: var(--dark-text-sub); word-break: break-word; }
+  .qp-confirm-foot { gap: 10px; }
+  .qp-confirm-foot .button { flex: 1; min-height: 48px; font-weight: 700; }
+</style>
+{% endblock %}
+
+{% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
 <script>
-// Pass admin status from server to JavaScript
-var isAdmin = JSON.parse('{{ admin | tojson }}');
+var isAdmin = {{ admin | tojson }};
 
-// Get current user from cookie for self-service controls
-var currentUser = (typeof getUserCookie === 'function') ? getUserCookie() : null;
-
-  // Escape strings for safe use in HTML attributes
-  function escape(str) {
-    return encodeURIComponent(str);
-  }
-
-  // Ensure global socket exists
-  if (typeof window.socket === 'undefined') {
-    window.socket = io();
-  }
-
-  // Initialize queue state if needed
-  if (typeof window.queuePageState === 'undefined') {
-    window.queuePageState = {
-      queue: [],
-      previousQueue: null,
-      nowPlaying: null,
-      previousNowPlaying: null
-    };
-  }
-
-  // Define global queue functions
-  window.queuePage_getQueue = function() {
-    if ($('#auto-refresh').length === 0) {
-      return;
-    }
-
-    // Fetch both queue and now_playing data
-    $.when(
-      $.get('{{ url_for("queue.get_queue") }}'),
-      $.get('{{ url_for("now_playing.now_playing") }}')
-    ).done(function(queueResp, nowPlayingResp) {
-      var newQueue = JSON.parse(queueResp[0]);
-      var newNowPlaying = nowPlayingResp[0] ? JSON.parse(nowPlayingResp[0]) : null;
-
-      var queueChanged = !isEqual(newQueue, window.queuePageState.previousQueue);
-      var npChanged = !isEqual(newNowPlaying, window.queuePageState.previousNowPlaying);
-
-      if (queueChanged || npChanged) {
-        window.queuePageState.queue = newQueue;
-        window.queuePageState.nowPlaying = newNowPlaying;
-
-        // Destroy existing Sortable before replacing HTML to avoid errors
-        var table = document.getElementById('auto-refresh');
-        if (table && table.sortableInstance) {
-            table.sortableInstance.destroy();
-            table.sortableInstance = null;
-        }
-
-        $("#auto-refresh").html(window.queuePage_generateHTML());
-        window.queuePageState.previousQueue = newQueue;
-        window.queuePageState.previousNowPlaying = newNowPlaying;
-
-        // Initialize Drag and Drop after HTML is rendered
-        window.initSortable();
-
-        // Highlight moved row if tracked
-        if (window.highlightAfterRefresh) {
-          var fileToHighlight = window.highlightAfterRefresh;
-          window.highlightAfterRefresh = null;
-          $('a.queue-song-options-btn').each(function() {
-            if (decodeURIComponent($(this).data('file')) === fileToHighlight) {
-              $(this).closest('tr').addClass('row-moved');
-            }
-          });
-        }
-      }
-    });
-  };
-
-  window.initSortable = function() {
-    var table = document.getElementById('auto-refresh');
-    var tbody = table ? table.querySelector('tbody') : null;
-
-    // Only init if admin (drag handles exist)
-    if ($(".drag-handle").length > 0 && tbody) {
-       table.sortableInstance = Sortable.create(tbody, {
-          handle: '.drag-handle',
-          animation: 150,
-          filter: '.disabled-sort',
-          chosenClass: 'drag-chosen',
-          // Touch device settings for better iOS compatibility
-          delay: 100,
-          delayOnTouchOnly: true,
-          touchStartThreshold: 5,
-          onMove: function (evt) {
-             // Prevent moving an item to the now-playing position
-             return evt.related.className.indexOf('disabled-sort') === -1;
-          },
-          onEnd: function (evt) {
-             if (evt.oldIndex === evt.newIndex) return;
-
-             // Calculate offset: if now-playing row exists, DOM indices are offset by 1
-             var np = window.queuePageState.nowPlaying;
-             var offset = (np && np.now_playing) ? 1 : 0;
-
-             // Convert DOM indices to queue array indices
-             var oldQueueIndex = evt.oldIndex - offset;
-             var newQueueIndex = evt.newIndex - offset;
-
-             // Track file for highlight after refresh
-             var movedFile = $(evt.item).find('.queue-song-options-btn').data('file');
-             if (movedFile) {
-                 window.highlightAfterRefresh = decodeURIComponent(movedFile);
-             }
-
-             // Immediately update row numbers to reflect new positions
-             $('#auto-refresh tbody tr:not(.disabled-sort)').each(function(i) {
-                 $(this).find('td:first').text(i + 1);
-             });
-
-             // Send queue indices to backend
-             $.post("{{ url_for('queue.reorder') }}", {
-                 old_index: oldQueueIndex,
-                 new_index: newQueueIndex
-             }).done(function() {
-                 // Force refresh to update data attributes
-                 window.queuePageState.previousQueue = null;
-                 window.queuePage_getQueue();
-             });
-          }
-      });
-    }
-  };
-
-  // Column width constants
-  var COL_WIDTH = {
-    number: '35px',
-    drag: '44px',
-    options: '50px'
-  };
-
-  // Generate now-playing row HTML
-  function generateNowPlayingRow(np) {
-    var iconSrc = np.is_paused
-      ? '{{ url_for("static", filename="images/now-playing.png") }}'
-      : '{{ url_for("static", filename="images/now-playing.gif") }}';
-
-    var html = '<tr class="disabled-sort has-background-dark">';
-    html += '<td style="width: ' + COL_WIDTH.number + '; padding: 8px 8px; vertical-align: middle; text-align: center;">';
-    html += '<img src="' + iconSrc + '" alt="Now Playing" style="width: 35px; height: auto;">';
-    html += '</td>';
-
-    if (isAdmin) {
-      html += '<td style="width: ' + COL_WIDTH.drag + '; padding: 5px 0px; vertical-align: middle;"></td>';
-    }
-
-    html += '<td style="padding: 8px 10px; vertical-align: middle;">';
-    html += '<div class="is-flex is-flex-wrap-wrap is-align-items-baseline">';
-    html += '<span class="has-text-success">' + escapeHtml(np.now_playing_user) + '</span>';
-    html += '<span class="is-hidden-mobile has-text-grey mx-2">&bull;</span>';
-    html += '<span class="has-text-weight-bold has-text-success is-hidden-mobile">' + escapeHtml(np.now_playing) + '</span>';
-    html += '<span class="is-size-7 has-text-weight-bold has-text-success is-hidden-tablet" style="width: 100%;">' + escapeHtml(np.now_playing) + '</span>';
-    html += '</div></td>';
-
-  if (isAdmin) {
-    html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right;">';
-    html += '<a class="has-text-grey-light is-small is-text now-playing-options-btn" title="{{ _("Options") }}">';
-    html += '<i class="icon-cog is-size-4"></i></a>';
-    html += '</td>';
-  } else if (currentUser) {
-    html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right;"></td>';
-  }
-  html += '</tr>';
-    return html;
-  }
-
-
-// What a held song (e.waiting) is waiting for
-var WAITING_LABELS = {
-  download: '{{ _("downloading") }}',
-  processing: '{{ _("processing") }}',
-  pick: '{{ _("waiting for lyrics") }}',
-  failed: '{{ _("failed") }}'
+var T = {
+  now: {{ _('NOW') | tojson }},
+  // What a row that cannot play yet says in its 60 px slot, over its place in line
+  paused: {{ _('paused') | tojson }},
+  failed: {{ _('failed') | tojson }},
+  waiting: {
+    download: {{ _('downloading') | tojson }},
+    processing: {{ _('processing') | tojson }},
+    // "waiting for lyrics" does not fit the slot
+    pick: {{ _('lyrics') | tojson }}
+  },
+  failedReason: {{ _("Couldn't be prepared. The host can retry it.") | tojson }},
+  upNextOne: {{ _('Up next · %(n)s song', n='{n}') | tojson }},
+  upNextMany: {{ _('Up next · %(n)s songs', n='{n}') | tojson }},
+  options: {{ _('Options') | tojson }},
+  remove: {{ _('Remove from Queue') | tojson }},
+  dismiss: {{ _('Dismiss') | tojson }},
+  drag: {{ _('Drag to reorder') | tojson }},
+  brb: {{ _('Pause my songs (BRB)') | tojson }},
+  brbBack: {{ _("I'm back: unpause my songs") | tojson }},
+  pause: {{ _('Pause') | tojson }},
+  unpause: {{ _('Unpause') | tojson }},
+  play: {{ _('Play') | tojson }},
+  removeLine: {{ _('%(song)s will come out of the queue.', song='{song}') | tojson }}
 };
 
-// Generate queue row HTML
-function generateQueueRow(e, index) {
-  var isPaused = !!e.paused;
-  var rowClasses = [];
-  if (isPaused) rowClasses.push('row-paused');
-  if (e.waiting) rowClasses.push('row-waiting');
-  var rowClass = rowClasses.length ? ' class="' + rowClasses.join(' ') + '"' : '';
-  var html = '<tr data-index="' + index + '"' + rowClass + '>';
-  html += '<td style="width: ' + COL_WIDTH.number + '; padding: 8px 8px; vertical-align: middle; text-align: center;">' + (index + 1) + '</td>';
+var URLS = {
+  queue: {{ url_for('queue.get_queue') | tojson }},
+  nowPlaying: {{ url_for('now_playing.now_playing') | tojson }},
+  reorder: {{ url_for('queue.reorder') | tojson }},
+  edit: {{ url_for('queue.queue_edit') | tojson }},
+  userDelete: {{ url_for('queue.user_delete') | tojson }},
+  userPause: {{ url_for('queue.user_pause') | tojson }}
+};
 
+// SPA navigation re-runs this script on every visit, so the state starts fresh each time.
+window.queuePageState = {
+  queue: [],
+  previousQueue: null,
+  nowPlaying: null,
+  previousNowPlaying: null,
+  brbBusy: false
+};
+
+// Ensure global socket exists
+if (typeof window.socket === 'undefined') {
+  window.socket = io();
+}
+
+// "song · artist", or the whole title when it has no split
+function songLine(artist, song) {
+  return artist ? song + ' · ' + artist : song;
+}
+
+function generateNowCard(np) {
+  var html = '<div class="qp-now">';
+  html += '<div class="sr-slot"><span class="qp-bars"><span></span><span></span><span></span></span>';
+  html += '<span class="sr-word">' + T.now + '</span></div>';
+  html += '<div class="sr-main"><span class="sr-name">' + escapeHtml(np.now_playing_user) + '</span>';
+  html += '<span class="sr-sub">' + escapeHtml(songLine(np.now_playing_artist, np.now_playing_song)) + '</span></div>';
   if (isAdmin) {
-    html += '<td class="drag-handle" style="width: ' + COL_WIDTH.drag + '; vertical-align: middle; text-align: center; cursor: grab; touch-action: none;" title="{{ _("Drag to reorder") }}">';
-    html += '<i class="icon icon-braille has-text-grey-light"></i>';
-    html += '</td>';
+    html += '<button type="button" class="button sr-btn now-playing-options-btn" aria-label="' + T.options + '"><i class="icon icon-cog"></i></button>';
+  }
+  return html + '</div>';
+}
+
+// One queue row. `place` is its number in line: a failed row never plays, so it takes none.
+function generateQueueRow(e, index, place, me) {
+  var failed = e.waiting === 'failed';
+  var mine = !!me && e.user === me;
+  // Its owner and the admin see the red row; everyone else sees it faded with a dashed slot
+  var showsFailure = failed && (isAdmin || mine);
+  var word = failed ? T.failed : e.waiting ? T.waiting[e.waiting] : e.paused ? T.paused : '';
+
+  var classes = 'sr-row';
+  if (mine) classes += ' is-mine';
+  if (showsFailure) classes += ' is-failed';
+  else if (word) classes += ' is-faded';
+
+  var slot;
+  if (showsFailure) {
+    slot = '<div class="sr-slot is-failed"><span class="sr-mark">!</span><span class="sr-word">' + word + '</span></div>';
+  } else if (failed) {
+    slot = '<div class="sr-slot is-held"><span class="sr-word">' + word + '</span></div>';
+  } else {
+    slot = '<div class="sr-slot' + (word ? ' is-held' : '') + '"><span class="sr-num">' + place + '</span>' +
+      (word ? '<span class="sr-word">' + word + '</span>' : '') + '</div>';
   }
 
-  html += '<td style="padding: 8px 10px; vertical-align: middle;">';
-  html += '<div class="is-flex is-flex-wrap-wrap is-align-items-baseline">';
-  html += '<span class="has-text-success">' + escapeHtml(e.user) + '</span>';
-  html += '<span class="is-hidden-mobile has-text-grey mx-2">&bull;</span>';
-  html += '<span class="has-text-weight-bold is-hidden-mobile">' + escapeHtml(e.title) + '</span>';
-  html += '<span class="is-size-7 has-text-weight-bold is-hidden-tablet" style="width: 100%;">' + escapeHtml(e.title) + '</span>';
-  if (isPaused) {
-    html += '<span class="tag is-warning is-light ml-2">{{ _("paused") }}</span>';
+  var side;
+  if (showsFailure) {
+    side = '<button type="button" class="button sr-text-btn sr-dismiss">' + T.dismiss + '</button>';
+  } else if (isAdmin) {
+    side = '<button type="button" class="button sr-btn sr-gear" aria-label="' + T.options + '"><i class="icon icon-cog"></i></button>';
+  } else if (mine) {
+    side = '<button type="button" class="button sr-btn is-delete sr-del" aria-label="' + T.remove + '"><i class="icon icon-trash-empty"></i></button>';
+  } else {
+    side = '<span class="sr-btn-gap"></span>';
   }
-  if (e.waiting) {
-    html += '<span class="tag is-info is-light ml-2">' + WAITING_LABELS[e.waiting] + '</span>';
-  }
-  html += '</div></td>';
 
-  // Options column: admin gets it always; non-admin gets it if they have a cookie
+  var html = '<div class="' + classes + '" data-index="' + index + '">';
   if (isAdmin) {
-    html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right; padding-right: 10px;">';
-    html += '<a class="has-text-grey-light is-small is-text queue-song-options-btn" data-index="' + index + '" data-file="' + escape(e.file) + '" data-title="' + escape(e.title) + '" data-paused="' + (isPaused ? '1' : '0') + '" title="{{ _("Options") }}">';
-    html += '<i class="icon-cog is-size-4"></i></a>';
-    html += '</td>';
-  } else if (currentUser) {
-    if (e.user === currentUser) {
-      html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right; padding-right: 10px;">';
-      html += '<a class="has-text-grey-light is-small is-text queue-song-user-btn" data-file="' + escape(e.file) + '" data-title="' + escape(e.title) + '" data-paused="' + (isPaused ? '1' : '0') + '" title="{{ _("Options") }}">';
-      html += '<i class="icon-cog is-size-4"></i></a>';
-      html += '</td>';
-    } else {
-      html += '<td style="width: ' + COL_WIDTH.options + '; vertical-align: middle; text-align: right; padding-right: 10px;"></td>';
-    }
+    html += '<span class="sr-drag drag-handle" title="' + T.drag + '"><i class="icon icon-braille"></i></span>';
   }
-
-  html += '</tr>';
+  html += slot;
+  html += '<div class="sr-main"><span class="sr-name">' + escapeHtml(e.user) + '</span>';
+  html += '<span class="sr-sub">' + escapeHtml(songLine(e.artist, e.song)) + '</span>';
+  if (showsFailure) {
+    html += '<span class="sr-reason">' + T.failedReason + '</span>';
+  }
+  html += '</div>' + side + '</div>';
   return html;
 }
 
-  window.queuePage_generateHTML = function() {
-    var html = "<tbody>";
-    var queue = window.queuePageState.queue;
-    var np = window.queuePageState.nowPlaying;
-    var colSpan = isAdmin ? 4 : (currentUser ? 3 : 2);
+// The guest's pause button: there when they have a song that can play, blue once every one of
+// those is paused.
+function renderBrb(queue, me) {
+  var own = (isAdmin || !me) ? [] : queue.filter(function(e) {
+    return e.user === me && e.waiting !== 'failed';
+  });
+  var allPaused = own.length > 0 && own.every(function(e) { return e.paused; });
+  $('#queue-brb').toggleClass('is-hidden', own.length === 0);
+  $('#queue-page').toggleClass('has-brb', own.length > 0);
+  $('#queue-brb-btn').toggleClass('is-primary', allPaused)
+    .find('i').attr('class', allPaused ? 'icon icon-play' : 'icon icon-pause');
+  $('#queue-brb-label').text(allPaused ? T.brbBack : T.brb);
+}
 
-    if (np && np.now_playing) {
-      html += generateNowPlayingRow(np);
+window.queuePage_render = function() {
+  var queue = window.queuePageState.queue;
+  var np = window.queuePageState.nowPlaying;
+  var me = getUserCookie();
+  var playing = !!(np && np.now_playing);
+  var list = document.getElementById('queue-list');
+
+  // Destroy the existing Sortable before replacing its rows
+  if (list.sortableInstance) {
+    list.sortableInstance.destroy();
+    list.sortableInstance = null;
+  }
+
+  var place = 0;
+  var rows = '';
+  queue.forEach(function(e, index) {
+    if (e.waiting !== 'failed') place++;
+    rows += generateQueueRow(e, index, place, me);
+  });
+
+  $('#queue-now').html(playing ? generateNowCard(np) : '');
+  $('#queue-up-next')
+    .text((place === 1 ? T.upNextOne : T.upNextMany).replace('{n}', place))
+    .toggleClass('is-hidden', queue.length === 0);
+  $(list).html(rows);
+  // Nothing playing and nothing waiting
+  $('#queue-empty').toggleClass('is-hidden', playing || queue.length > 0);
+  renderBrb(queue, me);
+  window.initSortable();
+};
+
+window.queuePage_getQueue = function() {
+  if ($('#queue-list').length === 0) {
+    return;
+  }
+
+  // Fetch both queue and now_playing data
+  $.when($.get(URLS.queue), $.get(URLS.nowPlaying)).done(function(queueResp, nowPlayingResp) {
+    var newQueue = JSON.parse(queueResp[0]);
+    var newNowPlaying = nowPlayingResp[0] ? JSON.parse(nowPlayingResp[0]) : null;
+
+    var queueChanged = !isEqual(newQueue, window.queuePageState.previousQueue);
+    var npChanged = !isEqual(newNowPlaying, window.queuePageState.previousNowPlaying);
+    if (!queueChanged && !npChanged) {
+      return;
     }
 
-    if (queue.length > 0) {
-      queue.forEach(function(e, index) {
-        html += generateQueueRow(e, index);
+    window.queuePageState.queue = newQueue;
+    window.queuePageState.nowPlaying = newNowPlaying;
+    window.queuePageState.previousQueue = newQueue;
+    window.queuePageState.previousNowPlaying = newNowPlaying;
+    window.queuePage_render();
+
+    // Highlight moved row if tracked
+    if (window.highlightAfterRefresh) {
+      var movedFile = window.highlightAfterRefresh;
+      window.highlightAfterRefresh = null;
+      newQueue.forEach(function(e, index) {
+        if (e.file === movedFile) {
+          $('#queue-list .sr-row').eq(index).addClass('row-moved');
+        }
       });
-    } else if (!np || !np.now_playing) {
-      // Only show empty message if nothing is playing AND queue is empty
-      html += '<tr><td colspan="' + colSpan + '"><p class="has-text-warning">{{ _("The queue is empty") }}</p></td></tr>';
     }
+  });
+};
 
-    html += "</tbody>";
-    return html;
-  };
+// Number the rows again after a drag, without waiting for the server. A failed row has no number.
+function renumberRows() {
+  var place = 0;
+  $('#queue-list .sr-num').each(function() {
+    $(this).text(++place);
+  });
+}
 
-  // Store current song info for modal actions
-  window.currentSongOptions = {
-      index: -1,
-      file: '',
-      title: ''
-  };
+window.initSortable = function() {
+  var list = document.getElementById('queue-list');
+  // Only admins have drag handles
+  if (!isAdmin || !list) return;
+  list.sortableInstance = Sortable.create(list, {
+    handle: '.drag-handle',
+    animation: 150,
+    chosenClass: 'drag-chosen',
+    // Touch device settings for better iOS compatibility
+    delay: 100,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 5,
+    onEnd: function(evt) {
+      if (evt.oldIndex === evt.newIndex) return;
 
-  // Track file to highlight after queue refresh
-  window.highlightAfterRefresh = null;
+      // The list holds only queue rows, so its indices are the queue's
+      var moved = window.queuePageState.queue[evt.oldIndex];
+      if (moved) window.highlightAfterRefresh = moved.file;
 
-  // Execute queue edit action via AJAX
-  window.executeQueueAction = function(action) {
-      var file = window.currentSongOptions.file;
-      var url = "/queue/edit?song=" + encodeURIComponent(file) + "&action=" + action;
+      renumberRows();
 
-      // Track moved file for highlight (except delete)
-      if (action !== 'delete') {
-          window.highlightAfterRefresh = file;
-      }
-
-      $.ajax({
-          url: url,
-          method: 'GET',
-          headers: { 'X-Requested-With': 'XMLHttpRequest' }
-      }).done(function(response) {
-          var result = JSON.parse(response);
-          if (!result.success && result.error) {
-              console.error('Queue action failed:', result.error);
-          }
-          // Socket event will trigger queue refresh
-      }).fail(function() {
-          console.error('Queue action request failed');
-          window.highlightAfterRefresh = null;
+      $.post(URLS.reorder, {
+        old_index: evt.oldIndex,
+        new_index: evt.newIndex
+      }).done(function() {
+        // Force refresh to update the rows' indices
+        window.queuePageState.previousQueue = null;
+        window.queuePage_getQueue();
       });
+    }
+  });
+};
 
-      window.closeSongOptions();
-  };
+// Track file to highlight after queue refresh
+window.highlightAfterRefresh = null;
 
-// Open the modal menu
-window.openSongOptions = function(index, file, title, paused) {
-  // Store song info for AJAX actions
-  window.currentSongOptions = {
-    index: index,
-    file: file,
-    title: title,
-    paused: paused
-  };
+// Edit the queue as the admin: move, pause or delete one song
+window.queueEdit = function(file, action) {
+  return $.ajax({
+    url: URLS.edit + '?song=' + encodeURIComponent(file) + '&action=' + action,
+    method: 'GET',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  }).done(function(response) {
+    var result = JSON.parse(response);
+    if (!result.success && result.error) {
+      console.error('Queue action failed:', result.error);
+    }
+    // Socket event will trigger queue refresh
+  }).fail(function() {
+    console.error('Queue action request failed');
+    window.highlightAfterRefresh = null;
+  });
+};
 
-  $('#modal-song-title').text(title);
+// The admin's song menu
+window.currentSongOptions = null;
 
-  // Reset all options to visible first
-  $('#opt-up, #opt-top, #opt-down, #opt-bottom, #opt-pause').show();
+window.openSongOptions = function(index) {
+  var queue = window.queuePageState.queue;
+  var e = queue[index];
+  window.currentSongOptions = e;
+  $('#modal-song-title').text(songLine(e.artist, e.song));
 
-  // Hide "Up"/"Play Next" if first in queue (index 0)
-  if (index === 0) {
-    $('#opt-up, #opt-top').hide();
-  }
-  // Hide "Down"/"Bottom" if last in queue
-  var queueLen = window.queuePageState.queue.length;
-  if (index >= queueLen - 1) {
-    $('#opt-down, #opt-bottom').hide();
-  }
-
-  // Update pause label based on current state
-  if (paused) {
-    $('#opt-pause-label').text("{% trans %}Unpause{% endtrans %}");
-  } else {
-    $('#opt-pause-label').text("{% trans %}Pause{% endtrans %}");
-  }
+  // The first song cannot move up, the last cannot move down
+  $('#opt-up, #opt-top').toggle(index > 0);
+  $('#opt-down, #opt-bottom').toggle(index < queue.length - 1);
+  $('#opt-pause-label').text(e.paused ? T.unpause : T.pause);
 
   $('#song-options-modal').addClass('is-active');
-}
+};
 
 window.closeSongOptions = function() {
   $('#song-options-modal').removeClass('is-active');
-}
-
-// User song options modal (for non-admin users)
-window.currentUserSong = { file: '', title: '', paused: false };
-
-window.openUserSongOptions = function(file, title, paused) {
-  window.currentUserSong = { file: file, title: title, paused: paused };
-  $('#user-modal-song-title').text(title);
-  // All .queue-song-user-btn elements belong to the current user — check if every one is paused
-  var btns = $('.queue-song-user-btn');
-  var allPaused = btns.length > 0 && btns.toArray().every(function(btn) {
-    var p = $(btn).data('paused');
-    return p === '1' || p === 1;
-  });
-  $('#user-opt-pause-label').text(allPaused
-    ? "{% trans %}I'm back (unpause){% endtrans %}"
-    : "{% trans %}Pause (I'll be right back){% endtrans %}");
-  $('#user-song-options-modal').addClass('is-active');
 };
 
-window.closeUserSongOptions = function() {
-  $('#user-song-options-modal').removeClass('is-active');
+window.executeQueueAction = function(action) {
+  var file = window.currentSongOptions.file;
+  window.highlightAfterRefresh = file;
+  window.queueEdit(file, action);
+  window.closeSongOptions();
 };
 
-window.executeUserAction = function(action) {
-  var isDelete = action === 'delete';
-  var data = { user: currentUser };
-  if (isDelete) data.song = window.currentUserSong.file;
-  $.post(isDelete ? '/queue/user/delete' : '/queue/user/pause', data).done(function(resp) {
+// Remove asks first, from the admin's menu and from a guest's red button alike
+window.songToRemove = null;
+
+window.openRemoveConfirm = function(e) {
+  window.songToRemove = e.file;
+  $('#remove-confirm-line').text(T.removeLine.replace('{song}', songLine(e.artist, e.song)));
+  $('#remove-confirm-modal').addClass('is-active');
+};
+
+window.closeRemoveConfirm = function() {
+  $('#remove-confirm-modal').removeClass('is-active');
+};
+
+window.openRemoveFromMenu = function() {
+  var e = window.currentSongOptions;
+  window.closeSongOptions();
+  window.openRemoveConfirm(e);
+};
+
+// Take a song off the queue: the admin's route for any song, the guest's for their own
+window.removeSong = function(file) {
+  if (isAdmin) {
+    window.queueEdit(file, 'delete');
+    return;
+  }
+  $.post(URLS.userDelete, { user: getUserCookie(), song: file }).done(function(resp) {
     var result = JSON.parse(resp);
     if (!result.success) console.error('User queue action failed:', result.error);
   }).fail(function(xhr) {
     console.error('User queue action request failed', xhr.status);
   });
-  window.closeUserSongOptions();
 };
 
-  // Socket listeners setup (same as before)
-  // Socket listeners - refresh on queue or now_playing changes
-  window.socket.off("queue_update");
-  window.socket.on("queue_update", window.queuePage_getQueue);
-  window.socket.off("now_playing");
-  window.socket.on("now_playing", window.queuePage_getQueue);
-  window.queuePageState.previousQueue = null;
-  window.queuePageState.previousNowPlaying = null;
+window.confirmRemove = function() {
+  window.removeSong(window.songToRemove);
+  window.closeRemoveConfirm();
+};
 
-  // Open now-playing options modal
-  window.openNowPlayingOptions = function() {
-      var np = window.queuePageState.nowPlaying;
-      if (!np || !np.now_playing) return;
+// The guest's BRB button
+window.toggleBrb = function() {
+  // A second tap while the first is out would put the songs back
+  if (window.queuePageState.brbBusy) return;
+  window.queuePageState.brbBusy = true;
+  $.post(URLS.userPause, { user: getUserCookie() }).done(function(resp) {
+    var result = JSON.parse(resp);
+    if (!result.success) console.error('User queue action failed:', result.error);
+  }).fail(function(xhr) {
+    console.error('User queue action request failed', xhr.status);
+  }).always(function() {
+    window.queuePageState.brbBusy = false;
+  });
+};
 
-      $('#np-modal-song-title').text(np.now_playing);
+// Socket listeners - refresh on queue or now_playing changes
+window.socket.off("queue_update");
+window.socket.on("queue_update", window.queuePage_getQueue);
+window.socket.off("now_playing");
+window.socket.on("now_playing", window.queuePage_getQueue);
 
-      // Update play/pause button based on current state
-      if (np.is_paused) {
-          $('#np-pause-btn').html('<span class="icon mr-2"><i class="icon-play"></i></span>{% trans %}Play{% endtrans %}');
-      } else {
-          $('#np-pause-btn').html('<span class="icon mr-2"><i class="icon-pause"></i></span>{% trans %}Pause{% endtrans %}');
-      }
+// Open now-playing options modal
+window.openNowPlayingOptions = function() {
+  var np = window.queuePageState.nowPlaying;
+  if (!np || !np.now_playing) return;
 
-      $('#now-playing-options-modal').addClass('is-active');
-  };
+  $('#np-modal-song-title').text(songLine(np.now_playing_artist, np.now_playing_song));
 
-  window.closeNowPlayingOptions = function() {
-      $('#now-playing-options-modal').removeClass('is-active');
-  };
+  // Update play/pause button based on current state
+  var icon = np.is_paused ? 'icon-play' : 'icon-pause';
+  var label = np.is_paused ? T.play : T.pause;
+  $('#np-pause-btn').html('<span class="icon mr-2"><i class="' + icon + '"></i></span>' + escapeHtml(label));
 
-  // Execute playback action and close modal
-  window.executePlaybackAction = function(action) {
-      $.get('/' + action);
-      window.closeNowPlayingOptions();
-  };
+  $('#now-playing-options-modal').addClass('is-active');
+};
 
-  // Initialize
-  $(function() {
-    window.queuePage_getQueue();
+window.closeNowPlayingOptions = function() {
+  $('#now-playing-options-modal').removeClass('is-active');
+};
+
+// Execute playback action and close modal
+window.executePlaybackAction = function(action) {
+  $.get('/' + action);
+  window.closeNowPlayingOptions();
+};
+
+// Initialize
+$(function() {
+  window.queuePage_getQueue();
 
   // Close the queue's own modals on background click. Scoped to .box, which navigation
   // replaces: an unscoped selector would also bind base.html's guest form, which it doesn't.
   $('.box .modal-background').click(function() {
     window.closeSongOptions();
     window.closeNowPlayingOptions();
-    window.closeUserSongOptions();
+    window.closeRemoveConfirm();
   });
 
-      // SPA navigation re-executes this inline script on every visit. Remove any
-      // previously-registered handlers via the .queue namespace before rebinding,
-      // otherwise a single click fires N times after N visits.
-      $(document).off('click.queue');
+  // SPA navigation re-executes this inline script on every visit. Remove any
+  // previously-registered handlers via the .queue namespace before rebinding,
+  // otherwise a single click fires N times after N visits.
+  $(document).off('click.queue');
 
-  // Queue song options button (for queued songs)
-  $(document).on('click.queue', '.queue-song-options-btn', function(e) {
+  function rowIndex(el) {
+    return parseInt($(el).closest('.sr-row').attr('data-index'), 10);
+  }
+  function queueItem(el) {
+    return window.queuePageState.queue[rowIndex(el)];
+  }
+
+  $(document).on('click.queue', '.sr-gear', function(e) {
     e.preventDefault();
-    var $btn = $(this);
-    var index = parseInt($btn.data('index'), 10);
-    var file = decodeURIComponent($btn.data('file'));
-    var title = decodeURIComponent($btn.data('title'));
-    var paused = $btn.data('paused') === '1' || $btn.data('paused') === 1;
-    openSongOptions(index, file, title, paused);
+    openSongOptions(rowIndex(this));
   });
-
-  // User song options button (for non-admin users' own songs)
-  $(document).on('click.queue', '.queue-song-user-btn', function(e) {
+  $(document).on('click.queue', '.sr-del', function(e) {
     e.preventDefault();
-    var $btn = $(this);
-    var file = decodeURIComponent($btn.data('file'));
-    var title = decodeURIComponent($btn.data('title'));
-    var paused = $btn.data('paused') === '1' || $btn.data('paused') === 1;
-    openUserSongOptions(file, title, paused);
+    openRemoveConfirm(queueItem(this));
   });
-
-      // Now-playing options button
-      $(document).on('click.queue', '.now-playing-options-btn', function(e) {
-          e.preventDefault();
-          openNowPlayingOptions();
-      });
-
-      // Playback controls handler (still used for any inline buttons if needed)
-      $(document).on('click.queue', '.playback-btn', function(e) {
-          e.preventDefault();
-          var action = $(this).data('action');
-          $.get('/' + action);
-      });
+  // A failed row's Dismiss does not ask: the song could not play anyway
+  $(document).on('click.queue', '.sr-dismiss', function(e) {
+    e.preventDefault();
+    removeSong(queueItem(this).file);
   });
-
-  // Visibility handler (same as before)
-  // ... (Keep existing visibility logic here if needed) ...
+  $(document).on('click.queue', '.now-playing-options-btn', function(e) {
+    e.preventDefault();
+    openNowPlayingOptions();
+  });
+  $(document).on('click.queue', '#queue-brb-btn', function(e) {
+    e.preventDefault();
+    toggleBrb();
+  });
+});
 </script>
 
 {% endblock %}
@@ -469,31 +461,27 @@ window.executeUserAction = function(action) {
 
 {% block content %}
 
-<style>
-.row-paused td, .row-waiting td { opacity: 0.5; }
-.row-paused .tag, .row-waiting .tag { opacity: 1; }
-.row-paused .queue-song-user-btn,
-.row-paused .queue-song-options-btn,
-.row-waiting .queue-song-user-btn,
-.row-waiting .queue-song-options-btn { opacity: 1; }
-</style>
+<div id="queue-page">
+  <div id="queue-now"></div>
+  <div id="queue-up-next" class="qp-up-next is-hidden"></div>
+  <div id="queue-list"></div>
+  <p id="queue-empty" class="has-text-warning is-hidden">{% trans %}The queue is empty{% endtrans %}</p>
 
-<table class="table is-striped" id="auto-refresh" style="margin-bottom: 30px">
-</table>
-
-{% if admin %}
-<div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
-	<div class="is-flex is-align-items-center">
-		<a class="add-random has-text-success" href="#"
-			><i class="icon icon-plus-circled is-size-4 mr-1"></i></a>
-			{% trans %}Add <input id="randomNumberInput" class="input mx-2 p-2" pattern="\d*" maxlength="2" value="3" min="1" max="99" style="width: 42px" /> random songs{% endtrans %}
-	</div>
-	<div>
-		<a class="button is-danger is-outlined confirm-clear" href="/queue/edit?action=clear">
-		<i class="icon icon-trash-empty mr-1"></i>{% trans %}Clear all{% endtrans %}</a>
-	</div>
+  {% if admin %}
+  <div class="qp-footer">
+    <div class="qp-add">
+      <a class="button is-success add-random" href="#"><i class="icon icon-plus-circled mr-2"></i>{% trans %}Add random songs{% endtrans %}</a>
+      <label class="qp-howmany">{% trans %}How many{% endtrans %}
+        <input id="randomNumberInput" class="input" pattern="\d*" maxlength="2" value="3" min="1" max="99" />
+      </label>
+    </div>
+    <a class="button is-danger is-outlined confirm-clear" href="/queue/edit?action=clear">
+      <i class="icon icon-trash-empty mr-2"></i>{% trans %}Clear the whole queue{% endtrans %}</a>
+  </div>
+  {% endif %}
 </div>
 
+{% if admin %}
 <div class="modal" id="song-options-modal">
   <div class="modal-background"></div>
   <div class="modal-card" style="width: 90%; max-width: 400px;">
@@ -522,7 +510,7 @@ window.executeUserAction = function(action) {
           <span class="icon mr-2"><i class="icon-pause"></i></span>
           <span id="opt-pause-label">{% trans %}Pause{% endtrans %}</span>
         </a>
-        <a id="opt-delete" class="panel-block py-3 has-text-danger" href="#" onclick="executeQueueAction('delete'); return false;">
+        <a id="opt-delete" class="panel-block py-3 has-text-danger" href="#" onclick="openRemoveFromMenu(); return false;">
             <span class="icon mr-2"><i class="icon-trash-empty"></i></span>
             {% trans %}Remove from Queue{% endtrans %}
         </a>
@@ -553,25 +541,26 @@ window.executeUserAction = function(action) {
     </section>
   </div>
 </div>
+{% else %}
+{# Pinned to the bottom of the screen; renderBrb shows it while the guest has a song that can play. #}
+<div id="queue-brb" class="qp-brb is-hidden">
+  <button type="button" id="queue-brb-btn" class="button is-fullwidth qp-brb-btn">
+    <i class="icon icon-pause"></i><span id="queue-brb-label"></span>
+  </button>
+</div>
 {% endif %}
 
-<div class="modal" id="user-song-options-modal">
+<div class="modal" id="remove-confirm-modal">
   <div class="modal-background"></div>
   <div class="modal-card" style="width: 90%; max-width: 400px;">
-    <header class="modal-card-head" style="padding: 15px;">
-      <p class="modal-card-title is-size-6" id="user-modal-song-title" style="max-width: 95%">{% trans %}Your Song{% endtrans %}</p>
-      <button class="delete" aria-label="close" onclick="closeUserSongOptions()"></button>
-    </header>
-    <section class="modal-card-body" style="padding: 0;">
-      <a id="user-opt-pause" class="panel-block py-3" href="#" onclick="executeUserAction('pause'); return false;">
-        <span class="icon mr-2"><i class="icon-pause"></i></span>
-        <span id="user-opt-pause-label">{% trans %}Pause (I'll be right back){% endtrans %}</span>
-      </a>
-      <a class="panel-block py-3 has-text-danger" href="#" onclick="executeUserAction('delete'); return false;">
-        <span class="icon mr-2"><i class="icon-trash-empty"></i></span>
-        {% trans %}Remove from Queue{% endtrans %}
-      </a>
+    <section class="modal-card-body">
+      <span class="qp-confirm-title">{% trans %}Remove this song?{% endtrans %}</span>
+      <span class="qp-confirm-line" id="remove-confirm-line"></span>
     </section>
+    <footer class="modal-card-foot qp-confirm-foot">
+      <button type="button" class="button" onclick="closeRemoveConfirm()">{% trans %}Keep it{% endtrans %}</button>
+      <button type="button" class="button is-danger" onclick="confirmRemove()">{% trans %}Remove{% endtrans %}</button>
+    </footer>
   </div>
 </div>
 
