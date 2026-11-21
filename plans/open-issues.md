@@ -478,9 +478,10 @@ The phone overhaul's two gates: `singer_defaults` Phase 5 puts L1, L15 and L16 i
 
 Stage 1, can run now, side by side:
 
-- `singer_defaults` (`fafc262`): Phase 5 (commit 1 the theme, `bulma-dark.css` only; commit 2
+- ~~`singer_defaults` (`fafc262`): Phase 5 (commit 1 the theme, `bulma-dark.css` only; commit 2
   L6, the name in the nav bar), the `/code-review` of Phase 4 that is due, Ken's Phase 6
-  checks.
+  checks.~~ Landed on `dev` 2026-11-21 (`5c0fdc2a`..`83671246`, as copies), Phase 6 run on
+  `dev`; retired as `archive/singer_defaults`. Findings: "Singer defaults: Phase 6 findings".
 - `download_modal_speed` (`d3128ba`): ~~commit 3b (L7)~~ (done, `def8493b`), `/code-review`,
   Ken's phone checks. Its grey and disabled looks arrive with the theme; no build dependency
   on `singer_defaults`.
@@ -495,9 +496,10 @@ Stage 1, can run now, side by side:
 
 Stage 2, landing:
 
-1. `singer_defaults`, then `now_playing_remote` (`254bec0`) right after it. The latter is built
-   on the former: rebase once Phase 5 is committed, then its Phases 1-4
-   (`plans/now-playing-remote.md`).
+1. ~~`singer_defaults`~~ (landed 2026-11-21), then `now_playing_remote` (`254bec0`) right
+   after it. The latter is built on the former: rebase onto `dev` (its 42 commits not on `dev`
+   include copies of `singer_defaults`' commits, which will conflict or drop out), then its
+   Phases 1-4 (`plans/now-playing-remote.md`).
 2. `search_official_captions` Parts 1-2 and `download_modal_speed`, one after the other: both
    edit `youtube_dl.py`, `routes/search.py`, `search.html` and `search_result.html`. Proposed:
    Search first, since its commit 7 makes `#add-to-queue` the surviving box and
@@ -510,7 +512,7 @@ Stage 2, landing:
    conflict with that commit's edits to the same lines: keep the dialog's code and add
    `is-flash` to each of its result flashes.
 
-Stage 3: `queue_phone` code, after `singer_defaults` is on `dev`. It takes L1, L15, L16 from
+Stage 3: `queue_phone` code, after `singer_defaults` is on `dev` (it is, since 2026-11-21). It takes L1, L15, L16 from
 `dev`, and its L14 nav half and `singer_defaults`' L6 both rewrite the nav bar in `base.html`;
 landing `singer_defaults` first leaves no conflict to resolve. Failed row first, then the nav
 change (L14).
@@ -537,12 +539,13 @@ Independent of the phone order:
 
 Retired 2026-11-18 (every code commit patch-equal to one on `dev`; the rest only plan
 records): `archive/movie_split`, `archive/queue_hold`, `archive/search_caption_check`.
+Retired 2026-11-21: `archive/singer_defaults` (31 code commits copied onto `dev`, plan
+records only on the tag).
 
 Not ruled (Ken's calls):
 
-- Land `singer_defaults` Phase 5 commit 1 (the theme) on `dev` ahead of the rest of the branch,
-  so `queue_phone`'s code can start sooner. Bends landing in order; proposed only if
-  `singer_defaults` stalls at its checks.
+- ~~Land `singer_defaults` Phase 5 commit 1 (the theme) on `dev` ahead of the rest of the
+  branch, so `queue_phone`'s code can start sooner.~~ Moot: the whole branch landed 2026-11-21.
 - Search Part 3 on a fresh branch off `dev` after `queue_phone` (proposed), or keep
   `search_official_captions` open until Part 3 is done and land all three parts together.
 
@@ -675,8 +678,8 @@ The "Small gaps inside the v2 group" above were ruled 2026-11-18 (S1-S4 in `plan
 
 `singer_defaults` landed on local `dev` 2026-11-21 (`5c0fdc2a`..`83671246`, as copies). Ken ran
 the Phase 6 test plan on `dev` the same day; every check passed functionally. What he saw
-besides, in his words, on his own devices. Record: `plans/singer-defaults.md` on the branch
-`singer_defaults` (not yet retired).
+besides, in his words, on his own devices. Record: `plans/singer-defaults.md` on tag
+`archive/singer_defaults`.
 
 - **Now Playing's (i) notes are two kinds.** For the admin, Original vocals and Lyrics have
   their (i) beside the label and open on hover (`info_tip()`); Change Key and Subtitle
