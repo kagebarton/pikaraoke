@@ -526,7 +526,7 @@ class Karaoke:
         The setter automatically applies the value to the system audio sink
         whenever MPV is running, keeping the UI and system volume in sync
         regardless of whether the write comes from the slider, a preference
-        save, vol_up/down, or startup initialization.
+        save, or startup initialization.
         """
         return getattr(self, "_volume", 0.85)
 
@@ -550,18 +550,6 @@ class Karaoke:
         self.log_and_send(_("Volume: %s") % int(vol_level * 100))
         self.update_now_playing_socket()
         return True
-
-    def vol_up(self) -> None:
-        """Increase volume by 10%."""
-        new_vol = min(self.volume + 0.1, 1.0)
-        self.volume_change(new_vol)
-        logging.debug(f"Increasing volume by 10%: {self.volume}")
-
-    def vol_down(self) -> None:
-        """Decrease volume by 10%."""
-        new_vol = max(self.volume - 0.1, 0.0)
-        self.volume_change(new_vol)
-        logging.debug(f"Decreasing volume by 10%: {self.volume}")
 
     def set_subtitle_delay(self, delay: float) -> None:
         """Set subtitle delay -- applies live to MPV.

@@ -1,0 +1,158 @@
+/* The shared slider's look (templates/stepper.html, stepper.js). base.html loads this on every
+   page. The fill and knob read the positions stepper.js writes on .stepper: --frac (the value),
+   --zero, and --lo/--hi (the fill's ends), each 0 to 1 along the rail. */
+
+.stepper {
+  --knob-w: 68px; /* the drawn knob and the range's invisible thumb share it, so a drag grabs where the knob is */
+  --frac: 0;
+  --zero: 0;
+  --lo: 0;
+  --hi: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* A rail position (0 to 1) as a distance from the left: the knob's centre travels the rail minus
+   half a knob at each end, the same way the native thumb does. */
+.stepper-track {
+  --travel: calc(100% - var(--knob-w));
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+}
+
+.stepper-track::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 10px;
+  transform: translateY(-50%);
+  border-radius: 5px;
+  background: var(--dark-bg-tertiary);
+}
+
+.stepper-fill {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--knob-w) / 2 + var(--travel) * var(--lo));
+  width: calc(var(--travel) * (var(--hi) - var(--lo)));
+  height: 10px;
+  transform: translateY(-50%);
+  background: var(--dark-primary);
+  opacity: 0.5;
+}
+
+.stepper.has-zero .stepper-track::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: calc(var(--knob-w) / 2 + var(--travel) * var(--zero) - 1px);
+  width: 2px;
+  height: 22px;
+  transform: translateY(-50%);
+  background: var(--dark-text-muted);
+}
+
+.stepper-knob {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: calc(var(--travel) * var(--frac));
+  width: var(--knob-w);
+  height: 44px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 22px;
+  background: var(--dark-primary);
+  color: var(--dark-text-primary);
+  font-size: 18px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+/* The real input covers the rail, drawn as nothing; its thumb is the knob's size, so the
+   browser's drag and keyboard handling line up with what is drawn. */
+.stepper-range {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.stepper-range::-webkit-slider-runnable-track {
+  height: 48px;
+  background: transparent;
+}
+
+.stepper-range::-moz-range-track {
+  height: 48px;
+  background: transparent;
+}
+
+.stepper-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--knob-w);
+  height: 48px;
+  border: 0;
+  background: transparent;
+}
+
+.stepper-range::-moz-range-thumb {
+  width: var(--knob-w);
+  height: 48px;
+  border: 0;
+  background: transparent;
+}
+
+.stepper-range:focus-visible {
+  outline: 2px solid var(--dark-link);
+  outline-offset: 2px;
+  border-radius: 22px;
+}
+
+.stepper-btn {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  /* Transparent, so the disabled look's border takes no room */
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--dark-bg-raised);
+  color: var(--dark-text-primary);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Only a real pointer gets the hover tint: a touch screen keeps :hover on the last tapped
+   button (the same rule as the lyric style buttons in custom.css). */
+@media (hover: hover) {
+  .stepper-btn:not(:disabled):hover {
+    background: var(--button-hover-bg);
+  }
+}
+
+/* The theme's disabled look (bulma-dark.css, "Disabled"): no fill, a faded border, a muted
+   label, no opacity fade. The buttons are not .button, so that rule doesn't reach them. */
+.stepper-btn:disabled {
+  border-color: var(--dark-border-faded);
+  background: transparent;
+  color: var(--dark-text-muted);
+  cursor: default;
+}

@@ -60,24 +60,6 @@ def volume(volume):
     return redirect(url_for("home.home"))
 
 
-@controller_bp.route("/vol_up")
-def vol_up():
-    """Increase volume by 10%."""
-    k = get_karaoke_instance()
-    broadcast_event("volume", "up")
-    k.vol_up()
-    return redirect(url_for("home.home"))
-
-
-@controller_bp.route("/vol_down")
-def vol_down():
-    """Decrease volume by 10%."""
-    k = get_karaoke_instance()
-    broadcast_event("volume", "down")
-    k.vol_down()
-    return redirect(url_for("home.home"))
-
-
 @controller_bp.route("/subtitle_delay/<seconds>")
 def subtitle_delay(seconds):
     """Set subtitle delay for current song (temporary override)."""
