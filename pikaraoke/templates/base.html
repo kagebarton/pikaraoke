@@ -70,14 +70,6 @@
       });
     }
 
-    function debounce(func, wait) {
-      let timeout;
-      return function(...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(this, args), wait);
-      };
-    }
-
     function connectSocket() {
       // SPA navigation re-runs this script on every page change, and each io() opens another connection.
       if (window.socket) return;
@@ -376,13 +368,13 @@
         </div>
 
         {# The key range is the guest state's, the same limit the server holds a saved key to #}
-        {% set key_limit = (singer or {}).get("key_limit", 0) %}
+        {% set guest_key_limit = (singer or {}).get("key_limit", 0) %}
         <div class="field" id="singer-key-field">
           <div>
             {# MSG: Label of the control where a guest picks the key their songs start at #}
             <span class="label" id="singer-key-heading" style="display: inline">{% trans %}Key{% endtrans %}</span>{{ key_tip() }}
           </div>
-          {{ stepper("singer-key", -key_limit, key_limit, 0, format="semitones", labelled_by="singer-key-heading") }}
+          {{ stepper("singer-key", -guest_key_limit, guest_key_limit, 0, format="semitones", labelled_by="singer-key-heading") }}
         </div>
 
         <div class="field">

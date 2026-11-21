@@ -56,23 +56,33 @@ function debounceStep(fn, key, delay = 300) {
   _stepTimers[key] = setTimeout(fn, delay);
 }
 
-// Sends a stepper's value when it settles (a drag's release, or a tap: stepper.js fires change
-// for both), so rapid taps merge into one request.
-function sendOnChange(selector, key, url) {
-  $(selector).on("change", function () {
+// A stepper is busy while a finger or the mouse is on it (_held) and while its latest value is
+// still on its way to the server (_sending, until that request settles). A push leaves a busy
+// stepper alone: every push repeats the server's state (another phone queued a song, say), and
+// applying it then would snap the knob back to the old value. Every other push applies, so a
+// value the server dropped (the song had just ended) or a failed request is put right by the
+// next push.
+var _held = {};
+var _sending = {};
+
+// Sends a stepper's value on `event` (input: live while dragged; change: when a drag is
+// released or a button tapped, stepper.js fires both for a tap), debounced so rapid taps merge
+// into one request. The value is read when the event fires, not when the request goes out.
+function sendStepper(selector, event, url, delay) {
+  var range = $(selector);
+  range.on("pointerdown", function () { _held[this.id] = true; });
+  range.on(event, function () {
+    var id = this.id;
     var value = this.value;
-    debounceStep(() => $.get(url(value)), key);
+    var send = (_sending[id] = {});
+    debounceStep(() => $.get(url(value)).always(() => {
+      if (_sending[id] === send) delete _sending[id]; // a later tap's send is still to come
+    }), id, delay);
   });
 }
 
-// A push moves a stepper only when the server's value differs from the last push. Every push
-// repeats the server's state (another phone queued a song, say), and applying a repeat would
-// snap the knob back to the old value while a drag is on or a request is still waiting out its
-// debounce, and Volume would then send that old value.
-var _pushed = {};
 function syncStepper(id, value) {
-  if (_pushed[id] === value) return;
-  _pushed[id] = value;
+  if (_held[id] || _sending[id]) return;
   stepperSet(document.getElementById(id), value);
 }
 
@@ -211,15 +221,13 @@ $(function () {
   $(".control-box").hide();
 
   // Volume goes out live while it is dragged
-  $("#volume-slider").on(
-    "input",
-    debounce(function () {
-      $.get("/volume/" + this.value / 100);
-    }, 500)
-  );
-  sendOnChange("#transpose", "_pitch", (v) => "/transpose/" + v);
-  sendOnChange("#subtitle-delay-slider", "_sub", (v) => "/subtitle_delay/" + v);
-  sendOnChange("#vocal-volume-slider", "_vocalvol", (v) => "/vocal_volume/" + v / 100);
+  sendStepper("#volume-slider", "input", (v) => "/volume/" + v / 100, 500);
+  // A finger or the mouse can let go off the rail, so the release is heard on the whole page.
+  // SPA navigation re-runs this script, hence the off first.
+  $(document).off(".npHeld").on("pointerup.npHeld pointercancel.npHeld", function () { _held = {}; });
+  sendStepper("#transpose", "change", (v) => "/transpose/" + v);
+  sendStepper("#subtitle-delay-slider", "change", (v) => "/subtitle_delay/" + v);
+  sendStepper("#vocal-volume-slider", "change", (v) => "/vocal_volume/" + v / 100);
 
   // Seek bar handlers (the seek bar is the admin's: no one else's page has it)
   var seekBar = document.getElementById("seek-bar");
@@ -338,7 +346,7 @@ $(function () {
   {# ── Original vocals section (dual-stem only) ──────────────────────── #}
   <div id="vocal-volume-section" class="np-section" style="display: none">
     {# MSG: Heading of Now Playing's slider for how loud the original recording's singer is. Not the guest's own microphone #}
-    <h4 id="vocal-volume-heading">{% trans %}Original vocals{% endtrans %} {{ original_vocals_tip() }}</h4>
+    <h4><span id="vocal-volume-heading">{% trans %}Original vocals{% endtrans %}</span> {{ original_vocals_tip() }}</h4>
     {{ stepper("vocal-volume-slider", 0, 100, 40, tap=10, labelled_by="vocal-volume-heading") }}
   </div>
 
@@ -346,7 +354,7 @@ $(function () {
   {# ── Key section ───────────────────────────────────────────────────── #}
   <div class="np-section">
     {# MSG: Heading of Now Playing's slider that moves the playing song up or down in pitch #}
-    <h4 id="key-heading">{% trans %}Key{% endtrans %} {{ key_tip() }}</h4>
+    <h4><span id="key-heading">{% trans %}Key{% endtrans %}</span> {{ key_tip() }}</h4>
     {{ stepper("transpose", -key_limit, key_limit, 0, format="semitones", labelled_by="key-heading") }}
   </div>
   {% endif %}
@@ -364,7 +372,7 @@ $(function () {
   {# ── Subtitle delay section (only visible in 'srt' mode) ───────────── #}
   <div id="subtitle-delay-section" class="np-section">
     {# MSG: Heading of Now Playing's slider that moves the on-screen lines earlier or later #}
-    <h4 id="subtitle-delay-heading">{% trans %}Subtitle delay{% endtrans %}
+    <h4><span id="subtitle-delay-heading">{% trans %}Subtitle delay{% endtrans %}</span>
       {# MSG: Note beside "Subtitle delay", the slider that moves the on-screen lines earlier or later (Now Playing) #}
       {% call info_tip() %}{% trans %}Below 0 the lines show earlier, above 0 later.{% endtrans %}{% endcall %}</h4>
     {{ stepper("subtitle-delay-slider", -5, 5, 0, step=0.1, tap=0.1, format="seconds", labelled_by="subtitle-delay-heading") }}
