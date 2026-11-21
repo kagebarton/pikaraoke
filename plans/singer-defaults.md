@@ -2081,3 +2081,66 @@ ui-check, and confirm the fix for 1 restores is-danger and is-light.
   last review found 15; pending a review (the checkpoint gives the line).
 - **Not done:** `graphify update .` (no `graphify-out/` on this box). The rebase onto `dev`
   (151 behind). Phase 6.
+
+### Review of the Phase 5 review fixes (2026-11-21, Claude Opus 5.5, Linux box)
+
+`/code-review ea66cb0e..5c3d806d`, three finders (correctness, simplicity, robustness). 10
+findings. Ken's triage (2026-11-21): fix 1, 2, 3, 5, 10; red becomes `#e74c3c` (Ken).
+
+| # | Finding | Ruling |
+|---|---|---|
+| 1 | Busy `is-primary`/`is-info`/`is-link` take Bulma's default fill once the disabled rule skips `is-loading` (primary `rgb(0,209,178)`, info `rgb(102,209,255)`) | Fixed |
+| 2 | `.button.is-primary { color: white }` beats the flash's label: white on green 2.1:1, on pink 2.8:1 | Fixed (pre-existing) |
+| 3 | `.button.is-primary:hover` beats Bulma's `is-success[disabled]`: a hovered flash shows `#436d9a` | Fixed (pre-existing) |
+| 4 | A slow Genius pick completes against the next video (`_activeYtId` read at reply time; `resetLyricsSection` skips `#lyrics-download-btn`) | Pre-existing on `dev`; `download_modal_speed` rewrites it with `isCurrent(d)`. `plans/open-issues.md` |
+| 5 | `is-danger` is Bulma's pink, not `--dark-danger` | Fixed: red `#e74c3c` (Ken) |
+| 6 | Dropdown change leaves `is-danger`/`is-loading`/min-width; flashError's timer undoes a newer flash | As 4 |
+| 7 | Name 0 px at 320, outline under the burger at 280 | Already triaged: Phase 5 review finding 6, waits for L14 |
+| 8 | `--bulma-button-disabled-*` hold the normal look | Dropped: Bulma's names; the comment says it |
+| 9 | `--dark-border-faded` is a literal | Dropped: the Phase 5 review's finding 5 fix (`color-mix` on old browsers) |
+| 10 | `.subtitle-mode-btn:disabled` copies the theme's disabled look | Fixed |
+
+### Phase 5 fix-review fixes (executed 2026-11-21, Claude Opus 5.5, Linux box)
+
+Commit `43303964`.
+
+- **1, 2, 3, 5:** `--bulma-primary-*`, `--bulma-info-*`, `--bulma-danger-*` h/s/l on `:root`
+  (`#375a7f`, `#3298dc`, `#e74c3c`), `--bulma-primary-invert-l: 100%`; `--dark-primary`,
+  `--dark-info`, `--dark-danger` read from them. The theme's `.button.is-primary`
+  (+`:hover`), `.is-info`, `.is-success`, `.is-warning`, `.is-danger` rules deleted.
+  `.button.is-link` kept (no parts; no page uses it). `.input.is-danger` border reads
+  `--dark-danger`.
+- **Knock-ons:** Info's three `is-primary is-inverted` buttons lose `is-inverted` (the fixed
+  fill hid it; Bulma's inverted swaps fill and label, so they would turn white). The lyric
+  list arrow (`search.html`) reads `--dark-link`, was `--bulma-primary` (turquoise by default).
+- **10:** `.subtitle-mode-btn` normal/hover/selected limited to `:not(:disabled)`; the copy
+  deleted.
+- **Browser check** (Playwright Chromium, the three stylesheets on a `#343c3d` card, HEAD
+  `bc2ccf5b` vs this commit, hover after 600 ms):
+
+| Case | Before | After |
+|---|---|---|
+| primary | `#375a7f` / white | same |
+| primary hover | `rgb(67,109,154)` | `rgb(63,103,145)` |
+| primary loading | `rgb(0,209,178)` | `#375a7f` |
+| primary + success flash | `#2ecc71` / white | `#2ecc71` / `rgb(8,33,18)` |
+| primary + success flash, hovered | `rgb(67,109,154)` | `#2ecc71` |
+| primary + danger flash | `rgb(255,102,133)` / white | `#e74c3c` / `rgb(23,5,3)` |
+| info | `#3298dc` / `rgb(0,36,51)` | `#3298dc` / `rgb(7,29,44)` |
+| info loading | `rgb(102,209,255)` | `#3298dc` |
+| success hover | no change | `rgb(64,212,126)` |
+| warning label | `rgba(0,0,0,0.7)` | `rgb(39,29,2)` |
+| danger | `rgb(255,102,133)` / `rgb(26,0,5)` | `#e74c3c` / `rgb(23,5,3)` |
+| danger outlined | `rgb(255,102,133)` | `#e74c3c` |
+| `has-text-info` | `rgb(102,209,255)` | `#3298dc` |
+| `has-text-danger` | `rgb(255,102,133)` | `#e74c3c` |
+| `.input.is-danger` border | `#ff6685` | `#e74c3c` |
+| disabled (plain, primary, danger), subtitle buttons, notifications, tags | | unchanged |
+
+- **Visible beyond buttons:** `has-text-info` (Queue's move icons, Search's music icon and
+  YouTube link) darkens from `#66d1ff` to `#3298dc`, 3.6:1 on the `#343c3d` card;
+  `has-text-danger` to `#e74c3c`. For Ken's Phase 6 look.
+- **Tests:** full suite 3528 passed. Pre-commit clean on the four files.
+- **Self-review:** CSS cascade every page loads, but measured state by state above; the
+  review that found these covers it. No further review due.
+- **Not done:** rebase onto `dev`; Phase 6.
