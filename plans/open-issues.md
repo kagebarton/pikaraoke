@@ -432,6 +432,17 @@ script's rules and workflow are in `scripts/movie_split.md`, and this entry is t
 Found 2026-10-27 during the `queue_hold` manual checks on the Windows box.
 Record: `plans/queue-hold.md` on tag `archive/queue_hold`, the manual checks row.
 
+- **A slow Genius pick can download the wrong video.** In the Search preview dialog,
+  the Genius Download's reply reads `_activeYtId` when it arrives, not when it was
+  tapped, and `resetLyricsSection` never resets `#lyrics-download-btn`. Close the
+  dialog and open another video while the pick is in flight: the old reply downloads
+  the second video, unconfirmed, and the first is never sent. Related: switching the
+  lyric dropdown during an error flash leaves the button red, and the old flash's timer
+  later undoes a newer flash. Found by the `singer_defaults` Phase 5 fix review
+  (2026-11-21, findings 4 and 6). Not fixed: `download_modal_speed` rewrites this
+  dialog and checks every reply against the video still open (`isCurrent(d)`). Fix
+  on `dev` only if that branch is dropped.
+
 - **Server messages never reach a screen.** `Karaoke.send_notification` emits
   the socket event `notification`, and its only listener was the browser splash
   (`static/js/splash.js`), removed by `367375cc` (2026-06-03). Every
@@ -492,6 +503,11 @@ Stage 2, landing:
    `plans/download-modal-speed.md` ("At landing") already says how the second one repoints
    `queueAfterDownload()`. If the dialog clears Ken's checks first, it goes first and the same
    note applies the other way.
+   Either way, after `singer_defaults`: a button disabled only while it shows its result
+   needs `is-flash`, or it takes the grey disabled look (`singer_defaults` `5c3d806d`).
+   `download_modal_speed`'s result flashes in `search.html` (`d7d5b5ff`) predate it and
+   conflict with that commit's edits to the same lines: keep the dialog's code and add
+   `is-flash` to each of its result flashes.
 
 Stage 3: `queue_phone` code, after `singer_defaults` is on `dev`. It takes L1, L15, L16 from
 `dev`, and its L14 nav half and `singer_defaults`' L6 both rewrite the nav bar in `base.html`;
