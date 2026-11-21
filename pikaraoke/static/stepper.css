@@ -141,7 +141,7 @@
 }
 
 /* Only a real pointer gets the hover tint: a touch screen keeps :hover on the last tapped
-   button (the same rule as the lyric style buttons in custom.css). */
+   button. */
 @media (hover: hover) {
   .stepper-btn:not(:disabled):hover {
     background: var(--button-hover-bg);
