@@ -11,15 +11,15 @@
    .button, --dark-text-sub for the second line. Nothing here restates a value that is defined
    there. */
 
-/* A row. Rows sit side by side in one container; every other one is shaded a step off the card
-   behind it. */
+/* A row. Rows sit side by side in one container, and each bleeds 8px into the card's padding so
+   its shading reaches nearly to the card's edge; every other one is shaded a step off the card. */
 .sr-row {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 10px;
 	min-height: 60px;
-	padding: 8px 10px;
-	border-radius: 8px;
+	padding: 6px 8px;
+	margin: 0 -8px;
 }
 
 .sr-row:nth-child(even) {
@@ -45,17 +45,11 @@
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 1px;
+	overflow-wrap: anywhere;
 }
 
-/* The singer's name, then "song · artist". Long ones cut with an ellipsis, not a second line. */
-.sr-name,
-.sr-sub {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
+/* The singer's name, then "song · artist". A long title wraps rather than being cut: the guest
+   has no other place to read it. */
 .sr-name {
 	font-size: 17px;
 	font-weight: 700;
@@ -69,7 +63,7 @@
 	color: var(--dark-text-sub);
 }
 
-/* The reason under a failed row: it may wrap. */
+/* The reason under a failed row. */
 .sr-reason {
 	font-size: 13px;
 	line-height: 1.3;
@@ -98,9 +92,7 @@
 	line-height: 1.1;
 }
 
-/* The place in line, or the "!" of a failed song that takes none */
-.sr-num,
-.sr-mark {
+.sr-num {
 	font-size: 17px;
 	font-weight: 700;
 }
@@ -111,22 +103,20 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	color: var(--dark-text-muted);
 }
 
 /* Not playable: a dashed outline and no fill, the number over a word saying why. */
 .sr-slot.is-held {
 	background: none;
 	border: 1px dashed var(--dark-text-muted);
+	color: var(--dark-text-sub);
 }
 
+/* Failed, for the owner and the admin: a solid red outline, a "!" over the word. */
 .sr-slot.is-failed {
+	gap: 2px;
 	background: none;
 	border: 1px solid var(--dark-danger);
-	color: var(--dark-danger-text);
-}
-
-.sr-slot.is-failed .sr-word {
 	color: var(--dark-danger-text);
 }
 
@@ -138,6 +128,7 @@
 	height: 40px;
 	padding: 0;
 	border-radius: 6px;
+	color: var(--dark-text-light);
 }
 
 .sr-btn.is-delete {
@@ -154,16 +145,18 @@
 /* A text button in a row's place (Dismiss): an outline, not a fill. */
 .sr-text-btn {
 	flex: none;
-	min-height: 40px;
+	height: 40px;
 	padding: 0 12px;
 	border-radius: 6px;
 	background-color: transparent;
-	font-weight: 700;
+	font-size: 15px;
+	font-weight: 400;
+	color: var(--dark-text-light);
 }
 
 .sr-drag {
 	flex: none;
-	width: 24px;
+	width: 20px;
 	align-self: stretch;
 	display: flex;
 	align-items: center;

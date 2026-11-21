@@ -4,30 +4,31 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='phone-rows.css') }}">
 <style>
   /* What only the Queue page draws; the rows are phone-rows.css. */
-  .qp-now { display: flex; align-items: center; gap: 8px; min-height: 60px; padding: 8px 10px; border-radius: 8px; background: var(--dark-bg-secondary); }
-  .qp-now .sr-slot { background: var(--dark-bg-tertiary); }
-  /* Three grey bars standing still: the song is playing, and nothing on this page moves. */
-  .qp-bars { display: flex; align-items: flex-end; gap: 2px; height: 18px; }
-  .qp-bars span { width: 3px; border-radius: 1px; background: var(--dark-text-muted); }
-  .qp-bars span:nth-child(1) { height: 10px; }
-  .qp-bars span:nth-child(2) { height: 18px; }
-  .qp-bars span:nth-child(3) { height: 13px; }
-  .qp-up-next { margin: 18px 0 8px; font-size: 13px; font-weight: 700; color: var(--dark-text-muted); }
+  .qp-now { display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 16px; border: 1px solid var(--dark-primary); border-radius: 8px; background: var(--dark-bg-secondary); }
+  /* Bars standing still: the song is playing, and nothing on this page moves. */
+  .qp-now-slot { flex: none; width: 60px; display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--dark-text-sub); }
+  .qp-now-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .qp-up-next { margin: 0 0 8px; font-size: 13px; color: var(--dark-text-sub); }
   /* The guest's pause button stays at the bottom of the screen while the list scrolls under it. */
-  .qp-brb { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 24px 14px 14px; background: linear-gradient(to top, var(--dark-bg-primary) 65%, transparent); }
-  .qp-brb-btn { display: flex; max-width: 880px; min-height: 56px; margin: 0 auto; font-size: 17px; font-weight: 700; gap: 8px; }
+  .qp-brb { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 12px 20px 20px; background: var(--dark-bg-primary); border-top: 1px solid var(--dark-bg-tertiary); box-shadow: 0 -8px 16px rgba(0, 0, 0, 0.45); }
+  .qp-brb-btn { display: flex; max-width: 860px; height: 56px; margin: 0 auto; border-radius: 8px; font-size: 17px; font-weight: 700; gap: 10px; }
   /* Room under the list so its last row clears the bar. */
-  #queue-page.has-brb { padding-bottom: 84px; }
-  .qp-footer { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
-  .qp-footer .button { min-height: 48px; font-weight: 700; }
-  .qp-add { display: flex; align-items: flex-end; gap: 10px; }
-  .qp-add .button { flex: 1; }
-  .qp-howmany { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--dark-text-muted); }
-  .qp-howmany .input { width: 64px; height: 48px; text-align: center; }
-  .qp-confirm-title { display: block; margin-bottom: 6px; font-size: 18px; font-weight: 700; color: var(--dark-text-secondary); }
-  .qp-confirm-line { display: block; color: var(--dark-text-sub); word-break: break-word; }
-  .qp-confirm-foot { gap: 10px; }
-  .qp-confirm-foot .button { flex: 1; min-height: 48px; font-weight: 700; }
+  #queue-page.has-brb { padding-bottom: 108px; }
+  .qp-footer { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+  .qp-footer .button { height: 44px; border-radius: 6px; font-size: 16px; }
+  .qp-add { display: flex; align-items: center; gap: 10px; }
+  .qp-add .button { flex: 1; font-weight: 700; }
+  .qp-howmany { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--dark-text-sub); }
+  .qp-howmany .input { width: 48px; height: 44px; padding: 0 8px; border-radius: 6px; background: var(--dark-bg-secondary); color: var(--dark-text-primary); text-align: center; }
+  .qp-clear { background: transparent; border-color: var(--dark-danger); color: var(--dark-danger-text); font-weight: 400; }
+  /* The remove dialog: a small card, not Bulma's wide modal. */
+  .qp-confirm { width: 330px; max-width: calc(100% - 32px); border: 1px solid var(--dark-border); border-radius: 10px; overflow: hidden; }
+  .qp-confirm .modal-card-body { padding: 20px 20px 0; }
+  .qp-confirm-title { display: block; margin-bottom: 6px; font-size: 18px; font-weight: 700; color: var(--dark-text-primary); }
+  .qp-confirm-line { display: block; font-size: 15px; color: var(--dark-text-light); word-break: break-word; }
+  .qp-confirm .modal-card-foot { gap: 10px; padding: 20px; border-top: 0; }
+  .qp-confirm .modal-card-foot .button { flex: 1; height: 48px; border-radius: 6px; font-size: 16px; font-weight: 400; }
+  .qp-confirm .modal-card-foot .is-danger { font-weight: 700; }
 </style>
 {% endblock %}
 
@@ -38,7 +39,7 @@
 var isAdmin = {{ admin | tojson }};
 
 var T = {
-  now: {{ _('NOW') | tojson }},
+  now: {{ _('Now') | tojson }},
   // What a row that cannot play yet says in its 60 px slot, over its place in line
   paused: {{ _('paused') | tojson }},
   failed: {{ _('failed') | tojson }},
@@ -91,10 +92,13 @@ function songLine(artist, song) {
   return artist ? song + ' · ' + artist : song;
 }
 
+// Five bars standing still, and the "!" of a failed song: drawn, so neither is a text glyph
+var BARS = '<svg width="26" height="18" viewBox="0 0 30 18" fill="currentColor" aria-hidden="true"><rect x="0" y="8" width="4" height="10"></rect><rect x="6" y="3" width="4" height="15"></rect><rect x="12" y="10" width="4" height="8"></rect><rect x="18" y="1" width="4" height="17"></rect><rect x="24" y="6" width="4" height="12"></rect></svg>';
+var BANG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M8 2.5v7"></path><path d="M8 13.2v0.3"></path></svg>';
+
 function generateNowCard(np) {
   var html = '<div class="qp-now">';
-  html += '<div class="sr-slot"><span class="qp-bars"><span></span><span></span><span></span></span>';
-  html += '<span class="sr-word">' + T.now + '</span></div>';
+  html += '<div class="qp-now-slot">' + BARS + '<span class="qp-now-label">' + T.now + '</span></div>';
   html += '<div class="sr-main"><span class="sr-name">' + escapeHtml(np.now_playing_user) + '</span>';
   html += '<span class="sr-sub">' + escapeHtml(songLine(np.now_playing_artist, np.now_playing_song)) + '</span></div>';
   if (isAdmin) {
@@ -118,7 +122,7 @@ function generateQueueRow(e, index, place, me) {
 
   var slot;
   if (showsFailure) {
-    slot = '<div class="sr-slot is-failed"><span class="sr-mark">!</span><span class="sr-word">' + word + '</span></div>';
+    slot = '<div class="sr-slot is-failed">' + BANG + '<span class="sr-word">' + word + '</span></div>';
   } else if (failed) {
     slot = '<div class="sr-slot is-held"><span class="sr-word">' + word + '</span></div>';
   } else {
@@ -470,13 +474,12 @@ $(function() {
   {% if admin %}
   <div class="qp-footer">
     <div class="qp-add">
-      <a class="button is-success add-random" href="#"><i class="icon icon-plus-circled mr-2"></i>{% trans %}Add random songs{% endtrans %}</a>
+      <a class="button is-success add-random" href="#">{% trans %}Add random songs{% endtrans %}</a>
       <label class="qp-howmany">{% trans %}How many{% endtrans %}
         <input id="randomNumberInput" class="input" pattern="\d*" maxlength="2" value="3" min="1" max="99" />
       </label>
     </div>
-    <a class="button is-danger is-outlined confirm-clear" href="/queue/edit?action=clear">
-      <i class="icon icon-trash-empty mr-2"></i>{% trans %}Clear the whole queue{% endtrans %}</a>
+    <a class="button qp-clear confirm-clear" href="/queue/edit?action=clear">{% trans %}Clear the whole queue{% endtrans %}</a>
   </div>
   {% endif %}
 </div>
@@ -552,7 +555,7 @@ $(function() {
 
 <div class="modal" id="remove-confirm-modal">
   <div class="modal-background"></div>
-  <div class="modal-card" style="width: 90%; max-width: 400px;">
+  <div class="modal-card qp-confirm">
     <section class="modal-card-body">
       <span class="qp-confirm-title">{% trans %}Remove this song?{% endtrans %}</span>
       <span class="qp-confirm-line" id="remove-confirm-line"></span>
