@@ -824,14 +824,14 @@ files, and one finder angle per Self-Review axis.
 
 ### Manual checks (Ken, on phones)
 
-- [ ] Each screen matches the mockup's lower row. Where they differ, the decisions win (the
+- [x] Each screen matches the mockup's lower row. Where they differ, the decisions win (the
   card reads "Queue…", decision 15; Queue is green, decision 17).
-- [ ] The list's arrow sits right on Android Chrome.
-- [ ] iPhone (Safari) and Android (Chrome): Play tapped before the wait ends starts the video
+- [x] The list's arrow sits right on Android Chrome.
+- [x] iPhone (Safari) and Android (Chrome): Play tapped before the wait ends starts the video
   once it ends; tapped after, it starts at once.
-- [ ] A video with a good manual caption: the captions screen after one wait. A video without:
+- [x] A video with a good manual caption: the captions screen after one wait. A video without:
   the Genius list the moment the wait ends.
-- [ ] "Add to queue after download" unticked: the dialog reads "Add to library" on a grey
+- [x] "Add to queue after download" unticked: the dialog reads "Add to library" on a grey
   button (decision 17), and the song downloads without joining the queue.
 
 ### At landing (not this run)
@@ -853,7 +853,7 @@ files, and one finder angle per Self-Review axis.
 | 3b `fix(search): the dialog's Queue is green, like every Queue` | `def8493` | 3868 passed, 0 failed (+1: the render test that pins the button's markup and the two places the script sets the class) | pre-commit passed on the 2 files; ui-check at 390x844, three runs of seven checks, 21/21 on the third version of my check (raw below, with the two earlier reads that failed and why); Ken's phone checks not done | `search.html` only: the markup loses `is-primary`; `syncQueue()` and the `/lyrics_select` answer set `is-success` from the box beside the label (`toggleClass("is-success", queued)`). Ticked, the enabled button computes `#2ecc71`; unticked it has no colour class and reads "Add to library", `rgb(20, 22, 26)` until `singer_defaults` Phase 5 puts its `#434d4e` fill on `dev`. Disabled and after a tap the button takes Bulma's disabled look (`rgb(72, 199, 142)` ticked): decision 17 builds nothing for that, L16's look comes from `bulma-dark.css`. Side effect, not asked for: a failed `/lyrics_select` now shows its "!" red (`rgb(255, 102, 133)`) in both states; the old build's disabled `is-primary` beat `is-danger` and showed `rgb(62, 91, 122)`. Review line: `/code-review` now takes in 3a and 3b, range `9110167..def8493` |
 | review fixes `fix(search): the dialog's late answers, refused play and failed sends after review`; `fix(search): a caption check that fails after the lookup printed the link keeps the preview` | `13ebc44`, `dce7598` | the four touched test files only: 365 passed, 0 failed (full suite not run) | pre-commit passed on the 6 files; ui-check at 390x844, ten checks, three runs on each of the fixed tree and `def8493` (raw below); Ken's phone checks not done | `/code-review` of `9110167..def8493` (Opus, 2026-11-19), 14 findings: fixed 1-5 and 7-13; 6 (the link's client also picks the caption track) logged in `plans/open-issues.md` on `dev`; 14 (test indirection) dropped. Deviation: for 3 the list is disabled at the tap rather than its change handler guarded. One record left stale: open-issues' "Download dialog as built on `download_modal_speed`" still calls Queue blue `is-primary` |
 | review 2 fixes `fix(search): a lookup that times out after printing the link keeps the preview`; `fix(search): one Enter handler per visit; the dialog's late errors, play logs and Queue label` | `b6195986`, `7599f323` | 3871 passed, 0 failed (full suite; +1 over `dce7598`: the link-printed-first lookup test now runs for an error exit and a timeout) | pre-commit passed on the 3 files; import smoke ok; the rendered inline scripts parse (deno, `new Function`); ui-check at 390x844, nine checks, three runs on each of the fixed tree and `dce7598` (raw below); Ken's phone checks not done | `/code-review` of `def8493..dce7598` (2026-11-21), 13 findings. Fixed: 1, 2, 3, 5, 6, 7, 9, 11, 12, and 10's string (moved into `TEXT`). Not done: 10's merge of the two `/download` request bodies (two copies; CLAUDE.md waits for a third); 8 (a lookup-only error class) dropped, the one reader is documented. Logged in `plans/open-issues.md` on `dev`: 4 (Queued shows before `/download` answers, kept from the plan's order) and 13 (no test drives the dialog's script). Added from self-review: the Enter handler also acts only while its page is showing, since a copy left by an SPA move took Enter from every other page |
-| manual checks (Ken) | | n/a | | |
+| manual checks (Ken) | `e808de9` | n/a | all five checks passed on Ken's phones; one fix from them, below | Found: Add to library and Search for other lyrics… were not the palette's raised grey (the first fell back to Bulma's default, the second was a transparent outline). Fixed in the `fix(ui)` commit above. ui-check not run (the skill is missing on this box) |
 
 ### Commit 1 measurement (raw)
 
