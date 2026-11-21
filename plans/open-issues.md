@@ -671,6 +671,39 @@ Buttons, every page (Ken, 2026-11-18, drawn on the canvas; owner `singer_default
 
 The "Small gaps inside the v2 group" above were ruled 2026-11-18 (S1-S4 in `plans/queue-phone.md`).
 
+## Singer defaults: Phase 6 findings (on `dev`)
+
+`singer_defaults` landed on local `dev` 2026-11-21 (`5c0fdc2a`..`83671246`, as copies). Ken ran
+the Phase 6 test plan on `dev` the same day; every check passed functionally. What he saw
+besides, in his words, on his own devices. Record: `plans/singer-defaults.md` on the branch
+`singer_defaults` (not yet retired).
+
+- **Now Playing's (i) notes are two kinds.** For the admin, Original vocals and Lyrics have
+  their (i) beside the label and open on hover (`info_tip()`); Change Key and Subtitle
+  Delay keep the old (i) beside the value, which needs a click and shows a notification
+  (`#semitones-info`, `#subtitle-delay-info`, `home.html`). Covered by `now_playing_remote`
+  (spec `254bec0`): items 5 and 7 give both headings the shared `info_tip()` and delete the
+  two click handlers. Open until that branch is built.
+- **Subtitle delay shows to non-admins.** Covered by `now_playing_remote` ruling 1 (Subtitle
+  delay, seek bar and master Volume become the admin's, hidden from everyone else). Hiding
+  only: a direct request to `/subtitle_delay` still works, ruled acceptable (ruling 3).
+- **The join form's Key has no (i).** Not covered: the spec's guest-form section says only
+  "the label 'Key' stays", and `singer_defaults` Phase 4 added notes to Original vocals and
+  Lyrics, not Key. Proposed: a `key_tip()` macro in `singer_tips.html` beside
+  `original_vocals_tip()` and `lyrics_tip()`, used by Now Playing's Key heading and the form,
+  in `now_playing_remote`'s commit 4 (the form's stepper), so the two say the same thing. The
+  spec's inline Now Playing wording is "Moves the song up or down in half-steps. 0 is the
+  original key." Needs adding to the spec; Ken has not ruled on it.
+- **The name's pill sits in different places by browser** (L6, `base.html`
+  `.singer-pill`). Firefox on desktop: right, beside the Pikaraoke link, as designed. Chrome
+  on a phone: next to the Processing icon, not beside the burger. Opera on a tablet: in that
+  same spot with no outline. Not diagnosed. `margin-left: auto` is only set from 1024 px up,
+  so below that the pill follows the Processing icon; the outline is the span's
+  `1px rgba(255,255,255,.6)` border. Ken's intent for the phone spot (beside the burger or
+  after the icons) is not recorded: ask him, then check at 390, 768 and 1024 px in
+  Chromium and Firefox, and Opera if it can be run. The L6 ui-check measured 390 px and 360
+  px only.
+
 ## Edit words (on `dev`)
 
 Landed 2026-11-03 as `90c37f2`..`03dff3a`. Record: `plans/edit-words.md` on tag
