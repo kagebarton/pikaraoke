@@ -549,18 +549,18 @@ $("#add-queue-link").trigger("click");
 					queue: $("#add-to-queue-direct").is(":checked"),
 				}),
 				success: function () {
-					$btn.removeClass("is-loading").addClass("is-success")
+					$btn.removeClass("is-loading").addClass("is-success is-flash")
 						.html('<i class="icon icon-ok"></i>');
 					setTimeout(function () {
-						$btn.removeClass("is-success").html(originalText)
+						$btn.removeClass("is-success is-flash").html(originalText)
 							.removeAttr("disabled").css("min-width", "");
 					}, 3000);
 				},
 				error: function () {
-					$btn.removeClass("is-loading").addClass("is-danger")
+					$btn.removeClass("is-loading").addClass("is-danger is-flash")
 						.text("!");
 					setTimeout(function () {
-						$btn.removeClass("is-danger").html(originalText)
+						$btn.removeClass("is-danger is-flash").html(originalText)
 							.removeAttr("disabled").css("min-width", "");
 					}, 3000);
 				},
@@ -596,13 +596,13 @@ $("#add-queue-link").trigger("click");
 				success: function (data) {
 					var result = typeof data === "string" ? JSON.parse(data) : data;
 					if (result.success[0]) {
-						$btn.removeClass("is-loading").html('<i class="icon icon-ok"></i>');
+						$btn.removeClass("is-loading").addClass("is-flash").html('<i class="icon icon-ok"></i>');
 					} else {
 						showNotification(result.success[1], "is-danger");
-						$btn.removeClass("is-loading").addClass("is-warning").text("Already queued");
+						$btn.removeClass("is-loading").addClass("is-warning is-flash").text("Already queued");
 					}
 					setTimeout(function () {
-						$btn.removeClass("is-warning").html(originalText)
+						$btn.removeClass("is-warning is-flash").html(originalText)
 							.removeAttr("disabled").css("min-width", "");
 					}, 3000);
 				},
@@ -610,9 +610,9 @@ $("#add-queue-link").trigger("click");
 					var msg = "";
 					try { msg = JSON.parse(xhr.responseText).error; } catch (err) {}
 					showNotification(msg || "Could not add to the queue.", "is-danger");
-					$btn.removeClass("is-loading").addClass("is-danger").text("!");
+					$btn.removeClass("is-loading").addClass("is-danger is-flash").text("!");
 					setTimeout(function () {
-						$btn.removeClass("is-danger").html(originalText)
+						$btn.removeClass("is-danger is-flash").html(originalText)
 							.removeAttr("disabled").css("min-width", "");
 					}, 3000);
 				},
@@ -700,7 +700,7 @@ function resetLyricsSection() {
   $("#lyrics-custom-input").val("");
   $("#lyrics-dropdown").empty();
   $("#lyrics-srt-btn")
-    .removeClass("is-loading is-success is-danger")
+    .removeClass("is-loading is-success is-danger is-flash")
     .removeAttr("disabled")
     .text("{% trans %}Download{% endtrans %}");
   _activeSrtAvailable = false;
@@ -840,7 +840,7 @@ $(document).on("change.search", "#lyrics-dropdown", function () {
   } else {
     $("#lyrics-custom-search").addClass("is-hidden");
     $("#lyrics-download-wrap").removeClass("is-hidden");
-    $("#lyrics-download-btn").removeAttr("disabled").text("{% trans %}Download{% endtrans %}");
+    $("#lyrics-download-btn").removeClass("is-success is-flash").removeAttr("disabled").text("{% trans %}Download{% endtrans %}");
   }
 });
 
@@ -877,7 +877,7 @@ $(document).on("click.search", "#lyrics-srt-btn", function () {
     contentType: "application/json",
     data: JSON.stringify({ yt_id: _activeYtId, mode: "srt", yt_title: _activeYtTitle }),
   });
-  $btn.addClass("is-success").attr("disabled", true)
+  $btn.addClass("is-success is-flash").attr("disabled", true)
     .html('<i class="icon icon-ok"></i>&nbsp; {% trans %}Added for processing...{% endtrans %}');
   var $li = $("#search-results li[data-ytid='" + _activeYtId + "']");
   postDownload($li.attr("value"), $li.attr("data-yttitle"));
@@ -897,7 +897,7 @@ $(document).on("click.search", "#lyrics-download-btn", function () {
       contentType: "application/json",
       data: JSON.stringify({ yt_id: _activeYtId, mode: modeValue, yt_title: _activeYtTitle }),
     });
-    $btn.addClass("is-success").attr("disabled", true)
+    $btn.addClass("is-success is-flash").attr("disabled", true)
       .html('<i class="icon icon-ok"></i>&nbsp; {% trans %}Added for processing...{% endtrans %}');
     var $li = $("#search-results li[data-ytid='" + _activeYtId + "']");
     postDownload($li.attr("value"), $li.attr("data-yttitle"));
@@ -913,9 +913,9 @@ $(document).on("click.search", "#lyrics-download-btn", function () {
 
   function flashError(detail) {
     console.warn("Lyrics select failed:", detail);
-    $btn.removeClass("is-loading").addClass("is-danger").text("!");
+    $btn.removeClass("is-loading").addClass("is-danger is-flash").text("!");
     setTimeout(function () {
-      $btn.removeClass("is-danger").html(originalHtml).removeAttr("disabled").css("min-width", "");
+      $btn.removeClass("is-danger is-flash").html(originalHtml).removeAttr("disabled").css("min-width", "");
     }, 3000);
   }
 
@@ -925,7 +925,7 @@ $(document).on("click.search", "#lyrics-download-btn", function () {
     contentType: "application/json",
     data: JSON.stringify({ yt_id: _activeYtId, genius_id: songId, yt_title: _activeYtTitle }),
     success: function () {
-      $btn.removeClass("is-loading").addClass("is-success")
+      $btn.removeClass("is-loading").addClass("is-success is-flash")
         .html('<i class="icon icon-ok"></i>&nbsp; {% trans %}Added for processing...{% endtrans %}');
       var $li = $("#search-results li[data-ytid='" + _activeYtId + "']");
       postDownload($li.attr("value"), $li.attr("data-yttitle"));

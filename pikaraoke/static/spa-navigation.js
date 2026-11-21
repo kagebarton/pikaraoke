@@ -157,7 +157,7 @@
             openSingerForm('join', state);
             return;
         }
-        $('#current-user span').text(state.name);
+        $('#current-user .singer-name').text(state.name);
         $('#current-user').removeClass('is-hidden');
         if (openEdit) {
             openSingerForm('edit', state);

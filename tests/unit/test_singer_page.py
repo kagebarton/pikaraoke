@@ -1,7 +1,9 @@
-"""Render test for the guest state base.html writes into every page.
+"""Render tests for the guest parts base.html puts on every page.
 
 A guest's name is free text and lands inside an inline script, so a name that closes the script
-tag must stay inert. The state's own values are tested in test_singer_routes.py.
+tag must stay inert. The name's link sits in the bar, not the burger menu, and the join form's
+line draws the settings icon rather than printing it. The state's own values are tested in
+test_singer_routes.py.
 """
 
 import json
@@ -78,3 +80,23 @@ def test_a_name_that_closes_the_script_tag_stays_inert(app, karaoke):
 
     assert "</script><img" not in html
     assert page_state(phone)["name"] == name
+
+
+def test_the_page_opens_on_its_doctype(app):
+    html = app.test_client().get("/page").get_data(as_text=True)
+
+    assert html.startswith("<!DOCTYPE html>")
+
+
+def test_the_name_sits_in_the_bar_outside_the_burger_menu(app):
+    html = app.test_client().get("/page").get_data(as_text=True)
+
+    assert html.index('id="brand"') < html.index('id="current-user"') < html.index('id="menu"')
+
+
+def test_the_join_line_draws_the_settings_icon(app):
+    html = app.test_client().get("/page").get_data(as_text=True)
+
+    [line] = re.findall(r'<p class="help singer-join-only">(.*?)</p>', html, re.DOTALL)
+    assert '<svg class="sliders-icon"' in line
+    assert "&lt;" not in line

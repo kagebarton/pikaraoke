@@ -1,6 +1,12 @@
-{# The (i) notes and lyric buttons of the guest form (base.html) and Now Playing (home.html),
-   written once so the two always say the same thing. #}
+{# Pieces of the guest form (base.html) that other pages use too, Now Playing (home.html) above
+   all, written once so they always say the same thing. #}
 {% from 'info_tip.html' import info_tip %}
+
+{# The singer settings icon, in the navbar name and in the join form's line. The icon font has no
+   sliders glyph, so it is drawn here. #}
+{% macro sliders_icon() -%}
+<svg class="sliders-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h9M18 6h3M3 12h3M12 12h9M3 18h11M20 18h1"/><circle cx="15" cy="6" r="2.5"/><circle cx="9" cy="12" r="2.5"/><circle cx="17" cy="18" r="2.5"/></svg>
+{%- endmacro %}
 
 {% macro original_vocals_tip() -%}
 {# MSG: Note beside "Original vocals", the slider for how loud the original recording's singer is (the guest form and Now Playing). Guests tend to read it as their own microphone, so the note says it isn't #}

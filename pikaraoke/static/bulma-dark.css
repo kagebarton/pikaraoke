@@ -14,8 +14,12 @@
 	--dark-bg-primary: #1f2424;
 	--dark-bg-secondary: #282f2f;
 	--dark-bg-tertiary: #343c3d;
-	/* One step above the card (--dark-bg-tertiary), so a button sits raised on it */
-	--dark-bg-raised: #434d4e;
+	/* #434d4e, one step above the card (--dark-bg-tertiary), so a button sits raised on it. In
+	   parts because Bulma shades a button's fill on hover and press from them (BUTTONS). */
+	--dark-raised-h: 185.45deg;
+	--dark-raised-s: 7.59%;
+	--dark-raised-l: 28.43%;
+	--dark-bg-raised: hsl(var(--dark-raised-h), var(--dark-raised-s), var(--dark-raised-l));
 
 	/* Text colors */
 	--dark-text-primary: #ffffff;
@@ -26,7 +30,8 @@
 	/* Border colors */
 	--dark-border: #5e6d6f;
 	--dark-border-light: #8c9b9d;
-	--dark-border-faded: color-mix(in srgb, var(--dark-border) 50%, transparent);
+	/* --dark-border at half strength */
+	--dark-border-faded: rgba(94, 109, 111, 0.5);
 
 	/* Accent colors */
 	--dark-primary: #375a7f;
@@ -112,13 +117,18 @@ hr {
 /* ===================================
    BUTTONS
    =================================== */
+/* Bulma declares its button variables on .button, so :root can't set them. The grey is given as
+   the parts Bulma builds the fill from, not as a fill: hover and press still shade it, and each
+   colour class, which sets the same parts one class heavier, keeps its own fill. */
 .button {
-	background-color: var(--dark-bg-raised);
+	--bulma-button-h: var(--dark-raised-h);
+	--bulma-button-s: var(--dark-raised-s);
+	--bulma-button-background-l: var(--dark-raised-l);
 	border-color: var(--dark-border);
-	/* Bulma reads its disabled look from these, and declares them on .button, so :root can't
-	   set them. */
-	--bulma-button-disabled-background-color: transparent;
-	--bulma-button-disabled-border-color: var(--dark-border-faded);
+	/* Bulma's own disabled look, which only a busy button now shows (see "Disabled" below): the
+	   normal one. Colour buttons restate their fill when disabled. */
+	--bulma-button-disabled-background-color: var(--dark-bg-raised);
+	--bulma-button-disabled-border-color: var(--dark-border);
 	--bulma-button-disabled-opacity: 1;
 }
 
@@ -177,14 +187,15 @@ hr {
 	/* border-color: transparent; */
 }
 
-/* Disabled, whatever its colour: no fill, a faded border, a muted label. Bulma's colour buttons
-   restate their fill and border when disabled, one class heavier than .button[disabled] and with
-   no border at all (their border width is 0); the doubled attribute lifts this rule to their
-   weight, and it comes later. */
-.button[disabled][disabled] {
+/* Disabled, whatever its colour: no fill, a faded border, a muted label. A busy button is
+   disabled only against a second tap and keeps its look: one loading (its spinner is drawn in the
+   label's colour) or one showing its result for a moment (is-flash, search.html). The two :not()s
+   also put this rule above Bulma's colour [disabled] rules, which restate the fill, and colour
+   buttons have no border (width 0) until it gives them one. */
+.button[disabled]:not(.is-loading):not(.is-flash) {
 	--bulma-button-border-width: var(--bulma-control-border-width);
-	background-color: var(--bulma-button-disabled-background-color);
-	border-color: var(--bulma-button-disabled-border-color);
+	background-color: transparent;
+	border-color: var(--dark-border-faded);
 	color: var(--dark-text-muted);
 }
 
@@ -225,7 +236,7 @@ hr {
 }
 
 .checkbox {
-	accent-color: hsl(141, 71%, 48%);
+	accent-color: var(--dark-success);
 	margin-right: 8px;
 	min-width: 20px;
 	min-height: 20px;
@@ -240,7 +251,7 @@ hr {
 .input.is-warning {
 	background: #fff3d8;
 	color: #674905;
-	border: 2px solid #ffb70f;
+	border: 2px solid var(--dark-warning);
 }
 
 .input.is-danger {

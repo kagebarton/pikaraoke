@@ -1,9 +1,4 @@
-{% from 'singer_tips.html' import lyric_style_buttons, lyrics_tip, original_vocals_tip -%}
-{# The singer settings icon, in the navbar name and in the join form's line. The icon font has no
-   sliders glyph, so it is drawn here. #}
-{% macro sliders_icon() -%}
-<svg class="sliders-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h9M18 6h3M3 12h3M12 12h9M3 18h11M20 18h1"/><circle cx="15" cy="6" r="2.5"/><circle cx="9" cy="12" r="2.5"/><circle cx="17" cy="18" r="2.5"/></svg>
-{%- endmacro %}
+{% from 'singer_tips.html' import lyric_style_buttons, lyrics_tip, original_vocals_tip, sliders_icon -%}
 <!DOCTYPE html>
 <html data-theme="dark">
 
@@ -167,22 +162,27 @@
   .singer-pill:hover {
     color: var(--dark-text-primary);
   }
+  /* The link fills the bar's height, so a tap just above or below the outline still opens the
+     form; the outline is drawn on the span inside it. min-width: 0 down the chain lets a long
+     name give way to the icons and the burger instead of pushing them off. */
   .singer-pill {
     display: flex;
     align-items: center;
-    align-self: center;
-    gap: 4px;
-    /* Lets a long name give way to the icons and the burger instead of pushing them off */
     min-width: 0;
-    margin: 0 2px;
+    padding: 0 2px;
+  }
+  .singer-pill-outline {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
     padding: 3px 7px;
     border: 1px solid rgba(255, 255, 255, 0.6);
     border-radius: 999px;
     font-size: 0.9rem;
   }
-  .singer-pill > span {
+  .singer-name {
     min-width: 0;
-    max-width: 70px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -196,10 +196,14 @@
     vertical-align: -0.3em;
   }
   /* At desktop width the menu sits beside the icons, not behind the burger: the name stays at the
-     right, beside the Pikaraoke link, where it was before it moved into the brand. */
+     right, beside the Pikaraoke link, where it was before it moved into the brand. Bulma keeps the
+     brand and the menu at full width there, so the brand is let shrink to keep the bar inside its
+     container with a long name. */
   @media screen and (min-width: 1024px) {
     .navbar-brand {
       flex-grow: 1;
+      flex-shrink: 1;
+      min-width: 0;
     }
     .navbar-menu {
       flex-grow: 0;
@@ -207,7 +211,7 @@
     .singer-pill {
       margin-left: auto;
     }
-    .singer-pill > span {
+    .singer-name {
       max-width: 12rem;
     }
   }
@@ -218,12 +222,6 @@
     left: 50%;
     margin-left: -250px;
     z-index: 20;
-  }
-  .current-user {
-    position: fixed;
-    padding: 3px;
-    bottom: 5px;
-    right: 10px;
   }
   tr:nth-child(even) {
     background-color: rgb(50, 55, 55);
@@ -290,8 +288,10 @@
 
         {# The guest's name, filled in by spa-navigation.js; a tap opens the singer settings. #}
         <a id="current-user" class="singer-pill is-hidden" href="#">
-          {{ sliders_icon() }}
-          <span></span>
+          <span class="singer-pill-outline">
+            {{ sliders_icon() }}
+            <span class="singer-name" dir="auto"></span>
+          </span>
         </a>
 
         <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false">
