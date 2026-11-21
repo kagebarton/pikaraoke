@@ -18,6 +18,8 @@ from pikaraoke.lib.preference_manager import PreferenceManager
 RESERVED_NAMES = ("Pikaraoke", "Randomizer")
 # Beyond this many semitones the pitch shift distorts the song.
 KEY_LIMIT = 3
+# The admin's live key change on Now Playing may go a full octave either way, past a guest's own.
+ADMIN_KEY_LIMIT = 12
 # Longest name a guest can take, in characters. The name rides in a 4 KB cookie and on screen.
 NAME_LIMIT = 30
 

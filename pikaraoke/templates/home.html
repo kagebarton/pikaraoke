@@ -158,7 +158,7 @@ function handleNowPlaying(np) {
     $("#subtitle-delay-section").hide();
   }
 
-  // Seek bar. These elements only exist on the home page, but this handler
+  // Seek bar. These elements only exist on the admin's home page, but this handler
   // stays bound to the shared socket after navigating away, so guard the
   // lookups to avoid a null deref on every now_playing push off-page.
   _seekDuration = np.now_playing_duration || 0;
@@ -210,18 +210,20 @@ $(function () {
   sendOnChange("#subtitle-delay-slider", "_sub", (v) => "/subtitle_delay/" + v);
   sendOnChange("#vocal-volume-slider", "_vocalvol", (v) => "/vocal_volume/" + v / 100);
 
-  // Seek bar handlers
+  // Seek bar handlers (the seek bar is the admin's: no one else's page has it)
   var seekBar = document.getElementById("seek-bar");
-  seekBar.addEventListener("input", function () { _seekDragging = true; });
-  seekBar.addEventListener("change", function () {
-    var pos = (seekBar.value / 100) * _seekDuration;
-    // Hold the drag-lock until *after* the seek confirms AND a small grace
-    // window passes, so a stale playback_position event in flight cannot
-    // snap the slider back to the pre-seek position.
-    $.get("/seek/" + pos).always(function () {
-      setTimeout(function () { _seekDragging = false; }, 200);
+  if (seekBar) {
+    seekBar.addEventListener("input", function () { _seekDragging = true; });
+    seekBar.addEventListener("change", function () {
+      var pos = (seekBar.value / 100) * _seekDuration;
+      // Hold the drag-lock until *after* the seek confirms AND a small grace
+      // window passes, so a stale playback_position event in flight cannot
+      // snap the slider back to the pre-seek position.
+      $.get("/seek/" + pos).always(function () {
+        setTimeout(function () { _seekDragging = false; }, 200);
+      });
     });
-  });
+  }
 
   // The button flips at once; the server's push confirms it
   $("#pause-resume").click(function () {
@@ -292,6 +294,7 @@ $(function () {
 <hr />
 
 <div class="has-background-black-bis box control-box" style="max-width: 500px; display: none">
+  {% if admin %}
   {# ── Seek bar ──────────────────────────────────────────────────────── #}
   <div class="seek-row" style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.75rem;">
     <span id="time-elapsed" style="width: 40px; text-align: right; font-size: var(--time-text-size); font-weight: var(--time-text-weight); color: var(--time-text-color);">0:00</span>
@@ -299,6 +302,7 @@ $(function () {
       style="flex: 1; min-width: 0;" />
     <span id="time-total" style="width: 40px; font-size: var(--time-text-size); font-weight: var(--time-text-weight); color: var(--time-text-color);">0:00</span>
   </div>
+  {% endif %}
 
   <div class="transport">
     {# MSG: Button that starts the playing song over from its beginning (Now Playing) #}
@@ -312,11 +316,13 @@ $(function () {
     <button type="button" id="skip">{% trans %}Skip{% endtrans %}</button>
   </div>
 
+  {% if admin %}
   <div class="np-section">
     {# MSG: Heading of Now Playing's slider for the speaker volume #}
     <h4 id="volume-heading">{% trans %}Volume{% endtrans %}</h4>
     {{ stepper("volume-slider", 0, 100, (volume * 100) | round | int, tap=10, labelled_by="volume-heading") }}
   </div>
+  {% endif %}
 
   {# ── Original vocals section (dual-stem only) ──────────────────────── #}
   <div id="vocal-volume-section" class="np-section" style="display: none">
@@ -330,7 +336,7 @@ $(function () {
   <div class="np-section">
     {# MSG: Heading of Now Playing's slider that moves the playing song up or down in pitch #}
     <h4 id="key-heading">{% trans %}Key{% endtrans %} {{ key_tip() }}</h4>
-    {{ stepper("transpose", -12, 12, 0, format="semitones", labelled_by="key-heading") }}
+    {{ stepper("transpose", -key_limit, key_limit, 0, format="semitones", labelled_by="key-heading") }}
   </div>
   {% endif %}
 
@@ -343,6 +349,7 @@ $(function () {
     </div>
   </div>
 
+  {% if admin %}
   {# ── Subtitle delay section (only visible in 'srt' mode) ───────────── #}
   <div id="subtitle-delay-section" class="np-section">
     {# MSG: Heading of Now Playing's slider that moves the on-screen lines earlier or later #}
@@ -351,6 +358,7 @@ $(function () {
       {% call info_tip() %}{% trans %}Below 0 the lines show earlier, above 0 later.{% endtrans %}{% endcall %}</h4>
     {{ stepper("subtitle-delay-slider", -5, 5, 0, step=0.1, tap=0.1, format="seconds", labelled_by="subtitle-delay-heading") }}
   </div>
+  {% endif %}
 </div>
 
 <div></div>
