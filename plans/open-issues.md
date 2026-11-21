@@ -338,15 +338,16 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
 `archive/search_official_first`, "Review follow-ups" and the Results log.
 
 - **A restored search page can show a stuck card.** After Show more, the page saves the cards
-  so coming back to Search restores them. The copy can catch a card's loading state or the
-  preview modal's last contents, and the restored card then keeps a stuck loading button.
-  Left by Ken 2026-11-08. The same copy also shows the library as it was at that render: a
-  song downloaded from the page since still offers Queue… (the download dialog) on its card,
-  not the in-library Queue, so it is easy to download twice, and no "In library" note shows
-  it. Both want the restore to re-check the cards (a small server call, or running the
-  search again) rather than put back the saved HTML. Found in the `/code-review` of
-  `search_official_captions` commits 5-9, 2026-11-19 (Results log on that branch). Not
-  ruled.
+  so coming back to Search restores them. The copy can catch a card's loading state (an
+  in-library button saved mid-flash), and the restored card then keeps a stuck loading button.
+  The dialog's half is fixed (`download_modal_speed`, O11): the dialog sits outside the saved
+  element, and a restore drops an older copy's own dialog. Left by Ken 2026-11-08. The same
+  copy also shows the library as it was at that render: a song downloaded from the page since
+  still offers Queue… (the download dialog) on its card, not the in-library Queue, so it is
+  easy to download twice, and no "In library" note shows it. Both want the restore to
+  re-check the cards (a small server call, or running the search again) rather than put back
+  the saved HTML. Found in the `/code-review` of `search_official_captions` commits 5-9,
+  2026-11-19 (Results log on that branch). Not ruled.
 - **A "Song - Artist" title is read the wrong way round** when the query also names the
   artist: for "queen bohemian rhapsody", "Bohemian Rhapsody - Queen" credits the song name as
   the artist. Official uploads are nearly always "Artist - Song". Left by Ken 2026-11-08.
