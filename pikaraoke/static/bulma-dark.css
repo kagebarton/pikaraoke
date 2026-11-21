@@ -26,6 +26,10 @@
 	--dark-text-secondary: #f2f2f2;
 	--dark-text-muted: #8c9b9d;
 	--dark-text-light: #dbdee0;
+	/* The second line of a two-line row (phone-rows.css): a step lighter than --dark-text-muted */
+	--dark-text-sub: #b5bfc0;
+	/* Red as text on the dark card; --dark-danger is red as a fill or a border */
+	--dark-danger-text: #f17a6b;
 
 	/* Border colors */
 	--dark-border: #5e6d6f;
