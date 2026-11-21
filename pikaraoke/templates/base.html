@@ -1,4 +1,5 @@
-{% from 'singer_tips.html' import lyric_style_buttons, lyrics_tip, original_vocals_tip, sliders_icon -%}
+{% from 'singer_tips.html' import key_tip, lyric_style_buttons, lyrics_tip, original_vocals_tip, sliders_icon -%}
+{% from 'stepper.html' import stepper -%}
 <!DOCTYPE html>
 <html data-theme="dark">
 
@@ -58,14 +59,6 @@
       // {# MSG: Confirmation dialog when permanently deleting a song file from the library #}
       confirmDeleteFromLibrary: '{{ _("Are you sure you want to delete this song from the library?") }}'
     };
-
-    function getSemitonesLabel(value) {
-      if (value > 0) {
-        return "+" + value + " semitones";
-      } else {
-        return value + " semitones";
-      }
-    }
 
     function isEqual(obj1, obj2) {
       return JSON.stringify(obj1) === JSON.stringify(obj2);
@@ -378,26 +371,22 @@
         </div>
 
         <div class="field">
-          <div class="is-flex" style="justify-content: space-between">
-            <div>
-              {# MSG: Label of the slider for how loud the original recording's singer is. Not the guest's own microphone #}
-              <label class="label" for="singer-vocal-volume" style="display: inline">{% trans %}Original vocals{% endtrans %}</label>{{ original_vocals_tip() }}
-            </div>
-            <span class="label" id="singer-vocal-volume-label"></span>
+          <div>
+            {# MSG: Label of the slider for how loud the original recording's singer is. Not the guest's own microphone #}
+            <label class="label" id="singer-vocal-volume-heading" for="singer-vocal-volume" style="display: inline">{% trans %}Original vocals{% endtrans %}</label>{{ original_vocals_tip() }}
           </div>
-          <input type="range" min="0" max="100" step="1" id="singer-vocal-volume" style="width: 100%" />
+          {{ stepper("singer-vocal-volume", 0, 100, 40, tap=10, labelled_by="singer-vocal-volume-heading") }}
         </div>
 
+        {# The key range is the guest state's, the same limit the server holds a saved key to #}
+        {% set key_limit = (singer or {}).get("key_limit", 0) %}
         <div class="field" id="singer-key-field">
-          {# MSG: Label of the control where a guest picks the key their songs start at #}
-          <span class="label">{% trans %}Key{% endtrans %}</span>
-          <div class="is-flex" style="align-items: center; justify-content: space-between">
-            <button type="button" class="button is-medium" id="singer-key-down">-</button>
-            <span class="is-size-5" id="singer-key-label"></span>
-            <button type="button" class="button is-medium" id="singer-key-up">+</button>
+          <div>
+            {# MSG: Label of the control where a guest picks the key their songs start at #}
+            <span class="label" id="singer-key-heading" style="display: inline">{% trans %}Key{% endtrans %}</span>{{ key_tip() }}
           </div>
+          {{ stepper("singer-key", -key_limit, key_limit, 0, format="semitones", labelled_by="singer-key-heading") }}
         </div>
-        <input type="hidden" id="singer-key">
 
         <div class="field">
           <div>

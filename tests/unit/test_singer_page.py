@@ -21,7 +21,7 @@ if not hasattr(werkzeug, "__version__"):
 
 import pikaraoke
 from pikaraoke.lib.preference_manager import PreferenceManager
-from pikaraoke.lib.singers import SingerRegistry, SingerSettings
+from pikaraoke.lib.singers import KEY_LIMIT, SingerRegistry, SingerSettings
 from pikaraoke.routes.singer import singer_bp
 
 # Endpoints base.html resolves via url_for.
@@ -100,3 +100,21 @@ def test_the_join_line_draws_the_settings_icon(app):
     [line] = re.findall(r'<p class="help singer-join-only">(.*?)</p>', html, re.DOTALL)
     assert '<svg class="sliders-icon"' in line
     assert "&lt;" not in line
+
+
+def test_the_form_sets_original_vocals_and_key_with_the_shared_stepper(app):
+    html = app.test_client().get("/page").get_data(as_text=True)
+
+    ranges = re.findall(r'<input type="range" class="stepper-range" id="(singer-[\w-]+)"', html)
+    assert ranges == ["singer-vocal-volume", "singer-key"]
+    assert 'type="hidden" id="singer-key"' not in html
+
+
+def test_the_forms_key_stops_at_the_guest_limit_and_has_its_note(app):
+    html = app.test_client().get("/page").get_data(as_text=True)
+
+    assert f'id="singer-key" min="-{KEY_LIMIT}" max="{KEY_LIMIT}"' in html
+    heading = html.index('id="singer-key-heading"')
+    assert (
+        heading < html.index('class="info-tip"', heading) < html.index('id="singer-key"', heading)
+    )
