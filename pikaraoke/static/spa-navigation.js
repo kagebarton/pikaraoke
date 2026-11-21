@@ -84,15 +84,8 @@
      */
     let singerFormMode = null;
     let singerFormPrefilledName = '';
-    let singerFormKeyLimit = 0;
     // The name click's load of the guest state, while it is out
     let singerStateLoad = null;
-
-    function setSingerKey(value) {
-        const key = Math.max(-singerFormKeyLimit, Math.min(singerFormKeyLimit, value));
-        $('#singer-key').val(key);
-        $('#singer-key-label').text(getSemitonesLabel(key));
-    }
 
     /** Show `mode` as the chosen lyric style among the buttons under `scope`. */
     function markSubModeButtons(scope, mode) {
@@ -121,11 +114,8 @@
         singerFormPrefilledName = mode === 'edit' ? state.name : '';
         $('#singer-name').val(singerFormPrefilledName).attr('maxlength', state.name_limit);
         $('#singer-name-error').hide();
-        const percent = Math.round(state.vocal_volume * 100);
-        $('#singer-vocal-volume').val(percent);
-        $('#singer-vocal-volume-label').text(percent + '%');
-        singerFormKeyLimit = state.key_limit;
-        setSingerKey(state.semitones);
+        stepperSet(document.getElementById('singer-vocal-volume'), Math.round(state.vocal_volume * 100));
+        stepperSet(document.getElementById('singer-key'), state.semitones);
         $('#singer-key-field').toggle(state.transpose_enabled);
         setSingerSubMode(state.sub_mode);
         $('.singer-join-only').toggle(mode === 'join');
@@ -268,17 +258,8 @@
             });
         });
         $(document).on('click.singer', '#singer-cancel', closeSingerForm);
-        $(document).on('click.singer', '#singer-key-down', function() {
-            setSingerKey(Number($('#singer-key').val()) - 1);
-        });
-        $(document).on('click.singer', '#singer-key-up', function() {
-            setSingerKey(Number($('#singer-key').val()) + 1);
-        });
         $(document).on('click.singer', '#singer-modal [data-sub-mode]', function() {
             setSingerSubMode($(this).attr('data-sub-mode'));
-        });
-        $(document).on('input.singer', '#singer-vocal-volume', function() {
-            $('#singer-vocal-volume-label').text(this.value + '%');
         });
         $(document).on('submit.singer', '#singer-form', function(e) {
             e.preventDefault();
