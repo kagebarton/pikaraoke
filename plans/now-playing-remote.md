@@ -386,3 +386,44 @@ and `.../np_check.py`. Screenshots and `results.json` (89 assertions): worktree
 - One commit beyond the plan's four: `6113ec99`, above.
 - The ui-check ran on the scratchpad harness described above, not on `launch.sh` with
   `FAKE_JOB_S=5`; the admin password was set on the app config, not in an instance config.
+
+### Review 1 (Opus 5.5, 2026-11-21)
+
+`/code-review high 277ba5be..6113ec99`, three finders (correctness, simplicity, robustness).
+Eight findings. Fixed in `bfca35d5`:
+
+| # | Finding | Verdict | Fix |
+|---|---------|---------|-----|
+| 1 | `syncStepper` skipped a push equal to the last push, so a value the server never applied stayed on the knob (Key + in a song's last second: `transpose_current` drops it with no push; the next song's push of 0 equals the last push of 0) | CONFIRMED | a stepper ignores pushes only while held (`pointerdown` until a page-wide `pointerup`/`pointercancel`) or while its latest send is unsettled (`_sending`, cleared by that request's `.always`, not by an older one's) |
+| 2 | Volume: a late echo of the first of two taps differs from the last push, snaps the range back, and the `debounce()` closure reads `this.value` at fire time | CONFIRMED | same; Volume moved onto `sendStepper` (value captured at the event) |
+| 7 | two debounce mechanisms (`base.html` `debounce()` for Volume, `debounceStep` for the rest) | CONFIRMED | `debounce()` deleted, its only caller gone |
+| 4 | `base.html`'s top-level `{% set key_limit %}` shadows the route's `key_limit` for anything rendered after it | CONFIRMED (latent) | renamed `guest_key_limit` |
+| 5 | Now Playing's `aria-labelledby` pointed at `h4`s holding the (i) tip, so the accessible name included the note | PLAUSIBLE, confirmed by the ui-check below | ids moved onto a `span` around the word |
+| 6 | `stepper.css` hover comment pointed at a `custom.css` rule this branch deleted | CONFIRMED | comment stands alone |
+
+Not fixed, for `plans/open-issues.md` on `dev` (not written there: the main checkout was mid
+cherry-pick in another session at the time):
+
+- **Pause's label can flicker** (finding 3, PLAUSIBLE). The tap flips the button at once; a
+  `now_playing` push from another phone landing before `/pause` is handled carries the old
+  `is_paused` and flips it back until the `/pause` push. Milliseconds on a LAN. Not ruled.
+- **Nothing tests Now Playing's script** (finding 8). Render tests check markup only; the
+  stepper ends, the held/sending rule above and the transport are covered only by the
+  scratchpad ui-check. Same gap as the search dialog's entry ("Nothing tests what the search
+  dialog's script does"); one JavaScript test setup would close both. Not ruled.
+
+Accepted with the fix: while a stepper's own send is unsettled, another phone's change to the
+same control is ignored too, and shows at the next push.
+
+**Suite:** 4263 passed at `bfca35d5`.
+
+**ui-check:** the Phase 1 harness, copied to
+`/tmp/claude-1000/-home-ken-projects-pikaraoke/83884eee-cbd1-4243-9be7-44b0d76e9f18/scratchpad/`
+(`np_app.py`: `transpose_current` drops the value with no push when nothing plays, as
+`Karaoke` does; `volume_delay_s` slows `/volume` so its echo lands late). 102 assertions at
+`bfca35d5`, 0 failed, 0 page errors: the Phase 1 89 plus 13 new ones (dropped Key tap put right
+by the next song's push; late Volume echo between two taps: knob stays 60%, sent
+`['/volume/0.7', '/volume/0.6']`; push while a Key drag is held ignored, applied after a
+release back at the start, no send; mouse let go off the rail, next push applies; each slider
+named exactly Volume / Key / Subtitle delay / Original vocals). The same script against
+`bbc8b92c` fails 7 of the 13 (old code sent `['/volume/0.7', '/volume/0.7']`).
