@@ -302,20 +302,6 @@
 
 		//START SELECTIZE CHANGES
 
-//if enter key press, by default search button is click
-// (but not inside the download dialog, whose controls answer Enter themselves)
-$(document).keypress(function (event) {
-if (event.which == "13" && !$(event.target).closest("#modal-js-example").length) {
-event.preventDefault();
-
-if ($(".search-selectize .selectize-input input").val()) {
-$("#search-link").trigger("click");
-} else if ($(".search-selectize").find(":selected").text()) {
-$("#add-queue-link").trigger("click");
-}
-}
-});
-
 		$("#add-queue-link").hide();
 		$("#add-queue-link").attr("disabled", "true");
 		$("#search-link").attr("disabled", "true");
@@ -512,6 +498,21 @@ $("#add-queue-link").trigger("click");
 		// single download click fires N AJAX calls, creating duplicate pipeline rows.
 		$(document).off(".search");
 
+		// Enter searches, or queues the library song picked in the box. Not while the download
+		// dialog is open: its controls answer Enter themselves, and a click on its text leaves
+		// focus on the page behind it. Not once the SPA has swapped this page out either: the
+		// handler stays on the document until the next visit, and would take Enter from every
+		// other page.
+		$(document).on("keypress.search", function (event) {
+			if (event.which != 13 || _dialog || !_modal.isConnected) return;
+			event.preventDefault();
+			if ($(".search-selectize .selectize-input input").val()) {
+				$("#search-link").trigger("click");
+			} else if ($(".search-selectize").find(":selected").text()) {
+				$("#add-queue-link").trigger("click");
+			}
+		});
+
 		$(document).on("change.search", "#search_result_selector", function () {
 			var url = $("#search_result_selector").val();
 			$("#youtube-link").attr("href", url);
@@ -565,6 +566,8 @@ $("#add-queue-link").trigger("click");
 			// Sync both checkboxes to have the same state
 			var isChecked = $(this).is(":checked");
 			$("#add-to-queue-direct, #add-to-queue-search").prop("checked", isChecked);
+			// The open dialog's Queue says what the box will do; once tapped it shows the answer.
+			if (_dialog && !_dialog.sent) syncQueue();
 		});
 
 		function downloadSong(songUrl, songTitle, button) {
@@ -622,7 +625,7 @@ $("#add-queue-link").trigger("click");
 				}),
 				error: function (xhr) {
 					console.warn("Download failed:", xhr && xhr.responseText ? xhr.responseText : "network error");
-					showNotification({{ _("Could not start the download.") | tojson }}, "is-danger");
+					showNotification(TEXT.downloadFailed, "is-danger");
 				},
 			});
 		}
@@ -752,6 +755,7 @@ var TEXT = {
   queued: {{ _("Queued") | tojson }},
   added: {{ _("Added") | tojson }},
   lyricsSelectFailed: {{ _("Could not save the lyric choice, so the song was not downloaded.") | tojson }},
+  downloadFailed: {{ _("Could not start the download.") | tojson }},
 };
 
 // Puts back every element the dialog changes, on open and on close.
@@ -841,7 +845,7 @@ function renderList(d) {
   });
 }
 
-// Queue's label and colour follow the box postDownload sends: green while the tap queues, a plain
+// Queue's label and colour follow the box the tap sends: green while the tap queues, a plain
 // button when it only adds to the library. It is off in the list view until something is picked.
 function syncQueue() {
   var d = _dialog;
@@ -1047,13 +1051,21 @@ function fadeOutPreviewModal(d, delay) {
   }, delay || 0);
 }
 
+// A play() that a load() cuts short (the link arriving, a close, the next card) rejects with an
+// AbortError. That is expected; any other rejection is logged.
+function warnPlayFailed(err) {
+  if (!err || err.name !== "AbortError") console.warn("Preview play failed:", err);
+}
+
 // A refused play (an autoplay block outside the tap) gives Play back, so the next tap, a fresh
-// gesture, tries again.
+// gesture, tries again on the video already loading.
 function startVideo(d) {
-  modalVideo.src = d.link;
-  modalVideo.load();
+  if (modalVideo.getAttribute("src") !== d.link) {
+    modalVideo.src = d.link;
+    modalVideo.load();
+  }
   modalVideo.play().catch(function (err) {
-    console.warn("Preview play failed:", err);
+    warnPlayFailed(err);
     if (!isCurrent(d)) return;
     d.playWaits = false;
     $("#modal-play").removeClass("is-waiting");
@@ -1072,19 +1084,19 @@ modalVideo.addEventListener("playing", function () {
   $("#modal-thumb-layer").addClass("is-hidden");
 });
 modalVideo.addEventListener("error", function () {
-  if (_dialog && modalVideo.hasAttribute("src")) showPreviewUnavailable();
+  if (_dialog && isCurrent(_dialog) && modalVideo.hasAttribute("src")) showPreviewUnavailable();
 });
 
 // Play: only a tap may start the video, and iOS Safari ties .play() to the tap itself, so a
 // tap before the link arrives plays the empty video once to keep that permission. That play
-// never starts: the link's load() aborts it, so its rejection is expected and not an error.
+// never starts: the link's load() aborts it.
 $(document).on("click.search", "#modal-play", function () {
   var d = _dialog;
   if (!d || d.playWaits) return;
   d.playWaits = true;
   $("#modal-play").addClass("is-waiting");
   if (d.link) startVideo(d);
-  else modalVideo.play().then(function () { modalVideo.pause(); }).catch(function () {});
+  else modalVideo.play().then(function () { modalVideo.pause(); }).catch(warnPlayFailed);
 });
 
 function openPreviewModal($li) {
