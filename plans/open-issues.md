@@ -395,6 +395,22 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
   another, or none (then it transcribes). Five videos agreed when it was built; nothing
   enforces it. Closing it costs the second call the branch removed. Found in the
   `/code-review` of `9110167..def8493`, 2026-11-19 (Results log on that branch). Not ruled.
+- **The dialog's Queue says Queued before the download is accepted** (branch
+  `download_modal_speed`). The button turns to Queued or Added and the dialog fades once
+  `/lyrics_select` answers, before `/download` has. If `/download` then fails, a 3 s notice
+  contradicts the button, an SPA move in that time cuts the notice short, and the lyric
+  choice stays written for a video that is never downloaded. The plan kept this order from
+  the old dialog. Fixing it means waiting for `/download`'s answer before Queued, with a way
+  back on failure and the notice kept for a dialog closed meanwhile. `/download` only adds a
+  job, so it rarely fails. Found in the `/code-review` of `def8493..dce7598`, 2026-11-21
+  (finding 4, Results log on that branch). Not ruled.
+- **Nothing tests what the search dialog's script does** (branch `download_modal_speed`).
+  The render tests check the markup only. Late answers dropped after a close or an SPA
+  move, the list held after Queue, a refused play, and the Queue label following the box
+  are covered only by the plan's ui-check runs (Playwright scripts kept in session
+  scratchpads, not the repo), so a regression in any of them passes the suite. Closing it
+  needs a JavaScript test setup in the repo, its own plan. Found in the same review
+  (finding 13). Not ruled.
 
 ## Movie splits (on `dev`)
 
