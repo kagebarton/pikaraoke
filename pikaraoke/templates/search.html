@@ -30,7 +30,6 @@
 	/* Thumbnail: full width on mobile, fixed 200px on desktop */
 	#search-results .img-wrapper {
 		position: relative;
-		cursor: pointer;
 		width: 100%;
 		flex-shrink: 0;
 	}
@@ -49,7 +48,6 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-		transition: opacity 0.3s ease;
 	}
 
 	/* Body: the title row, then the library copies noted on the card; fills the text column */
@@ -84,54 +82,123 @@
 		min-width: 0;
 	}
 
-	#search-results .img-wrapper:hover img {
-		opacity: 0.7;
-		box-shadow: 0px 0px 3px 1px #878787;
-	}
-
-	/* Semi-transparent circle behind the play icon */
-	#search-results .img-wrapper::before {
-		content: "";
+	/* The thumbnail's play button starts the card's preview; nothing else on the thumbnail is tappable. */
+	.card-play {
 		position: absolute;
 		top: 50%;
 		left: 50%;
 		transform: translate(-50%, -50%);
-		width: 80px;
-		height: 80px;
-		background-color: rgba(0, 0, 0, 0.6);
+		width: 56px;
+		height: 56px;
+		padding: 0;
+		border: none;
 		border-radius: 50%;
-		opacity: 0.7;
-		transition: opacity 0.3s ease;
-		pointer-events: none;
-		z-index: 1;
+		background: rgba(0, 0, 0, 0.6);
+		color: #fff;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 3;
 	}
+	/* Only where there is a hover: a phone's tap would leave the button dark. */
+	@media (hover: hover) {
+		.card-play:hover { background: rgba(0, 0, 0, 0.8); }
+	}
+	.card-play-notice { display: none; }
+	/* The card's preview, by the card's data-preview: loading | playing | paused | unavailable
+	   (no attribute: idle). The player is in the card's frame while loading, playing or paused. */
+	#search-results li[data-preview="loading"] .card-play { animation: breathe 2.4s ease-in-out infinite; }
+	#search-results li[data-preview="playing"] .card-play { display: none; }
+	#search-results li[data-preview="playing"] .duration-badge,
+	#search-results li[data-preview="paused"] .duration-badge { display: none; }
+	/* No link, or a video that cannot play: the button becomes the notice, and a tap tries again. */
+	#search-results li[data-preview="unavailable"] .card-play {
+		width: auto;
+		min-height: 44px;
+		padding: 0 14px;
+		border-radius: 6px;
+		font-size: 15px;
+	}
+	#search-results li[data-preview="unavailable"] .card-play svg { display: none; }
+	#search-results li[data-preview="unavailable"] .card-play-notice { display: inline; }
 
-	/* Fontello play icon overlay */
-	#search-results .img-wrapper::after {
-		font-family: "fontello";
-		content: "\e800";
+	/* One player for the page: it waits, hidden, outside the results and moves into the frame of the
+	   card that previews. Transparent while loading, so the thumbnail shows until the video plays. */
+	#card-player { display: none; }
+	#search-results #card-player {
+		display: block;
 		position: absolute;
-		top: 50%;
-		left: 51%;
-		transform: translate(-50%, -50%);
-		font-size: 2rem;
-		color: white;
-		opacity: 0.9;
-		transition: all 0.3s ease;
-		text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
-		pointer-events: none;
+		inset: 0;
 		z-index: 2;
+		background: #000;
 	}
-
-	/* Hover: full opacity and slight scale on desktop */
-	#search-results .img-wrapper:hover::before {
-		opacity: 1;
+	#search-results li[data-preview="loading"] #card-player { opacity: 0; pointer-events: none; }
+	#card-video {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
 	}
-
-	#search-results .img-wrapper:hover::after {
-		opacity: 1;
-		transform: translate(-50%, -50%) scale(1.2);
+	#card-bar {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 44px;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		background: rgba(0, 0, 0, 0.6);
+		color: #fff;
+		font-size: 12px;
 	}
+	#card-bar button {
+		flex: none;
+		width: 44px;
+		height: 44px;
+		padding: 0;
+		border: none;
+		background: none;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	#card-time { flex: none; font-variant-numeric: tabular-nums; }
+	#card-bar .bar-icon { display: none; }
+	/* The pause bars while it plays, the triangle otherwise; the X speaker while muted. */
+	#search-results li[data-preview="playing"] #card-toggle .bar-pause,
+	#search-results li:not([data-preview="playing"]) #card-toggle .bar-play,
+	#card-player.is-muted #card-mute .bar-muted,
+	#card-player:not(.is-muted) #card-mute .bar-sound { display: block; }
+	#card-seek {
+		--fill: 0%;
+		flex: 1;
+		min-width: 0;
+		height: 44px;
+		margin: 0 6px 0 0;
+		background: transparent;
+		-webkit-appearance: none;
+		appearance: none;
+		cursor: pointer;
+	}
+	#card-seek::-webkit-slider-runnable-track {
+		height: 3px;
+		border-radius: 2px;
+		background: linear-gradient(#fff, #fff) 0 / var(--fill) 100% no-repeat, #5e6d6f;
+	}
+	#card-seek::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		width: 11px;
+		height: 11px;
+		margin-top: -4px;
+		border-radius: 50%;
+		background: #fff;
+	}
+	#card-seek::-moz-range-track { height: 3px; border-radius: 2px; background: #5e6d6f; }
+	#card-seek::-moz-range-progress { height: 3px; border-radius: 2px; background: #fff; }
+	#card-seek::-moz-range-thumb { width: 11px; height: 11px; border: none; border-radius: 50%; background: #fff; }
 
 	.video-container {
 		position: relative;
@@ -193,7 +260,7 @@
 		padding: 2px 4px;
 		border-radius: 3px;
 		pointer-events: none;
-		z-index: 3; /* above the play-icon overlays (z-index 1 and 2) */
+		z-index: 3; /* above the card's player (z-index 2) while it loads */
 	}
 
 /* ── Lyrics picker inside modal ── */
@@ -246,6 +313,7 @@
 @media (prefers-reduced-motion: reduce) {
   #lyrics-wait { animation: none; opacity: 1; }
   #modal-play.is-waiting { animation: none; opacity: 0.5; }
+  #search-results li[data-preview="loading"] .card-play { animation: none; opacity: 0.5; }
 }
 #modal-video-head { margin-bottom: 0.5rem; }
 #modal-video-title {
@@ -266,11 +334,19 @@
 			downloadSong(url, "", this);
 		});
 
+		// The saved copy is parsed by DOMParser, which requests nothing: a copy of a playing video
+		// made by cloneNode or innerHTML would request the video again. A restored page shows every
+		// card idle, with no player.
 		function saveSearchResults() {
-			sessionStorage.setItem(
-				"pikaraoke_search_results",
-				document.getElementById("container_search_result").outerHTML
+			var copy = new DOMParser().parseFromString(
+				document.getElementById("container_search_result").outerHTML,
+				"text/html"
 			);
+			copy.querySelectorAll("#card-player").forEach(function (el) { el.remove(); });
+			copy.querySelectorAll("[data-preview]").forEach(function (el) {
+				el.removeAttribute("data-preview");
+			});
+			sessionStorage.setItem("pikaraoke_search_results", copy.body.innerHTML);
 		}
 
 		function forgetSearchResults() {
@@ -307,6 +383,7 @@
 			e.preventDefault();
 			$("#search-input").val("");
 			forgetSearchResults();
+			endPreview();
 			$("#container_search_result").remove();
 		});
 
@@ -506,8 +583,8 @@
 // ── Lyrics picker state & functions ──────────────────────────────────────
 //
 // Flow:
-//   1. A card opens the dialog at once, from the card alone: its thumbnail, title, channel
-//      and length, and "Checking YouTube for captions…". No request is waited on.
+//   1. A card's Queue… opens the dialog at once, from the card alone: its thumbnail, title,
+//      channel and length, and "Checking YouTube for captions…". No request is waited on.
 //   2. Two requests start together:
 //      - /caption_check: one yt-dlp lookup that answers the caption check and returns a link
 //        the browser can play. An answer with a link is kept for the visit, so a video asked
@@ -527,9 +604,10 @@
 //        stays off.
 //   4. Queue posts the lyric choice, then the download. Play: the thumbnail covers the video
 //      until the guest taps Play. The link came with the lookup, so there is no second
-//      request, and a tap before it arrives starts the video when it does. With no link, or a
-//      video that cannot play, the box says "Preview unavailable"; the caption answer and the
-//      download are unaffected.
+//      request, and a tap before it arrives starts the video when it does. A card's own preview
+//      (its thumbnail's play button) may have fetched the link already, so Play can start at
+//      once. With no link, or a video that cannot play, the box says "Preview unavailable"; the
+//      caption answer and the download are unaffected.
 //
 // Every answer is dropped unless the dialog it was asked for is still the open one.
 
@@ -560,6 +638,11 @@ var TEXT = {
   added: {{ _("Added") | tojson }},
   lyricsSelectFailed: {{ _("Could not save the lyric choice, so the song was not downloaded.") | tojson }},
   downloadFailed: {{ _("Could not start the download.") | tojson }},
+  play: {{ _("Play") | tojson }},
+  pause: {{ _("Pause") | tojson }},
+  {# MSG: Accessible name of the speaker button under a search result's video preview while it has sound: it turns the sound off. #}
+  mute: {{ _("Mute") | tojson }},
+  unmute: {{ _("Unmute") | tojson }},
 };
 
 // Puts back every element the dialog changes, on open and on close.
@@ -682,30 +765,40 @@ function renderLyrics() {
   syncQueue();
 }
 
-// Each video's yt-dlp lookup (the caption's answer and the link the video plays from) as a
-// promise, one per video for this visit: a second ask while it runs shares it. It stays once
-// settled only if it has a link; any other answer, or an error, is asked again next time.
+// Each video's yt-dlp lookup (the caption's answer and the link the video plays from), one per
+// video for this visit: a second ask while it runs shares its promise. It stays once settled
+// only if it has a link (held as `link`, for a tap that must start the video at once); any
+// other answer, or an error, is asked again next time.
 var _lookups = {};
 
 function lookupVideo(id) {
   if (!_lookups[id]) {
-    var entry = new Promise(function (resolve) {
-      $.ajax({
-        url: "{{ url_for('search.caption_check') }}",
-        type: "get",
-        data: { yt_id: id },
-        success: resolve,
-        error: function () {
-          resolve({ failed: true });
-        },
-      });
-    });
+    var entry = {
+      link: "",
+      answer: new Promise(function (resolve) {
+        $.ajax({
+          url: "{{ url_for('search.caption_check') }}",
+          type: "get",
+          data: { yt_id: id },
+          success: resolve,
+          error: function () {
+            resolve({ failed: true });
+          },
+        });
+      }),
+    };
     _lookups[id] = entry;
-    entry.then(function (check) {
-      if (!check.stream_url && _lookups[id] === entry) delete _lookups[id];
+    entry.answer.then(function (check) {
+      if (check.stream_url) entry.link = check.stream_url;
+      else if (_lookups[id] === entry) delete _lookups[id];
     });
   }
-  return _lookups[id];
+  return _lookups[id].answer;
+}
+
+// The link a settled lookup kept, or "".
+function keptLink(id) {
+  return _lookups[id] ? _lookups[id].link : "";
 }
 
 // A link that would not play is not kept.
@@ -856,6 +949,171 @@ $(document).on("click.search", "#lyrics-queue-btn", function () {
   });
 });
 
+// ── Card preview ─────────────────────────────────────────────────────────
+//
+// A card's thumbnail has one live control, its play button; it plays the video in the card, in
+// the page's one player, which moves into the frame of the card that previews. The card's
+// data-preview says where it is: loading | playing | paused | unavailable (none: idle). Only
+// one card previews at a time. Opening the dialog, another card's play button and Clear end it.
+// Any tap outside the player pauses it, and a tap while it loads cancels it; a scroll is not a tap.
+
+// The card previewing, {li, id}; null while none. Every late answer is dropped unless its own
+// preview is still this one.
+var _preview = null;
+var cardPlayer = document.getElementById("card-player");
+var cardVideo = document.getElementById("card-video");
+var cardSeek = document.getElementById("card-seek");
+var cardHome = cardPlayer.parentNode;
+var seekDragging = false;
+
+function previewState() {
+  return _preview ? _preview.li.getAttribute("data-preview") : null;
+}
+
+function setPreviewState(state) {
+  _preview.li.setAttribute("data-preview", state);
+  $("#card-toggle").attr("aria-label", state === "playing" ? TEXT.pause : TEXT.play);
+}
+
+// m:ss, as home.html's.
+function clock(s) {
+  var m = Math.floor(s / 60);
+  var sec = Math.floor(s % 60);
+  return m + ":" + (sec < 10 ? "0" : "") + sec;
+}
+
+// The time and the seek bar from the video; the knob stays where the guest's finger has it.
+function renderBar() {
+  var length = cardVideo.duration;
+  var finite = isFinite(length);
+  $("#card-time").text(clock(cardVideo.currentTime) + (finite ? " / " + clock(length) : ""));
+  if (!seekDragging) cardSeek.value = cardVideo.currentTime;
+  paintSeek();
+}
+
+function paintSeek() {
+  var max = parseFloat(cardSeek.max);
+  cardSeek.style.setProperty("--fill", (max > 0 ? (100 * cardSeek.value) / max : 0) + "%");
+}
+
+// The player back in its home, stopped: its video stops downloading.
+function parkPlayer() {
+  cardVideo.pause();
+  cardVideo.removeAttribute("src");
+  cardVideo.load();
+  cardHome.appendChild(cardPlayer);
+}
+
+function endPreview() {
+  if (!_preview) return;
+  _preview.li.removeAttribute("data-preview");
+  _preview = null;
+  parkPlayer();
+}
+
+function previewUnavailable() {
+  setPreviewState("unavailable");
+  parkPlayer();
+}
+
+// A refused play (an autoplay block outside the tap) goes back to idle, so the next tap, a
+// fresh gesture, tries again.
+function playPreview(p, link) {
+  playFrom(cardVideo, link).catch(function (err) {
+    warnPlayFailed(err);
+    if (_preview === p && err && err.name === "NotAllowedError") endPreview();
+  });
+}
+
+// Only a tap may start the video, and iOS Safari ties .play() to the tap itself: with no link
+// yet, the tap plays the empty video once and pauses it if it ever starts (the link's load()
+// aborts it first, as the dialog's Play does).
+function startPreview($li) {
+  endPreview();
+  var p = (_preview = { li: $li[0], id: $li.attr("data-ytid") || "" });
+  setPreviewState("loading");
+  $li.find(".img-frame").append(cardPlayer);
+  renderBar();
+  var link = keptLink(p.id);
+  if (link) {
+    playPreview(p, link);
+    return;
+  }
+  cardVideo.play().then(function () { cardVideo.pause(); }).catch(warnPlayFailed);
+  lookupVideo(p.id).then(function (check) {
+    if (_preview !== p || !cardPlayer.isConnected) return;
+    if (check.stream_url) playPreview(p, check.stream_url);
+    else previewUnavailable();
+  });
+}
+
+$(document).on("click.search", ".card-play", function () {
+  var $li = $(this).closest("li");
+  var state = $li.attr("data-preview");
+  if (state === "loading") return;
+  if (state === "paused") cardVideo.play().catch(warnPlayFailed);
+  else startPreview($li);
+});
+
+// pointerup, not click: Safari on an iPhone does not bubble a click on a plain element up to the
+// document, and a scroll ends in pointercancel, so scrolling does not pause. The video's own tap
+// is its click, below: the tap that pauses would otherwise be followed by a click that can land
+// on the play button the pause has just shown.
+$(document).on("pointerup.search pointercancel.search", function (e) {
+  seekDragging = false; // the knob follows the video again once the finger is up
+  var state = previewState();
+  if (e.type !== "pointerup" || !e.originalEvent.isPrimary) return;
+  if (state !== "playing" && state !== "loading") return;
+  var $target = $(e.target);
+  if ($target.closest("#card-player").length) return;
+  if ($target.closest(".card-play").closest("li")[0] === _preview.li) return;
+  if (state === "loading") endPreview();
+  else cardVideo.pause();
+});
+
+cardVideo.addEventListener("click", function () {
+  if (previewState() === "playing") cardVideo.pause();
+});
+$("#card-toggle").on("click", function () {
+  if (cardVideo.paused) cardVideo.play().catch(warnPlayFailed);
+  else cardVideo.pause();
+});
+$("#card-mute").on("click", function () {
+  cardVideo.muted = !cardVideo.muted;
+});
+$(cardSeek).on("pointerdown", function () {
+  seekDragging = true;
+});
+$(cardSeek).on("input", function () {
+  cardVideo.currentTime = cardSeek.valueAsNumber;
+  renderBar();
+});
+
+// The state follows the video's own events, so a pause the browser makes (the end of the video,
+// a page restored from the back-forward cache) shows as paused.
+cardVideo.addEventListener("playing", function () {
+  if (_preview && cardVideo.hasAttribute("src")) setPreviewState("playing");
+});
+cardVideo.addEventListener("pause", function () {
+  if (previewState() === "playing") setPreviewState("paused");
+});
+cardVideo.addEventListener("error", function () {
+  if (_preview && cardVideo.hasAttribute("src")) {
+    forgetVideo(_preview.id);
+    previewUnavailable();
+  }
+});
+cardVideo.addEventListener("loadedmetadata", function () {
+  cardSeek.max = isFinite(cardVideo.duration) ? cardVideo.duration : 0;
+  renderBar();
+});
+cardVideo.addEventListener("timeupdate", renderBar);
+// A mute lasts the page visit, whichever card plays next.
+cardVideo.addEventListener("volumechange", function () {
+  cardPlayer.classList.toggle("is-muted", cardVideo.muted);
+  $("#card-mute").attr("aria-label", cardVideo.muted ? TEXT.unmute : TEXT.mute);
+});
+
 // ── Preview modal ────────────────────────────────────────────────────────
 
 function closePreviewModal() {
@@ -884,12 +1142,16 @@ function warnPlayFailed(err) {
 
 // A refused play (an autoplay block outside the tap) gives Play back, so the next tap, a fresh
 // gesture, tries again on the video already loading.
-function startVideo(d) {
-  if (modalVideo.getAttribute("src") !== d.link) {
-    modalVideo.src = d.link;
-    modalVideo.load();
+function playFrom(video, link) {
+  if (video.getAttribute("src") !== link) {
+    video.src = link;
+    video.load();
   }
-  modalVideo.play().catch(function (err) {
+  return video.play();
+}
+
+function startVideo(d) {
+  playFrom(modalVideo, d.link).catch(function (err) {
     warnPlayFailed(err);
     if (!isCurrent(d)) return;
     d.playWaits = false;
@@ -928,6 +1190,7 @@ $(document).on("click.search", "#modal-play", function () {
 });
 
 function openPreviewModal($li) {
+  endPreview();
   var d = (_dialog = {
     open: ++_openSeq,
     id: $li.attr("data-ytid") || "",
@@ -966,10 +1229,6 @@ function openPreviewModal($li) {
   askTitleLyrics(d);
 }
 
-// Both thumbnail and Select button open the preview modal
-$("#search-results").on("click.search", ".img-wrapper", function () {
-  openPreviewModal($(this).closest("li"));
-});
 $(document).on("click.search", ".search_result_items_select", function () {
   openPreviewModal($(this).closest("li"));
 });
@@ -1078,8 +1337,8 @@ $(document).on("click.search", ".search_result_items_select", function () {
 	</div>
 	{% endif %}
 
-	{# Outside #container_search_result: Show more saves that element's copy for a return visit, and a
-	saved copy must not carry the dialog. #}
+	{# The dialog and the card player are outside #container_search_result: Show more saves that
+	element's copy for a return visit, and a saved copy must carry neither. #}
 	<div id="modal-js-example" class="modal">
 		<div class="modal-background"></div>
 		<div class="modal-content">
@@ -1145,6 +1404,27 @@ $(document).on("click.search", ".search_result_items_select", function () {
 			</div>
 		</div>
 		<button class="modal-close is-large" aria-label="close"></button>
+	</div>
+
+	{# The one card player, hidden here; the script moves it into the frame of the card that previews,
+	and back. It is the page's own bar, not the browser's controls: a tap on a native control would
+	reach the page as a tap on the video. #}
+	<div id="card-player" class="is-muted">
+		<video id="card-video" playsinline muted preload="metadata"></video>
+		<div id="card-bar">
+			<button type="button" id="card-toggle" aria-label="{{ _('Play') }}">
+				<svg class="bar-icon bar-pause" width="16" height="16" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><rect x="6" y="5" width="4" height="14"></rect><rect x="14" y="5" width="4" height="14"></rect></svg>
+				<svg class="bar-icon bar-play" width="16" height="16" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M7 4l13 8-13 8z"></path></svg>
+			</button>
+			<span id="card-time">0:00</span>
+			{# MSG: Accessible name of the seek bar under a search result's video preview. #}
+			<input type="range" id="card-seek" min="0" max="0" step="any" value="0" aria-label="{{ _('Seek') }}" />
+			{# MSG: Accessible name of the speaker button under a search result's video preview while it is muted: it turns the sound on. #}
+			<button type="button" id="card-mute" aria-label="{{ _('Unmute') }}">
+				<svg class="bar-icon bar-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"></path><path d="M17 9l4 6M21 9l-4 6"></path></svg>
+				<svg class="bar-icon bar-sound" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"></path><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path></svg>
+			</button>
+		</div>
 	</div>
 </div>
 {% endblock %}
