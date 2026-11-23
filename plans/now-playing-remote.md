@@ -63,6 +63,15 @@ above. Also:
 14. (L16) **Disabled, whatever its colour:** no fill, a faded border (`#5e6d6f` at half
     strength), a `#8c9b9d` label, no opacity fade. A stepper's −/+ at its end is drawn so.
 
+## Rulings (Ken, 2026-11-23): Phase 2
+
+15. **Resume is blue (`--button-selected-bg`, white text) while the song is paused**, and stays
+    blue under a mouse. This changes ruling 6's "no button is highlighted": the paused state is
+    the one worth drawing, and blue is the chosen colour. Pause is grey while playing.
+16. **The seek bar is blue** (`accent-color: var(--dark-primary)`), not the browser's accent.
+17. **A stepper with no zero fills from the rail's left edge** to the knob's centre. The
+    zero-centred fill (Key, Subtitle delay) is unchanged.
+
 Not ruled (L5): the mockup's near-black control panel (not in this spec) and the 12-14 px
 corners (in it). The spec stands until Ken rules.
 
@@ -427,3 +436,29 @@ by the next song's push; late Volume echo between two taps: knob stays 60%, sent
 release back at the start, no send; mouse let go off the rail, next push applies; each slider
 named exactly Volume / Key / Subtitle delay / Original vocals). The same script against
 `bbc8b92c` fails 7 of the 13 (old code sent `['/volume/0.7', '/volume/0.7']`).
+
+### Phase 2: Ken's checks (2026-11-23, in progress)
+
+Instance: ui-check's `launch.sh` from this worktree, port 5617, admin password `pw`, scratch
+library of two real dual-stem Ingrid Michaelson songs (headless mpv). Ken opened it on the
+desktop at `localhost:5617` as the admin and the current singer. Three findings from the first
+look, all fixed in `db92c732` (rulings 15 to 17):
+
+| # | Finding (Ken) | Fix |
+|---|---------------|-----|
+| 1 | The seek bar was the browser's orange, not blue | `#seek-bar { accent-color: var(--dark-primary) }` |
+| 2 | Volume's and Original vocals' blue ran only from half a knob in, not from the left end | `.stepper:not(.has-zero) .stepper-fill` starts at `left: 0` with a rounded left end; the form's two steppers take it too |
+| 3 | Resume should be blue while paused | `.is-selected` on `#pause-resume` from `showPaused`; the hover tint skips it |
+
+**Checked after the fix** (Chromium, 390 px, admin cookie, a joined guest, the playing song a real
+dual-stem one): seek bar `accent-color` `rgb(55, 90, 127)`; Original vocals at 40%: track
+113 to 277, fill 113 to 185, knob 151 to 219 (fill from the left edge to the knob's centre);
+Volume at 0%: fill 113 to 147 under a knob at 113 to 181; Key at 0: fill empty at the zero tick;
+paused: `Resume` on `rgb(55, 90, 127)` with white text, unchanged under a hovering mouse; after
+a second tap `Pause` on grey. 0 page errors. Original vocals showed on a real dual-stem song,
+which the Phase 1 harness could not test.
+
+**Suite:** 4263 passed at `db92c732`.
+
+Still to check by Ken: the phone itself (touch feel, the knob's size under a finger), the
+guest form on a phone, and the admin's view from the host's phone.
