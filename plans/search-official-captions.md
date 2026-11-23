@@ -740,6 +740,21 @@ Advanced open", and the download dialog's three boards.
     (mocked as option 1), a tinted card (green tint already means "your own rows" on Queue),
     and a pinned "Already in your library" section (decision 8 removed that box). Canvas:
     the "Search: results" artboard, first card. Lands in the Part 3 restyle with L13.
+- **L18. The card's "YouTube ↗" link goes** (Ken, 2026-11-23). Upstream's, never ruled here:
+  the thumbnail already opens the dialog's preview, and on a phone the link leaves the app
+  for the YouTube app. Canvas: both Search boards drawn without it.
+- **Canvas drawing choices for Part 3** (Opus, 2026-11-23, not ruled; the plan only lists
+  what goes): Search button neutral grey (`#434d4e`, `#5e6d6f` border, bold white), beside a
+  dark `#282f2f` input, both 44 px with 6 px corners; Official tag a filled `#434d4e` chip
+  with a check icon, 12 px bold white, so it is louder than the channel and quieter than the
+  L17 badge (Ken's order: In library first, official second); "Search results for…" becomes a
+  13 px `#b5bfc0` label, the rule above it goes; the Advanced panel is a `#282f2f` inset with
+  no shadow, its disabled Download in L16's look with 6 px corners, not a pill; the page sits
+  in the v2 `#343c3d` card under the guest nav bar. Ken rejected a thumbnail badge for
+  Official (it would dilute the In library badge).
+- **An owned card's thumbnail opens the download dialog**, whose Queue downloads the video
+  again. Open, in `plans/open-issues.md` on `dev` ("A search card you already own can be
+  downloaded again"); its fix may land in Part 3.
 - L1 (one green, one amber), L15 and L16 (disabled: no fill, a faded border, a `#8c9b9d`
   label, no opacity fade) come from `bulma-dark.css` on `singer_defaults` (its Phase 5), via
   `dev`. The canvas draws Advanced's disabled Download in L16's look.
