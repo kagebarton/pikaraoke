@@ -1,11 +1,16 @@
 {# One search result card. The page's click handlers are delegated, so a card needs no
-   per-card binding. #}
+   per-card binding. The play button starts the card's preview (search.html's script); the rest
+   of the thumbnail does nothing. #}
 {% macro result_card(row) -%}
 {% set result = row.result -%}
 <li data-ytID="{{result.id}}" data-ytTitle="{{result.title}}" data-ytChannel="{{result.channel}}" data-ytDuration="{{result.duration}}" value="{{result.url}}"{% if row.existing_path %} data-file-path="{{row.existing_path}}"{% endif %}>
-	<div class="img-wrapper" data-url="{{result.url}}">
+	<div class="img-wrapper">
 		<div class="img-frame">
 			<img loading="lazy" src="https://img.youtube.com/vi/{{result.id}}/mqdefault.jpg" />
+			<button type="button" class="card-play" aria-label="{{ _('Play preview') }}">
+				<svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true"><path d="M22 17l17 11-17 11z" fill="#fff"></path></svg>
+				<span class="card-play-notice">{% trans %}Preview unavailable{% endtrans %}</span>
+			</button>
 			{% if result.duration %}<span class="duration-badge">{{ result.duration }}</span>{% endif %}
 		</div>
 	</div>

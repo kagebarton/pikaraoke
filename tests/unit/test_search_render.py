@@ -568,6 +568,36 @@ def test_a_card_carries_its_length_for_the_dialog(mock_get, client):
     assert 'data-ytDuration=""' in second
 
 
+@pytest.mark.parametrize("page", ["search", "more"])
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_every_card_has_one_play_button_in_its_frame_and_no_thumbnail_link(mock_get, client, page):
+    """The play button is the thumbnail's one control (it starts the card's preview), on a card
+    in the library and one not, on the first page and on Show more. The thumbnail carries no
+    link of its own to open the dialog from."""
+    mirrors = _result("Justin Timberlake - Mirrors", "uuZE_IRwLNI")
+    library = _karaoke_with_library([_MIRRORS])
+    if page == "search":
+        body = _search_body(client, mock_get, [mirrors, *_filler(2)], library)
+    else:
+        mock_get.return_value = library
+        with patch(
+            "pikaraoke.routes.search.get_search_results",
+            return_value=_filler(30) + [mirrors, *_filler(2, 31)],
+        ):
+            body = client.get("/search/more?search_string=mirrors").get_data(as_text=True)
+
+    cards = _cards(body)
+    assert len(cards) == 3
+    assert f'data-file-path="{_MIRRORS}"' in cards[0]  # an owned card is among them
+    assert "data-file-path" not in cards[1]
+    for card in cards:
+        frame = re.search(r'<div class="img-frame">.*?</div>', card, re.S).group(0)
+        buttons = re.findall(r'<button type="button" class="card-play" aria-label="[^"]+">', frame)
+        assert len(buttons) == 1
+        assert card.count('class="card-play"') == 1  # none outside the frame
+        assert "data-url" not in card
+
+
 class _Ancestors(HTMLParser):
     """The ids of the elements an element with the given id sits inside."""
 
@@ -610,6 +640,32 @@ def test_the_dialog_is_on_every_page_and_outside_the_results_a_visit_saves(mock_
 
     assert "container_search_result" not in _ancestor_ids(body, "modal-js-example")
     assert body.count('id="modal-js-example"') == 1
+
+
+@patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_one_card_player_is_on_every_page_outside_the_results_a_visit_saves(
+    mock_get, _site, client
+):
+    """The player moves into the card that previews, so it must not be inside the saved copy
+    either; its video has no native controls (a tap on one would reach the page as a tap on the
+    video), and the page's own bar has labelled controls."""
+    bare = client.get("/search").get_data(as_text=True)
+    results = _search_body(client, mock_get, _RESULTS, _karaoke_with_library([]))
+
+    for body in (bare, results):
+        assert body.count('id="card-player"') == 1
+        assert "container_search_result" not in (_ancestor_ids(body, "card-player") or [])
+        assert _ancestor_ids(body, "card-player") is not None
+        video = re.search(r'<video id="card-video"[^>]*>', body).group(0)
+        assert "playsinline" in video and " muted" in video
+        assert "controls" not in video
+        bar = re.search(r'<div id="card-bar">(.*?)</div>', body, re.S).group(1)
+        buttons = re.findall(r"<button[^>]*>", bar)
+        assert len(buttons) == 2
+        assert all('type="button"' in b and 'aria-label="' in b for b in buttons)
+        seek = re.search(r"<input[^>]*>", bar).group(0)
+        assert 'type="range"' in seek and 'aria-label="' in seek
 
 
 @patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
