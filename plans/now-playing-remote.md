@@ -460,5 +460,10 @@ which the Phase 1 harness could not test.
 
 **Suite:** 4263 passed at `db92c732`.
 
-Still to check by Ken: the phone itself (touch feel, the knob's size under a finger), the
-guest form on a phone, and the admin's view from the host's phone.
+**Rest of Phase 2 (Ken, 2026-11-23):** the phone itself (touch feel, the knob's size under a
+finger), the guest form on a phone, and the admin's view from the host's phone: all good. One
+new finding, not for this branch: the brief flash after a tap on any button is square, not
+rounded like the button. Probably the phone browser's own tap highlight, so app-wide; logged in
+`plans/open-issues.md` on `dev` ("Phone pages: one look", `a24bcaf8`), ruled an app-wide fix.
+
+Phase 2 is done. Next: rebase onto `dev`, then land.
