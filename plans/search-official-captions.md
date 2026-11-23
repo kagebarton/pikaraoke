@@ -729,9 +729,17 @@ Advanced open", and the download dialog's three boards.
   library (`row.existing_path`) is first on the page and its button is the green Queue, but
   nothing else sets it apart from a `Queue…` card, so with "backstreet boys drowning" the
   owned official video reads as just another result; (b) the "In library" note, which L13
-  already turns into a dark row with the folder icon. For the spec: decide what marks (a)
-  (an In library tag beside the Official tag, the same dark row, or a tinted card) and
-  keep (a) and (b) one look. Not ruled.
+  already turns into a dark row with the folder icon. Candidates for (a) were an In library
+  tag beside the Official tag, the same dark row, or a tinted card.
+  - **L17. Ruled (Ken, 2026-11-23):** (a) gets an "In library" badge on the thumbnail's
+    top-left corner: `#282f2f` chip, 6 px corners, padding 6/12/6/10 px, a green `#2ecc71`
+    18 px folder icon (the Browse icon), 15 px bold white text. Its own button stays the
+    green Queue, and the lift (decision 7) keeps it first. (b) keeps L13's dark row; the two
+    share the dark fill and the folder icon, not the shape. The aim is a nudge seen while
+    scrolling, not text to read: no "ready now" line. Not chosen: the dark row on (a) too
+    (mocked as option 1), a tinted card (green tint already means "your own rows" on Queue),
+    and a pinned "Already in your library" section (decision 8 removed that box). Canvas:
+    the "Search: results" artboard, first card. Lands in the Part 3 restyle with L13.
 - L1 (one green, one amber), L15 and L16 (disabled: no fill, a faded border, a `#8c9b9d`
   label, no opacity fade) come from `bulma-dark.css` on `singer_defaults` (its Phase 5), via
   `dev`. The canvas draws Advanced's disabled Download in L16's look.
