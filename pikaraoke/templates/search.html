@@ -110,6 +110,9 @@
 	   (no attribute: idle). The player is in the card's frame while loading, playing or paused. */
 	#search-results li[data-preview="loading"] .card-play { animation: breathe 2.4s ease-in-out infinite; }
 	#search-results li[data-preview="playing"] .card-play { display: none; }
+	/* Paused, the button is centred on the picture above the 44 px bar: on a 200 px wide thumbnail
+	   it would otherwise lie over the seek bar. */
+	#search-results li[data-preview="paused"] .card-play { top: calc(50% - 22px); }
 	#search-results li[data-preview="playing"] .duration-badge,
 	#search-results li[data-preview="paused"] .duration-badge { display: none; }
 	/* No link, or a video that cannot play: the button becomes the notice, and a tap tries again. */
@@ -588,7 +591,8 @@
 //   2. Two requests start together:
 //      - /caption_check: one yt-dlp lookup that answers the caption check and returns a link
 //        the browser can play. An answer with a link is kept for the visit, so a video asked
-//        about again (the dialog reopened) is not looked up again.
+//        about again (the dialog reopened) is not looked up again, unless that link is near
+//        its expiry.
 //      - /lyrics_search: the Genius search for the video (its title, channel and the page's
 //        search term; the server works out what to ask). Its answer is held, not shown.
 //   3. The lookup answers, and the dialog shows one of two views:
@@ -771,8 +775,19 @@ function renderLyrics() {
 // other answer, or an error, is asked again next time.
 var _lookups = {};
 
+// The video's lookup, without a link that YouTube stops serving within half an hour (it writes
+// the time into the link; half an hour outlasts any song): that video is asked again.
+function currentLookup(id) {
+  var entry = _lookups[id];
+  if (entry && entry.link) {
+    var expire = Number(new URL(entry.link).searchParams.get("expire"));
+    if (expire && expire * 1000 - Date.now() < 30 * 60 * 1000) delete _lookups[id];
+  }
+  return _lookups[id];
+}
+
 function lookupVideo(id) {
-  if (!_lookups[id]) {
+  if (!currentLookup(id)) {
     var entry = {
       link: "",
       answer: new Promise(function (resolve) {
@@ -798,7 +813,8 @@ function lookupVideo(id) {
 
 // The link a settled lookup kept, or "".
 function keptLink(id) {
-  return _lookups[id] ? _lookups[id].link : "";
+  var entry = currentLookup(id);
+  return entry ? entry.link : "";
 }
 
 // A link that would not play is not kept.
@@ -1006,8 +1022,11 @@ function parkPlayer() {
   cardHome.appendChild(cardPlayer);
 }
 
+// The watcher's reports not yet delivered are about this preview's frame: dropped with it, so a
+// late "off screen" cannot stop the next card.
 function endPreview() {
   if (!_preview) return;
+  frameWatcher.takeRecords();
   frameWatcher.disconnect();
   _preview.li.removeAttribute("data-preview");
   _preview = null;
@@ -1162,8 +1181,7 @@ function warnPlayFailed(err) {
   if (!err || err.name !== "AbortError") console.warn("Preview play failed:", err);
 }
 
-// A refused play (an autoplay block outside the tap) gives Play back, so the next tap, a fresh
-// gesture, tries again on the video already loading.
+// Plays the link on the video, loading it only if the video does not have it already.
 function playFrom(video, link) {
   if (video.getAttribute("src") !== link) {
     video.src = link;
@@ -1172,6 +1190,8 @@ function playFrom(video, link) {
   return video.play();
 }
 
+// A refused play (an autoplay block outside the tap) gives Play back, so the next tap, a fresh
+// gesture, tries again on the video already loading.
 function startVideo(d) {
   playFrom(modalVideo, d.link).catch(function (err) {
     warnPlayFailed(err);
