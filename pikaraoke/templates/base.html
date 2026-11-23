@@ -284,11 +284,14 @@
           <span>{% trans %}Browse{% endtrans %}</span>
         </a>
 
+        {# Admins only; the page itself stays open to a guest who has the address. #}
+        {% if admin %}
         <a id="processing" class="navbar-item" href="{{ url_for('processing.processing') }}">
           <i class="icon icon-spinner" title="Processing"></i>
           {# MSG: Navigation link for the processing pipeline monitoring page. #}
           <span>{% trans %}Processing{% endtrans %}</span>
         </a>
+        {% endif %}
 
         {# The guest's name, filled in by spa-navigation.js; a tap opens the singer settings. #}
         <a id="current-user" class="singer-pill is-hidden" href="#">

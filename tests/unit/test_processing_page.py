@@ -234,6 +234,14 @@ class TestProcessingPage:
         assert 'id="pr-tools"' not in body and "/library/" not in body
         assert "Library tools" not in body
 
+    def test_a_guest_who_has_the_address_still_opens_the_page_without_the_nav_icon(self, env):
+        guest = get(env, "/processing", admin=False)
+        admin = get(env, "/processing", admin=True)
+
+        assert guest.status_code == 200
+        assert 'id="processing"' not in guest.get_data(as_text=True)
+        assert 'id="processing"' in admin.get_data(as_text=True)
+
     def test_a_guest_gets_no_run_controls(self, env):
         body = get(env, "/processing", admin=False).get_data(as_text=True)
 

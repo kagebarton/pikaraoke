@@ -10,13 +10,14 @@ from unittest.mock import MagicMock
 
 import pytest
 import werkzeug
-from flask import Flask
+from flask import Flask, render_template
 from flask_babel import Babel
 
 if not hasattr(werkzeug, "__version__"):
     werkzeug.__version__ = "3.0.0"
 
 import pikaraoke
+from pikaraoke.routes.admin import admin_bp
 from pikaraoke.routes.queue import queue_bp
 
 # Endpoints base.html and queue.html resolve via url_for that are not on queue_bp.
@@ -40,6 +41,7 @@ def make_app(admin_password: str | None) -> Flask:
         static_folder=os.path.join(pkg_dir, "static"),
     )
     app.register_blueprint(queue_bp)
+    app.register_blueprint(admin_bp)
     for endpoint in _STUB_ENDPOINTS:
         app.add_url_rule(f"/__stub/{endpoint}", endpoint=endpoint, view_func=lambda *a, **k: "")
     app.config.update(
@@ -91,3 +93,31 @@ def test_with_no_admin_password_everyone_is_an_admin_and_nobody_sees_the_pause_b
 
     assert "var isAdmin = true;" in page
     assert 'id="queue-brb"' not in page
+
+
+def bare_page(admin_password: str | None, *, admin_cookie: bool = False) -> str:
+    """A page whose route passes no `admin`, so the nav sees only the context processor's."""
+    app = make_app(admin_password)
+    app.add_url_rule(
+        "/__bare",
+        endpoint="bare",
+        view_func=lambda: render_template("base.html", site_title="PiKaraoke", title="Bare"),
+    )
+    client = app.test_client()
+    if admin_cookie:
+        client.set_cookie("admin", ADMIN_PASSWORD)
+    return client.get("/__bare").get_data(as_text=True)
+
+
+def test_the_processing_nav_icon_is_the_admins_only_on_a_page_that_passes_no_admin_flag():
+    assert 'id="processing"' in bare_page(ADMIN_PASSWORD, admin_cookie=True)
+    assert 'id="processing"' not in bare_page(ADMIN_PASSWORD)
+
+
+def test_with_no_admin_password_everyone_gets_the_processing_nav_icon():
+    assert 'id="processing"' in bare_page(None)
+
+
+def test_the_queue_page_hides_the_processing_nav_icon_from_a_guest(admin_page, guest_page):
+    assert 'id="processing"' in admin_page
+    assert 'id="processing"' not in guest_page
