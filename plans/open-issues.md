@@ -740,6 +740,16 @@ Buttons, every page (Ken, 2026-11-18, drawn on the canvas; owner `singer_default
 
 The "Small gaps inside the v2 group" above were ruled 2026-11-18 (S1-S4 in `plans/queue-phone.md`).
 
+- **The brief flash after a tap is square, not rounded like the button.** Found by Ken on a
+  phone during `now_playing_remote` Phase 2, 2026-11-23, on Now Playing's transport and
+  stepper buttons (12 and 14 px corners). Not reproduced on a desktop. Probable cause, not
+  confirmed: nothing in the repo sets `-webkit-tap-highlight-color`, so the phone browser
+  paints its own tap highlight over every button, and that highlight can be a plain
+  rectangle. If so it hits every button on every page, not just Now Playing, so fix it once
+  for all: transparent tap highlight in the shared stylesheet, plus a pressed look
+  (`:active` tint) so a tap still shows. Confirm on Ken's phone (Chrome, Android). Ruled
+  2026-11-23: app-wide, not on `now_playing_remote`.
+
 ## Singer defaults: Phase 6 findings (on `dev`)
 
 `singer_defaults` landed on local `dev` 2026-11-21 (`5c0fdc2a`..`83671246`, as copies). Ken ran
