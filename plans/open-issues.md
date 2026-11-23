@@ -441,9 +441,10 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
 - **The m:ss clock is on its third copy.** `home.html` (`fmtTime`), `playlist.html`
   (`clock`, with hours) and Search's card bar (`clock`, `search_official_captions` commit
   11) each format a time. One shared formatter (the one with hours) needs a script all
-  three load; `home.html` loads none of the shared ones and is mid-change on
-  `now_playing_remote`, so do it once both branches are on `dev`. Part 2b's "Not doing"
-  already left it out. Found in the same review (finding 6). Not ruled.
+  three load; `home.html` loads none of the shared ones. It was mid-change on
+  `now_playing_remote`, which landed 2026-11-23, so this now waits only for
+  `search_official_captions`. Part 2b's "Not doing" already left it out. Found in the same
+  review (finding 6). Not ruled.
 
 ## Movie splits (on `dev`)
 
@@ -561,10 +562,11 @@ Stage 1, can run now, side by side:
 
 Stage 2, landing:
 
-1. ~~`singer_defaults`~~ (landed 2026-11-21), then `now_playing_remote` (`254bec0`) right
-   after it. The latter is built on the former: rebase onto `dev` (its 42 commits not on `dev`
-   include copies of `singer_defaults`' commits, which will conflict or drop out), then its
-   Phases 1-4 (`plans/now-playing-remote.md`).
+1. ~~`singer_defaults`~~ (landed 2026-11-21), then ~~`now_playing_remote`~~ (landed
+   2026-11-23, `997e3dfb`..`c9c3b010`, as copies; retired as `archive/now_playing_remote`).
+   It landed after `queue_phone`, not before it as planned here: the two share only
+   `base.html`, `karaoke.py` and one test file, in different places, and the seven commits
+   applied clean.
 2. ~~`download_modal_speed`~~ (landed 2026-11-21, first), then `search_official_captions`
    Parts 1-2: both edit `youtube_dl.py`, `routes/search.py`, `search.html` and
    `search_result.html`, so Search rebases over the dialog now on `dev`. As the second to
@@ -790,22 +792,30 @@ the Phase 6 test plan on `dev` the same day; every check passed functionally. Wh
 besides, in his words, on his own devices. Record: `plans/singer-defaults.md` on tag
 `archive/singer_defaults`.
 
-- **Now Playing's (i) notes are two kinds.** For the admin, Original vocals and Lyrics have
+- ~~**Now Playing's (i) notes are two kinds.** For the admin, Original vocals and Lyrics have
   their (i) beside the label and open on hover (`info_tip()`); Change Key and Subtitle
   Delay keep the old (i) beside the value, which needs a click and shows a notification
   (`#semitones-info`, `#subtitle-delay-info`, `home.html`). Covered by `now_playing_remote`
   (spec `254bec0`): items 5 and 7 give both headings the shared `info_tip()` and delete the
-  two click handlers. Open until that branch is built.
-- **Subtitle delay shows to non-admins.** Covered by `now_playing_remote` ruling 1 (Subtitle
+  two click handlers. Open until that branch is built.~~ Landed 2026-11-23 with
+  `now_playing_remote` (`997e3dfb`..`c9c3b010`): all four headings use the shared tips
+  (`info_tip()`, `key_tip()`), and `#semitones-info`, `#subtitle-delay-info` and their
+  handlers are gone.
+- ~~**Subtitle delay shows to non-admins.** Covered by `now_playing_remote` ruling 1 (Subtitle
   delay, seek bar and master Volume become the admin's, hidden from everyone else). Hiding
-  only: a direct request to `/subtitle_delay` still works, ruled acceptable (ruling 3).
-- **The join form's Key has no (i).** Not covered: the spec's guest-form section says only
+  only: a direct request to `/subtitle_delay` still works, ruled acceptable (ruling 3).~~
+  Landed 2026-11-23 with `now_playing_remote` (`c8580c0e`): the seek bar, Volume and Subtitle
+  delay each render only under `{% if admin %}` in `home.html`. The route still answers a
+  direct request, as ruled.
+- ~~**The join form's Key has no (i).** Not covered: the spec's guest-form section says only
   "the label 'Key' stays", and `singer_defaults` Phase 4 added notes to Original vocals and
   Lyrics, not Key. Proposed: a `key_tip()` macro in `singer_tips.html` beside
   `original_vocals_tip()` and `lyrics_tip()`, used by Now Playing's Key heading and the form,
   in `now_playing_remote`'s commit 4 (the form's stepper), so the two say the same thing. The
   spec's inline Now Playing wording is "Moves the song up or down in half-steps. 0 is the
-  original key." Needs adding to the spec; Ken has not ruled on it.
+  original key." Needs adding to the spec; Ken has not ruled on it.~~ Landed 2026-11-23 with
+  `now_playing_remote` (`997e3dfb`, `fdbb750e`): `key_tip()` in `singer_tips.html`, used by Now
+  Playing's Key heading and the guest form.
 - ~~**The name's pill sits in different places by browser** (L6, `base.html`
   `.singer-pill`). Firefox on desktop: right, beside the Pikaraoke link, as designed. Chrome
   on a phone: next to the Processing icon, not beside the burger. Opera on a tablet: in that
@@ -826,12 +836,13 @@ besides, in his words, on his own devices. Record: `plans/singer-defaults.md` on
   engine and was left there (Ken: a rare combination); untested lead: the pages never declare
   `color-scheme: dark`, so a browser's forced dark mode would repaint them.
 
-## Now Playing remote: review findings (branch `now_playing_remote`, not yet on `dev`)
+## Now Playing remote: review findings (on `dev`)
 
-Found by the `/code-review` of `277ba5be..6113ec99`, 2026-11-21 (findings 3 and 8). Their
-fixes and the other six findings are in `bfca35d5`; these two were left open. Record:
-`plans/now-playing-remote.md` on the branch (on tag `archive/now_playing_remote` once it is
-retired), "Review 1". Both apply once the branch lands.
+Landed 2026-11-23 as `997e3dfb`..`c9c3b010`. Found by the `/code-review` of the first five of
+those (`997e3dfb`..`26192b06`), 2026-11-21 (findings 3 and 8). Their fixes and the other six
+findings are in `9f1ce8d3`; these two were left open. Record: `plans/now-playing-remote.md` on
+tag `archive/now_playing_remote`, "Review 1"; its "Landing" section maps the branch's hashes to
+`dev`'s.
 
 - **Pause's label can flicker.** A tap on Pause flips the button at once (it reads Resume, and
   is blue, while paused) and the server's push confirms it. If a `now_playing` push triggered
@@ -843,8 +854,10 @@ retired), "Review 1". Both apply once the branch lands.
 - **Nothing tests Now Playing's script.** The render tests (`test_home_page.py`) check the
   markup only. The steppers' ends, the held-or-sending rule that keeps a push from moving a
   knob under a finger, the transport, the Paused tag and Resume's colour are covered only by
-  Playwright scripts kept in session scratchpads (102 assertions at `bfca35d5`), so a
-  regression in any of them passes the suite. Same gap as the search dialog's entry under
+  Playwright scripts outside the repo, so a regression in any of them passes the suite. The
+  Phase 1 script (89 assertions) is kept untracked at `.claude/ui-check/now_playing_remote/` in
+  the main checkout; Review 1's extension (102 assertions at `9f1ce8d3`) was lost with its
+  session scratchpad, and Ken let it go. Same gap as the search dialog's entry under
   "Search results (on `dev`)"; closing it needs a JavaScript test setup in the repo, its own
   plan. Not ruled.
 
