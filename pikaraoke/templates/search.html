@@ -510,7 +510,8 @@
 //      and length, and "Checking YouTube for captions…". No request is waited on.
 //   2. Two requests start together:
 //      - /caption_check: one yt-dlp lookup that answers the caption check and returns a link
-//        the browser can play.
+//        the browser can play. An answer with a link is kept for the visit, so a video asked
+//        about again (the dialog reopened) is not looked up again.
 //      - /lyrics_search: the Genius search for the video (its title, channel and the page's
 //        search term; the server works out what to ask). Its answer is held, not shown.
 //   3. The lookup answers, and the dialog shows one of two views:
@@ -681,24 +682,45 @@ function renderLyrics() {
   syncQueue();
 }
 
-// The one yt-dlp lookup: the caption's answer and the link the video plays from.
+// Each video's yt-dlp lookup (the caption's answer and the link the video plays from) as a
+// promise, one per video for this visit: a second ask while it runs shares it. It stays once
+// settled only if it has a link; any other answer, or an error, is asked again next time.
+var _lookups = {};
+
+function lookupVideo(id) {
+  if (!_lookups[id]) {
+    var entry = new Promise(function (resolve) {
+      $.ajax({
+        url: "{{ url_for('search.caption_check') }}",
+        type: "get",
+        data: { yt_id: id },
+        success: resolve,
+        error: function () {
+          resolve({ failed: true });
+        },
+      });
+    });
+    _lookups[id] = entry;
+    entry.then(function (check) {
+      if (!check.stream_url && _lookups[id] === entry) delete _lookups[id];
+    });
+  }
+  return _lookups[id];
+}
+
+// A link that would not play is not kept.
+function forgetVideo(id) {
+  delete _lookups[id];
+}
+
 function askCaptionCheck(d) {
-  function answered(check) {
+  lookupVideo(d.id).then(function (check) {
     if (!isCurrent(d)) return;
     d.caption = check.passed ? "passed" : check.failed ? "failed" : check.found ? "sparse" : "none";
     d.link = check.stream_url || "";
     if (!d.link) showPreviewUnavailable();
     else if (d.playWaits) startVideo(d);
     renderLyrics();
-  }
-  $.ajax({
-    url: "{{ url_for('search.caption_check') }}",
-    type: "get",
-    data: { yt_id: d.id },
-    success: answered,
-    error: function () {
-      answered({ failed: true });
-    },
   });
 }
 
@@ -887,7 +909,10 @@ modalVideo.addEventListener("playing", function () {
   $("#modal-thumb-layer").addClass("is-hidden");
 });
 modalVideo.addEventListener("error", function () {
-  if (_dialog && isCurrent(_dialog) && modalVideo.hasAttribute("src")) showPreviewUnavailable();
+  if (_dialog && isCurrent(_dialog) && modalVideo.hasAttribute("src")) {
+    forgetVideo(_dialog.id);
+    showPreviewUnavailable();
+  }
 });
 
 // Play: only a tap may start the video, and iOS Safari ties .play() to the tap itself, so a
