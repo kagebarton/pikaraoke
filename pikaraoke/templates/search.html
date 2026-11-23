@@ -956,6 +956,8 @@ $(document).on("click.search", "#lyrics-queue-btn", function () {
 // data-preview says where it is: loading | playing | paused | unavailable (none: idle). Only
 // one card previews at a time. Opening the dialog, another card's play button and Clear end it.
 // Any tap outside the player pauses it, and a tap while it loads cancels it; a scroll is not a tap.
+// It pauses itself if forgotten, too: its card scrolled entirely off the screen, or the page
+// hidden (phone locked, app or tab switched). Nothing resumes by itself.
 
 // The card previewing, {li, id}; null while none. Every late answer is dropped unless its own
 // preview is still this one.
@@ -1006,10 +1008,25 @@ function parkPlayer() {
 
 function endPreview() {
   if (!_preview) return;
+  frameWatcher.disconnect();
   _preview.li.removeAttribute("data-preview");
   _preview = null;
   parkPlayer();
 }
+
+// What a tap elsewhere, a card scrolled away and a hidden page share: a preview that plays
+// pauses, one that loads is cancelled (its late answer is dropped), a paused one stays as it is.
+function stopPreview() {
+  var state = previewState();
+  if (state === "loading") endPreview();
+  else if (state === "playing") cardVideo.pause();
+}
+
+// Watches the previewing card's frame from start to end; with none of it on the screen the
+// preview is forgotten. Half of it still showing is not.
+var frameWatcher = new IntersectionObserver(function (entries) {
+  if (!entries[entries.length - 1].isIntersecting) stopPreview();
+});
 
 function previewUnavailable() {
   setPreviewState("unavailable");
@@ -1032,7 +1049,9 @@ function startPreview($li) {
   endPreview();
   var p = (_preview = { li: $li[0], id: $li.attr("data-ytid") || "" });
   setPreviewState("loading");
-  $li.find(".img-frame").append(cardPlayer);
+  var $frame = $li.find(".img-frame");
+  $frame.append(cardPlayer);
+  frameWatcher.observe($frame[0]);
   renderBar();
   var link = keptLink(p.id);
   if (link) {
@@ -1067,8 +1086,11 @@ $(document).on("pointerup.search pointercancel.search", function (e) {
   var $target = $(e.target);
   if ($target.closest("#card-player").length) return;
   if ($target.closest(".card-play").closest("li")[0] === _preview.li) return;
-  if (state === "loading") endPreview();
-  else cardVideo.pause();
+  stopPreview();
+});
+
+$(document).on("visibilitychange.search", function () {
+  if (document.visibilityState === "hidden") stopPreview();
 });
 
 cardVideo.addEventListener("click", function () {
