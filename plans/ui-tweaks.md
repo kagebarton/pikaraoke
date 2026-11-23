@@ -20,8 +20,10 @@ up 2026-11-23. Where this file and the canvas differ, this file wins.
 
    - Now Playing: the animated bars (`static/images/now-playing.gif`) beside the heading, about
      40 px wide, as Home had them.
-   - Queue: the same bars replace the five still grey bars on the Now card, about 32 px wide
-     above the "Now" label.
+   - Queue: the same bars replace the five still grey bars (`BARS` in `queue.html`) on the Now
+     card, about 32 px wide above the "Now" label, in the 60 px slot as landed (`.qp-now-slot`).
+     The canvas draws that slot at 52 px; the build is right.
+   - The gif keeps its own yellow (Ken, 2026-11-23), not the palette amber `#f1b70e`.
    - While the song is paused, both show the still frame (`now-playing.png`). One shared helper
      picks gif or png from `is_paused`; Queue's `np` already carries it.
 
@@ -33,34 +35,32 @@ up 2026-11-23. Where this file and the canvas differ, this file wins.
      it; on Queue, the nav bar plus the fixed BRB bar leave enough room for the list on a phone;
      `.base-notification` and the mobile `body { min-height: 120vh }` still behave.
 
+3. **A tap's flash takes the button's rounded shape, on every page.** Open-issues entry "The
+   brief flash after a tap is square, not rounded like the button." Added by Ken 2026-11-23.
+
+   - Probable cause, not confirmed: nothing sets `-webkit-tap-highlight-color`, so the phone
+     browser paints its own rectangular highlight over every button.
+   - Fix once for all pages in a stylesheet `base.html` loads everywhere (`custom.css`): turn the
+     browser's highlight off, and add a pressed look (`:active` tint) so a tap still shows.
+   - Confirm the cause on Ken's phone before calling it fixed.
+
 Ruled out (2026-11-23): putting the bars in the nav bar so they show on every page. The admin's
 phone nav is already full, and every page would have to track pause state.
 
-## Candidates, not yet in scope
-
-- **Square tap flash.** Open-issues entry "The brief flash after a tap is square, not rounded
-  like the button." Ruled app-wide on 2026-11-23 with no owner branch; it fits here if Ken wants
-  it.
-
-## Open for Ken before starting
-
-- **Which yellow.** The gif's yellow is brighter and more lemony than the palette amber
-  `#f1b70e` used for song titles on Now Playing. Keep the gif as is, or recolour it to the amber.
-- **Queue slot width.** The open-issues entry says 60 px; the canvas draws Queue at 52 px. The
-  bars fit either; confirm against what landed.
-
 ## Phases
 
-0. Rebase onto `dev`; re-read the open-issues entries and the canvas boards; settle the open
-   questions above.
+0. Rebase onto `dev`; re-read the open-issues entries and the canvas boards.
 1. Bars (item 1), with tests for the gif/png pick.
 2. Sticky nav bar (item 2).
-3. Ken's phone check (Chrome, Android): both items on Now Playing, Queue, and one other page.
-4. Land on `dev` per CLAUDE.md; drop the shipped entries from `plans/open-issues.md`; retire
+3. Tap flash (item 3).
+4. Ken's phone check (Chrome, Android): all three on Now Playing, Queue, and one other page,
+   including the stepper buttons where the square flash was first seen.
+5. Land on `dev` per CLAUDE.md; drop the shipped entries from `plans/open-issues.md`; retire
    the branch as `archive/ui_tweaks`.
 
 ## Plan log
 
-| Date       | Commit | Step                                    |
-| ---------- | ------ | --------------------------------------- |
-| 2026-11-23 | -      | Plan recorded; waiting on the revamps. |
+| Date       | Commit     | Step                                                          |
+| ---------- | ---------- | ------------------------------------------------------------- |
+| 2026-11-23 | `31f0adc1` | Plan recorded; waiting on the revamps.                        |
+| 2026-11-23 | -          | Ken: keep the gif's yellow, add the tap flash; slot is 60 px. |
