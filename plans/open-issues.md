@@ -412,7 +412,8 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
   are covered only by the plan's ui-check runs (Playwright scripts kept in session
   scratchpads, not the repo), so a regression in any of them passes the suite. Closing it
   needs a JavaScript test setup in the repo, its own plan. Found in the same review
-  (finding 13). Not ruled.
+  (finding 13). Not ruled. Now Playing's script has the same gap (see "Now Playing remote:
+  review findings"); one setup would close both.
 
 ## Movie splits (on `dev`)
 
@@ -736,6 +737,28 @@ besides, in his words, on his own devices. Record: `plans/singer-defaults.md` on
   Opera on Ken's phone matches Chrome. The tablet's missing outline was not reproduced in any
   engine and was left there (Ken: a rare combination); untested lead: the pages never declare
   `color-scheme: dark`, so a browser's forced dark mode would repaint them.
+
+## Now Playing remote: review findings (branch `now_playing_remote`, not yet on `dev`)
+
+Found by the `/code-review` of `277ba5be..6113ec99`, 2026-11-21 (findings 3 and 8). Their
+fixes and the other six findings are in `bfca35d5`; these two were left open. Record:
+`plans/now-playing-remote.md` on the branch (on tag `archive/now_playing_remote` once it is
+retired), "Review 1". Both apply once the branch lands.
+
+- **Pause's label can flicker.** A tap on Pause flips the button at once (it reads Resume, and
+  is blue, while paused) and the server's push confirms it. If a `now_playing` push triggered
+  by another phone lands before the server has handled `/pause`, it carries the old
+  `is_paused` and flips the button back until the push that follows `/pause`. Milliseconds on
+  a LAN, and only while two phones act at once. A fix would hold the button for the length of
+  its own request the way a stepper is held (`_sending`), at the cost of one more piece of
+  state in `home.html`. Not ruled.
+- **Nothing tests Now Playing's script.** The render tests (`test_home_page.py`) check the
+  markup only. The steppers' ends, the held-or-sending rule that keeps a push from moving a
+  knob under a finger, the transport, the Paused tag and Resume's colour are covered only by
+  Playwright scripts kept in session scratchpads (102 assertions at `bfca35d5`), so a
+  regression in any of them passes the suite. Same gap as the search dialog's entry under
+  "Search results (on `dev`)"; closing it needs a JavaScript test setup in the repo, its own
+  plan. Not ruled.
 
 ## Edit words (on `dev`)
 
