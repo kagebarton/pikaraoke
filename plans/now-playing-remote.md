@@ -467,3 +467,44 @@ rounded like the button. Probably the phone browser's own tap highlight, so app-
 `plans/open-issues.md` on `dev` ("Phone pages: one look", `a24bcaf8`), ruled an app-wide fix.
 
 Phase 2 is done. Next: rebase onto `dev`, then land.
+
+### Landing (2026-11-23)
+
+Rebased onto `dev` at `a24bcaf8` (21 commits: `download_modal_speed` and open-issues edits; no file
+shared with this branch). `git range-diff` showed all 14 patches unchanged. **Suite:** 4285 passed.
+
+`queue_phone` landed on `dev` before this branch did, the reverse of the landing order in
+`plans/open-issues.md`. Rehearsal on a throwaway worktree of `dev` at `4c5588c5`: the 7 code
+commits cherry-picked clean (the only files both sides touched were `karaoke.py`, `base.html` and
+`test_karaoke_utils.py`, in different places); **suite:** 4321 passed; the Phase 1 ui-check
+(`np_app.py` + `np_check.py`): 89 assertions, 0 failed, 0 page errors.
+
+Landed on `dev` as `997e3dfb`..`c9c3b010`, seven copied commits in order, none touching `plans/`.
+**Suite:** 4321 passed on `dev`; the net code change is patch-id identical to this branch's
+(`git diff a24bcaf8 now_playing_remote -- pikaraoke tests`). `dev` not pushed at landing.
+
+The ui-check kept is the Phase 1 version, untracked, in the main checkout at
+`.claude/ui-check/now_playing_remote/`. Review 1's extension (the fake's `volume_delay_s` and its 13
+assertions, "Review 1" above) lived in a session scratchpad that was cleared and is lost; Ken let
+it go rather than rebuild it.
+
+Hashes above this section were written before two rebases. Map, branch before the 2026-11-23
+rebase, then after it, then on `dev` (code commits only):
+
+| Before | Rebased | On `dev` | Subject |
+|--------|---------|----------|---------|
+| `a9d38a95` | `09328e5c` | `997e3dfb` | sliders become steppers |
+| `1bbacd87` | `c1910954` | `d77c8408` | transport is three text buttons |
+| `8d23f10f` | `4ada2edd` | `c8580c0e` | seek bar, volume, subtitle delay are the admin's |
+| `77a06988` | `a02b7752` | `fdbb750e` | the guest form uses the stepper |
+| `6113ec99` | `7d70e35c` | `26192b06` | a repeated push no longer snaps a stepper back |
+| `bfca35d5` | `098fbd54` | `9f1ce8d3` | held-or-sending rule (Review 1's fixes) |
+| `db92c732` | `81a97534` | `c9c3b010` | blue seek bar, left-edge fill, blue Resume |
+
+Plan commits cited above: `277ba5be` is now `2ca4fbec`, `bbc8b92c` is `f86f9fd1`, `ac53bad9` is
+`a309279a`, `cd2e5600` is `d5d061ab`, `5fbf02d9` is `bf754d20`.
+
+Open issues: Review 1's two leftovers are on `dev` as `1f10f09c`. The three Now Playing entries
+that said "open until that branch is built" (the two (i) kinds, subtitle delay shown to
+non-admins, the join form's Key without an (i)) are struck there, each checked against the code on
+`dev`. Branch retired as tag `archive/now_playing_remote`.
