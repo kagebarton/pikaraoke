@@ -497,6 +497,19 @@ Record: `plans/queue-hold.md` on tag `archive/queue_hold`, the manual checks row
   2026-11-16 as `58ccd638` (landed from `genius_search_accuracy`, where Ken took it
   from the review triage): `downloadSong` reads `#add-to-queue-direct`.
 
+- **Five routes still pass `admin=` that the context processor now supplies.**
+  `inject_admin` (`routes/admin.py`, on `queue_phone` as `006e92ff`, not on `dev` yet) gives
+  every page `admin`. `home.py`, `files.py`, `info.py`, `queue.py` and `processing.py` (the
+  page render only; `processing_status`'s `get_status(admin=...)` is not a render and stays)
+  still pass the same value. Nothing is wrong today: both are `is_admin()` in the same
+  request. Drop each when its phone branch next edits that route (`browse_phone` and
+  `processing_phone` restyle `files.py` and `processing.py`). The tests then need `admin_bp`
+  registered and `admin.is_admin` patched: `test_processing_page.py`'s `get()`, the seven
+  browse tests in `test_files_routes.py`, one in `test_info_routes.py`; without that,
+  `{{ admin | tojson }}` in `home.html`, `queue.html` and `processing.html` is a 500. Found
+  2026-11-23 closing `queue_phone` Phase 3 (an Opus read of the call); record:
+  `plans/queue-phone.md` Results log on `queue_phone`. Not ruled.
+
 ## Landing order (every open branch)
 
 Proposed by Claude Opus 5.5, 2026-11-18, from the branch plans and file overlaps at the
