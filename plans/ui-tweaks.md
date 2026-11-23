@@ -31,8 +31,7 @@ up 2026-11-23. Where this file and the canvas differ, this file wins.
    the top blue nav bar on screen while scrolling, on every page."
 
    - One change in `base.html`, which owns the navbar for every page.
-   - Check: the burger menu opens under the bar at any scroll position; the SPA page swap keeps
-     it; on Queue, the nav bar plus the fixed BRB bar leave enough room for the list on a phone;
+   - Check: the SPA page swap keeps it; on Queue, the nav bar plus the fixed BRB bar leave enough room for the list on a phone;
      `.base-notification` and the mobile `body { min-height: 120vh }` still behave.
 
 3. **A tap's flash takes the button's rounded shape, on every page.** Open-issues entry "The
@@ -44,6 +43,19 @@ up 2026-11-23. Where this file and the canvas differ, this file wins.
      browser's highlight off, and add a pressed look (`:active` tint) so a tap still shows.
    - Confirm the cause on Ken's phone before calling it fixed.
 
+4. **The burger menu becomes an (i) icon that opens the Info page.** Added by Ken 2026-11-23.
+
+   - The menu's only entry is Info (`#info`, `/info`): the share URL and QR code for everyone,
+     then the admin login for a guest (when a password is set) or the settings and Log out for
+     the admin. One tap instead of two.
+   - The (i) (`icon-info-circled-1`, as the menu uses today) takes the burger's place at the
+     right end of the bar, after the name pill. Not a gear: beside the sliders pill it would
+     read as a second settings button.
+   - Delete what the burger needed: the `.navbar-menu` block, the burger markup, the
+     burger's open/close code and its two close calls in `spa-navigation.js`, and the phone
+     dropdown CSS in `base.html`. The nav highlight for `/info` keeps working through `#info`.
+   - Do it before item 2, so the sticky nav bar has no menu to account for.
+
 Ruled out (2026-11-23): putting the bars in the nav bar so they show on every page. The admin's
 phone nav is already full, and every page would have to track pause state.
 
@@ -51,11 +63,13 @@ phone nav is already full, and every page would have to track pause state.
 
 0. Rebase onto `dev`; re-read the open-issues entries and the canvas boards.
 1. Bars (item 1), with tests for the gif/png pick.
-2. Sticky nav bar (item 2).
-3. Tap flash (item 3).
-4. Ken's phone check (Chrome, Android): all three on Now Playing, Queue, and one other page,
-   including the stepper buttons where the square flash was first seen.
-5. Land on `dev` per CLAUDE.md; drop the shipped entries from `plans/open-issues.md`; retire
+2. Burger to (i) (item 4).
+3. Sticky nav bar (item 2).
+4. Tap flash (item 3).
+5. Ken's phone check (Chrome, Android): all four on Now Playing, Queue, and one other page,
+   including the stepper buttons where the square flash was first seen, and the (i) as guest
+   and as admin.
+6. Land on `dev` per CLAUDE.md; drop the shipped entries from `plans/open-issues.md`; retire
    the branch as `archive/ui_tweaks`.
 
 ## Plan log
@@ -63,4 +77,5 @@ phone nav is already full, and every page would have to track pause state.
 | Date       | Commit     | Step                                                          |
 | ---------- | ---------- | ------------------------------------------------------------- |
 | 2026-11-23 | `31f0adc1` | Plan recorded; waiting on the revamps.                        |
-| 2026-11-23 | -          | Ken: keep the gif's yellow, add the tap flash; slot is 60 px. |
+| 2026-11-23 | `29014e7f` | Ken: keep the gif's yellow, add the tap flash; slot is 60 px. |
+| 2026-11-23 | -          | Ken: burger menu becomes an (i) icon to the Info page.        |
