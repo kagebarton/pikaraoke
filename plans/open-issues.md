@@ -768,6 +768,21 @@ The "Small gaps inside the v2 group" above were ruled 2026-11-18 (S1-S4 in `plan
   `singer_defaults`'s nav pill and `queue_phone`'s Processing icon gate only by sharing
   the file. Not started.
 
+## Queue page: review findings (on `dev`)
+
+From `/code-review high 08556079^..de80acd9` (2026-11-21); the rest were fixed in `c00a2821`
+(landed on `dev` 2026-11-23 as `d3903850`).
+
+- **"Up next · N songs" has two plural forms only.** The page picks the singular or plural
+  string with `place === 1`, because it counts the rows itself. Languages with more forms
+  (Polish, Russian) get the wrong one. Matters only once such a catalog ships; the fix is a
+  plural rule on the page (or the count from the server through `ngettext`).
+- **BRB ignores a tap until its own refresh is on screen.** Since `c00a2821` the button stays
+  locked until a queue fetched after the tap has drawn, so the label is always true; a tap in
+  that gap (about one round trip after the colour changes) does nothing. A route that sets
+  paused or unpaused, rather than toggling, would need no lock at all: two taps on the same
+  label would ask for the same state. Changes the pause route's ruling, so not done.
+
 ## Singer defaults: Phase 6 findings (on `dev`)
 
 `singer_defaults` landed on local `dev` 2026-11-21 (`5c0fdc2a`..`83671246`, as copies). Ken ran
