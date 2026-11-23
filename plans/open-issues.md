@@ -360,7 +360,10 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
   hides the lyrics and its Queue enqueues the library file; (3) `/download` refuses an ID it
   already owns and enqueues the library copy instead, which also covers the stale restored
   page above. Recommended: 3 in any case, with 1 for simplicity or 2 to keep the preview.
-  Likely home: Search Part 3. Not ruled.
+  Likely home: Search Part 3. Not ruled. Planned for the card half (Ken, 2026-11-23): every
+  thumbnail plays its video in its card instead of opening the dialog, so an owned card no
+  longer reaches it (`search_official_captions` Part 2b, after that branch rebases onto
+  `dev`). Option 3 would still cover the stale restored page.
 - **A "Song - Artist" title is read the wrong way round** when the query also names the
   artist: for "queen bohemian rhapsody", "Bohemian Rhapsody - Queen" credits the song name as
   the artist. Official uploads are nearly always "Artist - Song". Left by Ken 2026-11-08.
@@ -555,7 +558,9 @@ Stage 2, landing:
    `#add-to-queue` the surviving box, and `dev` still reads `#add-to-queue-search`
    (`plans/download-modal-speed.md`, "At landing", on tag `archive/download_modal_speed`).
    The dialog's result flashes already carry `is-flash` (`61460808`); keep it when
-   resolving `search.html`.
+   resolving `search.html`. After the rebase and before it lands, its Part 2b (the video
+   previews on its card, added 2026-11-23) builds on the rebased branch; its spec waits on
+   Ken's UI rulings.
 
 Stage 3: `queue_phone` code, after `singer_defaults` is on `dev` (it is, since 2026-11-21). It takes L1, L15, L16 from
 `dev`, and its L14 nav half and `singer_defaults`' L6 both rewrite the nav bar in `base.html`;
