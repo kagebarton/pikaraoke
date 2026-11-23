@@ -791,6 +791,10 @@ thumbnail start it, its bar has a fullscreen button and is 40 px tall), P6-P8 an
   native player, a second path with its own exit, and the preview already fills a phone's width
   (P3). The seek bar stays, so a guest can skip an intro. Not chosen: the board's fullscreen
   button.
+- **P9. Show more pauses the preview like any other tap outside it** (Ken, 2026-11-23, after
+  commit 12: "the user is clearly navigating away from it"). Found when commit 11 was built:
+  Spec check 12 said "A keeps playing", which P6 contradicts. P6 stands as built, no exemption;
+  check 12 above is corrected to match.
 - The sketch's open question, settled by Opus with P6 (no phone trial needed): **the page draws
   its own control bar**, as the board does, and the `<video>` has no native controls. Taps on
   the browser's native controls reach the page as taps on the `<video>`, so the page could not
@@ -1040,9 +1044,9 @@ def serve_clip(route):
     with no second `/caption_check` request.
 11. The no-link card: "Preview unavailable" in its play button's place; a tap on it asks again
     (a second request). The 404-link card: unavailable after the video's error; a tap asks again.
-12. A playing, then Show more: A keeps playing; the saved copy in `sessionStorage` holds no
-    `<video>` and no `data-preview`, and the clip was requested no more often than before; SPA to
-    Queue and back: every card idle, and a restored card plays.
+12. A playing, then Show more tapped (P9): A pauses and its card keeps the player; the saved copy
+    in `sessionStorage` holds no `<video>` and no `data-preview`, and the clip was requested no
+    more often than before; SPA to Queue and back: every card idle, and a restored card plays.
 13. Clear while playing: the results go, no console error; a new search works.
 14. A screenshot at 1100 px wide of a playing card (P3 does nothing for it; it must only not
     break).
@@ -1091,8 +1095,8 @@ Review-due checkpoint for commits 10-12: a new state machine in the page script,
       unmutes it; no dialog opens. Same for a card you own.
 - [ ] A tap on the playing video pauses it; its play button resumes it; the bar's button pauses
       and plays; the seek bar moves through the video.
-- [ ] A tap anywhere else (the search box, another card's title, an owned card's Queue) pauses
-      it. Scrolling doesn't, until the card is entirely off the screen; it is paused when you
+- [ ] A tap anywhere else (the search box, another card's title, an owned card's Queue, Show
+      more) pauses it. Scrolling doesn't, until the card is entirely off the screen; it is paused when you
       scroll back. Locking the phone pauses it.
 - [ ] While it plays or is paused, the duration badge is gone (the bar shows the length).
 - [ ] A second card's play button stops the first.
