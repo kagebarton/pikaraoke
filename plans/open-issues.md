@@ -516,7 +516,7 @@ Record: `plans/queue-hold.md` on tag `archive/queue_hold`, the manual checks row
   from the review triage): `downloadSong` reads `#add-to-queue-direct`.
 
 - **Five routes still pass `admin=` that the context processor now supplies.**
-  `inject_admin` (`routes/admin.py`, on `queue_phone` as `006e92ff`, not on `dev` yet) gives
+  `inject_admin` (`routes/admin.py`, on `dev` as `5079f020`) gives
   every page `admin`. `home.py`, `files.py`, `info.py`, `queue.py` and `processing.py` (the
   page render only; `processing_status`'s `get_status(admin=...)` is not a render and stays)
   still pass the same value. Nothing is wrong today: both are `is_admin()` in the same
@@ -526,7 +526,7 @@ Record: `plans/queue-hold.md` on tag `archive/queue_hold`, the manual checks row
   browse tests in `test_files_routes.py`, one in `test_info_routes.py`; without that,
   `{{ admin | tojson }}` in `home.html`, `queue.html` and `processing.html` is a 500. Found
   2026-11-23 closing `queue_phone` Phase 3 (an Opus read of the call); record:
-  `plans/queue-phone.md` Results log on `queue_phone`. Not ruled.
+  `plans/queue-phone.md` Results log on tag `archive/queue_phone`. Not ruled.
 
 ## Landing order (every open branch)
 
@@ -662,7 +662,7 @@ queues, dashed slots for a state.
   solid blue Queue button on Browse but a dashed grey slot on Queue and Processing;
   the chevron opens a menu on Browse and expands the row on Processing (Queue uses a
   gear); the 13 px sub-line grey `#b5bfc0` is not a `bulma-dark.css` token yet.
-  **Ruled 2026-11-18** (`plans/queue-phone.md` on `queue_phone` `0439038`, S1-S4): the
+  **Ruled 2026-11-18** (`plans/queue-phone.md` on tag `archive/queue_phone`, S1-S4): the
   slot is 60 px everywhere; solid means a tap and dashed a state, so Browse's green
   button and the dashed slots both stay; a gear opens a menu and a chevron expands a
   row, so Browse's admin button becomes a gear (`browse_phone` `c2de136`); `#b5bfc0`
@@ -756,11 +756,11 @@ The "Small gaps inside the v2 group" above were ruled 2026-11-18 (S1-S4 in `plan
   Now Playing screen (`now_playing_remote`) no longer shows the animated bars
   (`static/images/now-playing.gif`, still frame `now-playing.png` while paused; today only
   Home's `.playing_gif` swaps between them). Wanted: (1) restore the animation on Now
-  Playing; (2) use it as the "Now" icon on Queue's Now card, where `queue_phone` draws five
+  Playing; (2) use it as the "Now" icon on Queue's Now card, where `queue_phone` (landed) draws five
   still bars (`BARS` in `queue.html`) because the plan said nothing on that page moves;
   (3) pausing a song freezes it, so a pause gives visible feedback on both screens. One
   shared helper that picks gif or png from `is_paused` would serve both; Queue's `np`
-  already carries `is_paused`. Not started: `queue_phone` lands with the still bars.
+  already carries `is_paused`. Not started: Queue landed on `dev` with the still bars.
   Check the 60 px slot: the gif is 376 x 217, so about 32 px wide fits.
 - **Keep the top blue nav bar on screen while scrolling, on every page.** Proposed by Ken
   2026-11-23 (`queue_phone` Phase 4), to match the BRB bar that stays at the bottom of
