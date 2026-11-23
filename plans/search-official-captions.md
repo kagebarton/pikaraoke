@@ -3,7 +3,7 @@
 Model: Claude Sonnet 5.5 (spec by Claude Fable 5.2, 2026-11-11; rules revised 2026-11-16 after
 the held-out check, see Measurements; Part 2, the search page layout, spec by Claude Opus 5.5,
 2026-11-17; commit 9 and Part 3's rulings from the phone pages' style review, Claude Opus 5.5,
-2026-11-18)
+2026-11-18; Part 2b scoped by Claude Opus 5.5, 2026-11-23, spec not yet written)
 
 Branch `search_official_captions` off `dev` at `1016e20`, worktree
 `.claude/worktrees/search_official_captions` (inside the main checkout, gitignored via
@@ -702,6 +702,112 @@ Review-due checkpoint for commits 5-8: multi-file and a script rewrite, so it is
 - [ ] Show more: a card you own on the second page lands first in the appended batch.
 - [ ] Every Queue and Queue… on the page is green (L11).
 
+## Part 2b: the video previews on its card (after the rebase onto `dev`)
+
+Proposed by Ken 2026-11-23. Today every thumbnail, in-library cards included, opens the
+download dialog (`search.html`, the `.img-wrapper` click calls `openPreviewModal`). Guests
+will want to watch a video on the page before committing to anything, as the thumbnail's play
+icon suggests. A thumbnail tap plays that video in its card instead, on every card. Queue
+(owned card) and Queue… (the dialog) are unchanged.
+
+**No spec yet.** The UI points are ruled (P3-P5) and Ken approved the canvas board below
+(2026-11-23). The spec takes the rebase (Order, step 1) as its first step, so Sonnet runs
+both. Canvas: https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL#artboard-SearchPreview,
+"Search: card preview (Part 2b)", four states of a card (loading, playing, paused, preview
+unavailable).
+
+### Order
+
+1. Rebase this branch onto `dev` first. That is already Stage 2 item 2 of the landing order
+   (`plans/open-issues.md` on `dev`): it points `queueAfterDownload()` at commit 7's
+   `#add-to-queue` and keeps `is-flash` on the dialog's flashes. The preview needs the rebase
+   because it reuses the dialog's lookup, which is on `dev` only (`download_modal_speed`,
+   landed 2026-11-21). A trial merge at `dev` `ed74b059` conflicts in `routes/search.py`,
+   `search.html` and `tests/unit/test_search_render.py`. The branch is on origin and gh-ssh,
+   so the rebase needs a force-push.
+2. Then this Part's commit or commits, with their Results rows, before the branch lands.
+   Building it on `dev` instead was ruled out: this branch rewrites the same card markup and
+   script, so the same lines would conflict twice.
+
+### Decisions (Ken, 2026-11-23)
+
+- **P1. The dialog keeps its own player.** Not chosen: a dialog with only the thumbnail as a
+  still header, about lyrics alone (one player on the page, less dialog code, but no watching
+  while picking lyrics).
+- **P2. The card's preview starts muted**, as the dialog's does; the player's speaker control
+  unmutes it. Not chosen: starting with sound (the dialog would have changed to match).
+
+### Assumptions (Opus, 2026-11-23, not ruled; reopen any by asking)
+
+- A1. One card plays at a time. Tapping another card's thumbnail, or opening the dialog, stops
+  it.
+- A2. One yt-dlp lookup per video per page visit, shared by the card and the dialog
+  (`/caption_check` already returns the link beside the caption answer, so no server change).
+  A video previewed on its card opens the dialog with its caption answer and link in hand, and
+  the dialog's Play starts at once. Only an answer with a link is kept; anything else is asked
+  again on the next tap or open, as each dialog open does today.
+- A3. The thumbnail stays until the video plays, its play icon breathing while the lookup runs
+  (the dialog's Play does the same). With no link, or a video that cannot play, the card says
+  "Preview unavailable" over the thumbnail; a second tap tries again.
+- A4. An owned card's thumbnail no longer reaches the dialog, so the card half of "A search
+  card you already own can be downloaded again" (`plans/open-issues.md`) is fixed. The stale
+  restored page half (a song downloaded since still shows Queue…) stays open.
+
+### Decisions (Ken, 2026-11-23): the playing card
+
+- **P3. Sized for phones.** The player fills the thumbnail's frame, the card's full width on a
+  phone. Nothing is done for the 200 px thumbnail on a wide screen.
+- **P4. A second tap pauses the preview, not ends it.** The player stays in the card, paused;
+  its play button resumes it. Only A1 (another card's thumbnail, or the dialog) ends it.
+- **P5. Badges stay during the preview, clear of the player's controls.** Part 3's L17 In
+  library badge (top-left) stays, smaller while the player is in the card so it covers less
+  of the video (Ken, same day): canvas draws it 8 px from the corner, 4 px corners, padding
+  3/7/3/5 px, a 13 px folder icon, 12 px bold text; the thumbnail keeps L17's full size.
+  Approved as drawn (Ken, 2026-11-23): smaller only while the player is in the card, and
+  L19's Official badge shrinks with it. Part 2b builds before Part 3, so on the card today
+  only the duration badge exists; the shrink applies to L17's and L19's badges once Part 3
+  adds them. The duration badge goes while the player is in the
+  card (playing or paused), since the player's own time shows the length (Ken, amended the
+  same day; first ruled as moved above the control bar). Drawn on the canvas board above,
+  which Ken asked for in place of a ruling on whether to draw one.
+
+### Design sketch (Opus, from `dev` at `ed74b059`; recheck against the rebased branch)
+
+All in `search.html`'s script; no route or card markup change.
+
+- One `<video controls playsinline muted preload="metadata">` per visit, moved into the tapped
+  card's `.img-frame` and hidden until its `playing` event, as the dialog's thumbnail layer
+  does. A tap on the player pauses or resumes it (P4), never restarts it. Spec question:
+  taps on the browser's native control bar reach the page as clicks on the `<video>` itself,
+  so a page-side pause-on-tap can fight the native play button (a double toggle), and on
+  Android a first tap on the video only shows the bar. Settle it by trying it on a phone:
+  native controls with the toggle limited to taps outside the bar, or the page's own small
+  bar (play/pause, mute, time) drawn as on the canvas.
+- A shared `lookupVideo(id)` holds each video's `/caption_check` answer. The dialog's
+  `askCaptionCheck` uses it in place of its own request, and its `isCurrent(d)` check is kept.
+- iOS ties `play()` to the tap: the tap plays the empty video once to keep that permission, as
+  the dialog's Play does, then the link's play follows.
+- `saveSearchResults()` strips the player and the card's preview classes from the saved copy,
+  so a restored page shows no half-played card.
+- `openPreviewModal` stops the card's preview first (A1).
+- The `.img-wrapper` click handler stops calling `openPreviewModal`; the "Both thumbnail and
+  Select button open the preview modal" comment and the dialog's flow comment (step 4, "The
+  link came with the lookup") follow.
+- "Preview unavailable" is already a catalog string (the dialog's), so no new translation.
+
+### Manual checks, Part 2b (Ken, on a phone)
+
+- [ ] A not-yet-downloaded card's thumbnail plays its video in the card, muted; the speaker
+      control unmutes it; no dialog opens.
+- [ ] Same for a card you own.
+- [ ] A second tap on the playing video pauses it; its play button resumes it.
+- [ ] While it plays or is paused, an owned card's In library badge stays, clear of the
+      player's controls, and the duration badge is gone (the player shows the time).
+- [ ] A second card's thumbnail stops the first.
+- [ ] A card previewed first, then Queue…: the dialog opens, the card's video stops, and the
+      dialog's Play starts the video at once.
+- [ ] Show more, then go to Queue and back: no card comes back mid-preview.
+
 ## Part 3: search page restyle (after `queue_phone` lands)
 
 Ruled by Ken 2026-11-18 (L12 and L13 in `plans/open-issues.md` on `dev`, "Phone pages: one
@@ -732,7 +838,7 @@ Advanced open", and the download dialog's three boards.
   already turns into a dark row with the folder icon. Candidates for (a) were an In library
   tag beside the Official tag, the same dark row, or a tinted card.
   - **L17. Ruled (Ken, 2026-11-23):** (a) gets an "In library" badge on the thumbnail's
-    top-left corner: `#282f2f` chip, 6 px corners, padding 6/12/6/10 px, a green `#2ecc71`
+    top-left corner: `#282f2f` chip (fill superseded by L20), 6 px corners, padding 6/12/6/10 px, a green `#2ecc71`
     18 px folder icon (the Browse icon), 15 px bold white text. Its own button stays the
     green Queue, and the lift (decision 7) keeps it first. (b) keeps L13's dark row; the two
     share the dark fill and the folder icon, not the shape. The aim is a nudge seen while
@@ -742,7 +848,8 @@ Advanced open", and the download dialog's three boards.
     the "Search: results" artboard, first card. Lands in the Part 3 restyle with L13.
 - **L18. The card's "YouTube ↗" link goes** (Ken, 2026-11-23). Upstream's, never ruled here:
   the thumbnail already opens the dialog's preview, and on a phone the link leaves the app
-  for the YouTube app. Canvas: both Search boards drawn without it.
+  for the YouTube app. Canvas: both Search boards drawn without it. After Part 2b the
+  thumbnail plays the video in the card itself; the reason holds.
 - **Canvas drawing choices for Part 3** (Opus, 2026-11-23, not ruled; the plan only lists
   what goes): Search button neutral grey (`#434d4e`, `#5e6d6f` border, bold white), beside a
   dark `#282f2f` input, both 44 px with 6 px corners; Official tag a filled `#434d4e` chip
@@ -751,10 +858,37 @@ Advanced open", and the download dialog's three boards.
   13 px `#b5bfc0` label, the rule above it goes; the Advanced panel is a `#282f2f` inset with
   no shadow, its disabled Download in L16's look with 6 px corners, not a pill; the page sits
   in the v2 `#343c3d` card under the guest nav bar. Ken rejected a thumbnail badge for
-  Official (it would dilute the In library badge).
+  Official (it would dilute the In library badge); reversed by L19.
+- **L19. Official moves onto the thumbnail** (Ken, 2026-11-23, approved on the canvas).
+  Guests should pick in-library songs first and official videos second, so the Official
+  badge sits in the In library badge's top-left corner, after it when a card has both, and
+  the order reads left to right. Same size and shape as L17's badge. Its icon is one
+  verified-style check emblem (a scalloped badge with a white check) in two fills, for
+  consistency (Ken): the palette's icon grey `#8c9b9d` beside In library, so green stays
+  the loudest; the palette's Info `#3298dc` when Official is the only badge (Ken asked for a
+  palette blue; the other, `#375a7f`, is the "chosen" blue and too dark on a badge). That
+  gives Info a second job beside the running job on Processing; both are states, never
+  buttons, and the palette board says so. The channel line drops the Official tag. The
+  badge reads "Official video" or "Official audio", as the tag does today.
+- **L20. One fill for every thumbnail badge** (Ken, 2026-11-23, approved on the canvas): In
+  library, Official and the duration all sit on black at 60% (`rgba(0,0,0,0.6)`), the play
+  circle's, the player bar's and Preview unavailable's. It replaces L17's solid `#282f2f`
+  chip and the duration's 80%. 60% is the lightest that keeps the white text at 4.5:1 or
+  better on a pure white frame (about 5.7:1; 50% gives about 3.9:1); the icons, not the fill,
+  tell the badges apart. L13's In library row under a card is not a thumbnail badge and
+  keeps its `#282f2f`. Being see-through, a badge reads near black on a dark thumbnail and
+  mid grey on a bright one; Ken saw both on the canvas and kept it (a solid fill would look
+  the same everywhere but cover the video again).
+- Canvas for L17-L20 and Part 2b, consolidated 2026-11-23: "Search: results" (an owned card;
+  Official alone on a near-white thumbnail; a Download… card with its In library row),
+  "Search: Advanced open", and "Search: card preview (Part 2b)" (an owned official video with
+  both badges on a near-white thumbnail, through loading, playing and paused; then Official
+  alone, preview unavailable). The palette board's Info swatch and the Processing note name
+  the Official check.
 - **An owned card's thumbnail opens the download dialog**, whose Queue downloads the video
   again. Open, in `plans/open-issues.md` on `dev` ("A search card you already own can be
-  downloaded again"); its fix may land in Part 3.
+  downloaded again"); its fix may land in Part 3. Superseded (2026-11-23): Part 2b's in-card
+  preview takes every thumbnail off the dialog (A4).
 - L1 (one green, one amber), L15 and L16 (disabled: no fill, a faded border, a `#8c9b9d`
   label, no opacity fade) come from `bulma-dark.css` on `singer_defaults` (its Phase 5), via
   `dev`. The canvas draws Advanced's disabled Download in L16's look.
