@@ -46,6 +46,14 @@
   opacity: 0.5;
 }
 
+/* With no zero on the rail the value counts up from the left end, so the fill starts at the edge
+   and runs to the knob's centre; the centred rule above would leave half a knob bare. */
+.stepper:not(.has-zero) .stepper-fill {
+  left: 0;
+  width: calc(var(--knob-w) / 2 + var(--travel) * var(--hi));
+  border-radius: 5px 0 0 5px;
+}
+
 .stepper.has-zero .stepper-track::after {
   content: "";
   position: absolute;
