@@ -49,7 +49,9 @@ up 2026-11-23. Where this file and the canvas differ, this file wins.
      then the admin login for a guest (when a password is set) or the settings and Log out for
      the admin. One tap instead of two.
    - The (i) (`icon-info-circled-1`, as the menu uses today) takes the burger's place at the
-     right end of the bar, after the name pill. Not a gear: beside the sliders pill it would
+     right end of the bar, after the name pill, pushed into the bar's right padding so its
+     icon sits near the edge and the rest of the bar keeps the room (Ken, 2026-11-23). Its tap
+     area stays 44 px. Not a gear: beside the sliders pill it would
      read as a second settings button.
    - Delete what the burger needed: the `.navbar-menu` block, the burger markup, the
      burger's open/close code and its two close calls in `spa-navigation.js`, and the phone
