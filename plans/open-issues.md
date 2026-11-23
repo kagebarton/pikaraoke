@@ -749,6 +749,24 @@ The "Small gaps inside the v2 group" above were ruled 2026-11-18 (S1-S4 in `plan
   for all: transparent tap highlight in the shared stylesheet, plus a pressed look
   (`:active` tint) so a tap still shows. Confirm on Ken's phone (Chrome, Android). Ruled
   2026-11-23: app-wide, not on `now_playing_remote`.
+- **Bring the yellow Now Playing animation back, and use it on Queue; pause stops it.**
+  Proposed by Ken 2026-11-23 after his `queue_phone` Phase 4 phone check. The rebuilt
+  Now Playing screen (`now_playing_remote`) no longer shows the animated bars
+  (`static/images/now-playing.gif`, still frame `now-playing.png` while paused; today only
+  Home's `.playing_gif` swaps between them). Wanted: (1) restore the animation on Now
+  Playing; (2) use it as the "Now" icon on Queue's Now card, where `queue_phone` draws five
+  still bars (`BARS` in `queue.html`) because the plan said nothing on that page moves;
+  (3) pausing a song freezes it, so a pause gives visible feedback on both screens. One
+  shared helper that picks gif or png from `is_paused` would serve both; Queue's `np`
+  already carries `is_paused`. Not started: `queue_phone` lands with the still bars.
+  Check the 60 px slot: the gif is 376 x 217, so about 32 px wide fits.
+- **Keep the top blue nav bar on screen while scrolling, on every page.** Proposed by Ken
+  2026-11-23 (`queue_phone` Phase 4), to match the BRB bar that stays at the bottom of
+  Queue. `base.html` owns the navbar for all pages, so it is one change there (Bulma's
+  `is-fixed-top` or `position: sticky; top: 0` on `.navbar`, with the burger menu open
+  state and the SPA page swap in `spa-navigation.js` checked), not a per-page one. Touches
+  `singer_defaults`'s nav pill and `queue_phone`'s Processing icon gate only by sharing
+  the file. Not started.
 
 ## Singer defaults: Phase 6 findings (on `dev`)
 
