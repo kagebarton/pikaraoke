@@ -430,6 +430,20 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
   needs a JavaScript test setup in the repo, its own plan. Found in the same review
   (finding 13). Not ruled. Now Playing's script has the same gap (see "Now Playing remote:
   review findings"); one setup would close both.
+- **Leaving Search mid-preview keeps the clip loaded** (branch `search_official_captions`,
+  Part 2b commits 10-12). An SPA move swaps the page out and the browser pauses the removed
+  video, but the page's document handlers and frame watcher hold it, link and buffer
+  included, until the next Search visit re-binds them. Nothing plays or misbehaves: the old
+  handlers find the preview paused and do nothing (checked with `ui-check` in commit 12's
+  run, check 6). Closing it needs a "page leaving" signal from `spa-navigation.js` (none
+  exists) that Search answers by ending the preview. Found in the `/code-review high` of
+  `570a0ad6^..b1e262b7`, 2026-11-23 (finding 3). Not ruled.
+- **The m:ss clock is on its third copy.** `home.html` (`fmtTime`), `playlist.html`
+  (`clock`, with hours) and Search's card bar (`clock`, `search_official_captions` commit
+  11) each format a time. One shared formatter (the one with hours) needs a script all
+  three load; `home.html` loads none of the shared ones and is mid-change on
+  `now_playing_remote`, so do it once both branches are on `dev`. Part 2b's "Not doing"
+  already left it out. Found in the same review (finding 6). Not ruled.
 
 ## Movie splits (on `dev`)
 
