@@ -20,6 +20,15 @@ _ = flask_babel.gettext
 admin_bp = Blueprint("admin", __name__)
 
 
+@admin_bp.app_context_processor
+def inject_admin() -> dict[str, bool]:
+    """Give every page the `admin` flag, so base.html can hide admin-only nav items.
+
+    A route's own `admin=` argument still wins, with the same value.
+    """
+    return {"admin": is_admin()}
+
+
 class AuthForm(Schema):
     admin_password = fields.String(load_default="", metadata={"description": "Admin password"})
     next = fields.String(
