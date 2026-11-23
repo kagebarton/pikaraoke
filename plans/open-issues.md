@@ -559,8 +559,8 @@ Stage 2, landing:
    (`plans/download-modal-speed.md`, "At landing", on tag `archive/download_modal_speed`).
    The dialog's result flashes already carry `is-flash` (`61460808`); keep it when
    resolving `search.html`. After the rebase and before it lands, its Part 2b (the video
-   previews on its card, added 2026-11-23) builds on the rebased branch; its spec waits on
-   Ken's UI rulings.
+   previews on its card, added 2026-11-23) builds on the rebased branch; specced 2026-11-23 in
+   its plan, with the rebase as its Step 1.
 
 Stage 3: `queue_phone` code, after `singer_defaults` is on `dev` (it is, since 2026-11-21). It takes L1, L15, L16 from
 `dev`, and its L14 nav half and `singer_defaults`' L6 both rewrite the nav bar in `base.html`;
