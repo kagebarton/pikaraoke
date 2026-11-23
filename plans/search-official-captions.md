@@ -3,7 +3,7 @@
 Model: Claude Sonnet 5.5 (spec by Claude Fable 5.2, 2026-11-11; rules revised 2026-11-16 after
 the held-out check, see Measurements; Part 2, the search page layout, spec by Claude Opus 5.5,
 2026-11-17; commit 9 and Part 3's rulings from the phone pages' style review, Claude Opus 5.5,
-2026-11-18; Part 2b scoped by Claude Opus 5.5, 2026-11-23, spec not yet written)
+2026-11-18; Part 2b scoped and specced by Claude Opus 5.5, 2026-11-23)
 
 Branch `search_official_captions` off `dev` at `1016e20`, worktree
 `.claude/worktrees/search_official_captions` (inside the main checkout, gitignored via
@@ -704,17 +704,17 @@ Review-due checkpoint for commits 5-8: multi-file and a script rewrite, so it is
 
 ## Part 2b: the video previews on its card (after the rebase onto `dev`)
 
-Proposed by Ken 2026-11-23. Today every thumbnail, in-library cards included, opens the
-download dialog (`search.html`, the `.img-wrapper` click calls `openPreviewModal`). Guests
-will want to watch a video on the page before committing to anything, as the thumbnail's play
-icon suggests. A thumbnail tap plays that video in its card instead, on every card. Queue
-(owned card) and Queue… (the dialog) are unchanged.
+Proposed by Ken 2026-11-23. Today every thumbnail, in-library cards included, opens the download
+dialog (`search.html`, the `.img-wrapper` click calls `openPreviewModal`). Guests will want to
+watch a video on the page before committing to anything, as the thumbnail's play icon suggests.
+The play button on a thumbnail plays that video in its card instead, on every card. Queue (owned
+card) and Queue… (the dialog) are unchanged.
 
-**No spec yet.** The UI points are ruled (P3-P5) and Ken approved the canvas board below
-(2026-11-23). The spec takes the rebase (Order, step 1) as its first step, so Sonnet runs
-both. Canvas: https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL#artboard-SearchPreview,
+Spec by Claude Opus 5.5, 2026-11-23 (Spec, below); Sonnet runs it, the rebase included. Canvas,
+approved by Ken 2026-11-23: https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL#artboard-SearchPreview,
 "Search: card preview (Part 2b)", four states of a card (loading, playing, paused, preview
-unavailable).
+unavailable). Where the board and P6-P8 or the Spec differ (the board's caption has a tap on the
+thumbnail start it, its bar has a fullscreen button and is 40 px tall), P6-P8 and the Spec win.
 
 ### Order
 
@@ -722,10 +722,9 @@ unavailable).
    (`plans/open-issues.md` on `dev`): it points `queueAfterDownload()` at commit 7's
    `#add-to-queue` and keeps `is-flash` on the dialog's flashes. The preview needs the rebase
    because it reuses the dialog's lookup, which is on `dev` only (`download_modal_speed`,
-   landed 2026-11-21). A trial merge at `dev` `ed74b059` conflicts in `routes/search.py`,
-   `search.html` and `tests/unit/test_search_render.py`. The branch is on origin and gh-ssh,
-   so the rebase needs a force-push.
-2. Then this Part's commit or commits, with their Results rows, before the branch lands.
+   landed 2026-11-21). The branch is on origin and gh-ssh (both at `bf3c86d6`), so the rebase
+   needs a force-push.
+2. Then this Part's commits (10-12), with their Results rows, before the branch lands.
    Building it on `dev` instead was ruled out: this branch rewrites the same card markup and
    script, so the same lines would conflict twice.
 
@@ -739,26 +738,32 @@ unavailable).
 
 ### Assumptions (Opus, 2026-11-23, not ruled; reopen any by asking)
 
-- A1. One card plays at a time. Tapping another card's thumbnail, or opening the dialog, stops
-  it.
+- A1. One card plays at a time. Tapping another card's play button, or opening the dialog, ends
+  it (the card goes back to its thumbnail).
 - A2. One yt-dlp lookup per video per page visit, shared by the card and the dialog
   (`/caption_check` already returns the link beside the caption answer, so no server change).
   A video previewed on its card opens the dialog with its caption answer and link in hand, and
   the dialog's Play starts at once. Only an answer with a link is kept; anything else is asked
-  again on the next tap or open, as each dialog open does today.
-- A3. The thumbnail stays until the video plays, its play icon breathing while the lookup runs
-  (the dialog's Play does the same). With no link, or a video that cannot play, the card says
-  "Preview unavailable" over the thumbnail; a second tap tries again.
+  again on the next tap or open, as each dialog open does today. A link that fails to play is
+  forgotten too, so a retry looks again.
+- A3. The thumbnail stays until the video plays, its play button breathing while the lookup
+  runs (the dialog's Play does the same). With no link, or a video that cannot play, the play
+  button becomes a "Preview unavailable" notice; a tap on it tries again.
 - A4. An owned card's thumbnail no longer reaches the dialog, so the card half of "A search
   card you already own can be downloaded again" (`plans/open-issues.md`) is fixed. The stale
   restored page half (a song downloaded since still shows Queue…) stays open.
+- A5. An unmute lasts the page visit, as the dialog's does: the page has one card `<video>` per
+  visit, so the next card it plays in starts with sound. Leaving the page and coming back starts
+  muted again.
+- A6. The bar is 44 px tall, not the board's 40, so its buttons are full tap size.
 
 ### Decisions (Ken, 2026-11-23): the playing card
 
 - **P3. Sized for phones.** The player fills the thumbnail's frame, the card's full width on a
   phone. Nothing is done for the 200 px thumbnail on a wide screen.
-- **P4. A second tap pauses the preview, not ends it.** The player stays in the card, paused;
-  its play button resumes it. Only A1 (another card's thumbnail, or the dialog) ends it.
+- **P4. A pause is a pause, not an end.** The player stays in the card, paused; its play button
+  resumes it. Only A1 (another card's play button, or the dialog) ends it. First ruled with "a
+  second tap pauses"; P6 sets what pauses.
 - **P5. Badges stay during the preview, clear of the player's controls.** Part 3's L17 In
   library badge (top-left) stays, smaller while the player is in the card so it covers less
   of the video (Ken, same day): canvas draws it 8 px from the corner, 4 px corners, padding
@@ -771,39 +776,327 @@ unavailable).
   same day; first ruled as moved above the control bar). Drawn on the canvas board above,
   which Ken asked for in place of a ruling on whether to draw one.
 
-### Design sketch (Opus, from `dev` at `ed74b059`; recheck against the rebased branch)
+### Decisions (Ken, 2026-11-23, while the spec was written): what starts and stops it
 
-All in `search.html`'s script; no route or card markup change.
+- **P6. Only the play button starts a preview**, so a stray tap starts nothing (Ken: "to
+  prevent accidental taps, and users forgetting to stop previews"). The rest of the thumbnail
+  does nothing and stops looking tappable. While a preview plays, any tap outside its control
+  bar pauses it, a tap on the video itself included. A tap elsewhere while it is still loading
+  cancels the start. A scroll is not a tap. Ken proposed the rule; Opus's reading of it (the
+  tap on the video, the cancel while loading, scrolling) was put to him with P7 and stood.
+- **P7. A forgotten preview pauses itself** when its card scrolls entirely off the screen, or
+  the page is hidden (phone locked, app or tab switched). Nothing resumes by itself. Not chosen:
+  only on a hidden page (a guest could listen while browsing other results), taps only.
+- **P8. No fullscreen button.** An iPhone can only fullscreen a video by handing it to its own
+  native player, a second path with its own exit, and the preview already fills a phone's width
+  (P3). The seek bar stays, so a guest can skip an intro. Not chosen: the board's fullscreen
+  button.
+- The sketch's open question, settled by Opus with P6 (no phone trial needed): **the page draws
+  its own control bar**, as the board does, and the `<video>` has no native controls. Taps on
+  the browser's native controls reach the page as taps on the `<video>`, so the page could not
+  tell them from a tap elsewhere, and P6 would pause on every control tap. On Android the native
+  time also hides while the video plays, and P5 drops the duration badge because the bar shows
+  the length. L20 already gives the bar its fill.
 
-- One `<video controls playsinline muted preload="metadata">` per visit, moved into the tapped
-  card's `.img-frame` and hidden until its `playing` event, as the dialog's thumbnail layer
-  does. A tap on the player pauses or resumes it (P4), never restarts it. Spec question:
-  taps on the browser's native control bar reach the page as clicks on the `<video>` itself,
-  so a page-side pause-on-tap can fight the native play button (a double toggle), and on
-  Android a first tap on the video only shows the bar. Settle it by trying it on a phone:
-  native controls with the toggle limited to taps outside the bar, or the page's own small
-  bar (play/pause, mute, time) drawn as on the canvas.
-- A shared `lookupVideo(id)` holds each video's `/caption_check` answer. The dialog's
-  `askCaptionCheck` uses it in place of its own request, and its `isCurrent(d)` check is kept.
-- iOS ties `play()` to the tap: the tap plays the empty video once to keep that permission, as
-  the dialog's Play does, then the link's play follows.
-- `saveSearchResults()` strips the player and the card's preview classes from the saved copy,
-  so a restored page shows no half-played card.
-- `openPreviewModal` stops the card's preview first (A1).
-- The `.img-wrapper` click handler stops calling `openPreviewModal`; the "Both thumbnail and
-  Select button open the preview modal" comment and the dialog's flow comment (step 4, "The
-  link came with the lookup") follow.
-- "Preview unavailable" is already a catalog string (the dialog's), so no new translation.
+### What exists (checked 2026-11-23 on a trial merge of `dev` `f48dc939` and this branch `3ce787f9`)
+
+- The trial merge conflicts in `routes/search.py`, `search.html` and
+  `tests/unit/test_search_render.py`. A trial rebase stops first at `ed3d12be` (commit 2) in the
+  test file. Resolved by the rules in Step 1, the merged tree is `7eaf9276` (Black-formatted;
+  4465 unit tests pass).
+- The dialog's lookup: `askCaptionCheck(d)` asks `/caption_check?yt_id=`, answered
+  `{found, passed, failed, stream_url}`; its `answered` sets `d.caption` and `d.link` and starts
+  the video if Play waits; `isCurrent(d)` drops an answer for a dialog that has closed. Nothing
+  is kept: each open asks again.
+- The dialog's video: `#modal-video` (`controls playsinline muted preload="metadata"`), covered
+  by `#modal-thumb-layer` until its `playing` event; `startVideo`, `warnPlayFailed`,
+  `showPreviewUnavailable`; a Play tap before the link plays the empty video once (iOS).
+- The card: `.img-wrapper` (its `data-url` read by nothing) holds `.img-frame`, which holds the
+  `<img>` and `.duration-badge` (z-index 3). The play icon is two pseudo-elements on
+  `.img-wrapper` (an 80 px circle and fontello `\e800`), not an element. The wrapper has
+  `cursor: pointer` and hover rules, and `$("#search-results").on("click.search",
+  ".img-wrapper", ...)` opens the dialog.
+- `saveSearchResults()` saves `#container_search_result`'s `outerHTML` after a submitted search
+  and after Show more; the restore parses the copy with jQuery `.html()`. Probed 2026-11-23 in
+  the `ui-check` Chromium: a copy of a playing `<video>` made by `cloneNode` or `innerHTML`
+  requests the video again; one parsed by `DOMParser` requests nothing.
+- Each visit's `$(document).off(".search")` drops the last visit's document handlers.
+- Catalogs (last regenerated 2026-06-10): "Pause" and "Play" are translated in all 15. "Play
+  preview" and "Preview unavailable" (the dialog's, from `download_modal_speed`) are in none,
+  so the sketch's "already a catalog string" was wrong; they are on the page already, so no new
+  msgid.
+- The fontello set has `icon-play`, `icon-pause`, `icon-volume-up` and `icon-volume-down`, and
+  no muted speaker. `home.html` has its own `fmtTime(s)` (m:ss); nothing is shared.
+- The `ui-check` Chromium plays VP9/Opus WebM (not H.264). A Playwright route that fulfils the
+  whole file plays it but cannot seek (the video restarts); one that answers `Range` with 206
+  seeks (the recipe below). Probed 2026-11-23.
+
+### Spec
+
+Per-commit routine as Part 1 (pre-commit on the changed files, `tests/unit`, import smoke, a read
+of `git diff --cached`, the CLAUDE.md self-review), a Results row in a separate plan-only commit,
+and **stop after each** (the rebase, 10, 11, 12) for Ken.
+
+#### Step 1: the rebase (no commit of its own)
+
+`git rebase dev` from the worktree. The rules hold at every stop, so each rewritten commit is
+whole, not only the last; after each stop's resolution, run
+`tests/unit/test_search_render.py -q` before `git rebase --continue`.
+
+1. `routes/search.py`: both routes go. `dev` removed `/preview`, `PreviewQuery` and
+   `get_preview_info` from the import; the branch removed `/autocomplete` and
+   `AutocompleteQuery`. Keep the branch's `official_rank` import (`Acts`, `read_first_page`).
+2. `search.html` head: keep `dev`'s `library-pages.js` `<script>`; drop the selectize `<link>`
+   and `<script>`.
+3. `search.html` script: drop the selectize block and `dev`'s document-wide Enter handler (the
+   `keypress.search` one with the `_dialog` guard). The branch's GET form submits on Enter, and
+   the dialog's typed search has its own handler. Drop the dead thumbnail cycling, as the branch
+   does.
+4. The Advanced box (rewritten commit 7, `67d6a23b`): keep the branch's `sessionStorage` load and
+   its change handler on `#add-to-queue`, and put `dev`'s line into that handler with its
+   comment: `if (_dialog && !_dialog.sent) syncQueue();`. **Drop `setUserCookie();`**: `dev`
+   deleted that function (`bf96982b`, the join form), so the call would throw at load and stop
+   the rest of the script. Drop `.song_added_by`, `restoreCheckboxStates()` and the cookie, as
+   the branch does.
+5. Also in rewritten commit 7: `postDownload` keeps `dev`'s `queue` parameter (`queue: queue`;
+   the Queue tap takes the box's state when tapped), and `queueAfterDownload()` reads
+   `#add-to-queue`. That line auto-merges still reading `#add-to-queue-search`, which commit 7
+   deletes; commit 7's test fails until it changes.
+6. Keep `is-flash` wherever `dev` has it (`61460808`).
+7. `test_search_render.py`: keep both sides' tests. The branch's
+   `test_the_official_video_comes_first_and_audio_beside_it_keeps_its_place_with_a_badge`
+   replaces `dev`'s `test_the_artists_official_video_and_audio_come_first_with_a_badge`.
+8. `plans/open-issues.md`, if it stops there (branch commits `25a3f817`, `ce409d83`): keep both
+   sides; where both edit one entry, `dev`'s later text wins.
+
+Then:
+
+- `git diff 7eaf9276 HEAD -- pikaraoke tests` is empty. `7eaf9276` is an unreachable tree that git
+  may prune after two weeks: if `git cat-file -t 7eaf9276` fails, skip this and say so. If `dev`
+  has moved past `f48dc939`, explain each difference by a `dev` commit.
+- Every branch commit is still there: `git log --oneline dev..HEAD` against
+  `git log --oneline 764df440..3ce787f9` plus this spec's commit; none dropped as empty.
+- The full `tests/unit` suite, pre-commit on the files the rebase resolved, an import smoke.
+- One `ui-check` pass (the fake search of the commit 6 and 7 rows, a port nobody uses;
+  `/caption_check`, `/lyrics_search`, `/lyrics_select` and `/download` answered by the script):
+  no console errors but thumbnail 404s; a thumbnail still opens the dialog (until commit 11);
+  Advanced unticked, the dialog's button reads "Add to library" and sends `queue: false`;
+  ticking the box with the dialog open turns it back to "Queue" (rule 4's line); Enter in the
+  search box searches; Enter in the dialog's lyric box runs the lyric search, not a page search.
+- Results row "rebase onto `dev`" (plan-only commit), then stop. **The force-push waits for
+  Ken's OK**: `git push --force-with-lease=search_official_captions:bf3c86d6 gh-ssh
+  search_official_captions`, then `git fetch origin` (the same GitHub repository).
+
+#### Commit 10: `feat(search): one caption lookup per video per visit, shared by every dialog open`
+
+`search.html` only (A2).
+
+- `lookupVideo(id)` gives a video's `/caption_check` answer as a promise. One map per visit, a
+  `var` in the inline script, so the SPA's next visit starts empty. The first ask makes the
+  entry, and every ask while it is in flight shares it. Once settled it stays only if the answer
+  has a `stream_url`; otherwise (no link, or an error, answered `{failed: true}` as today) it is
+  removed, so the next ask asks again.
+- `forgetVideo(id)` removes an entry. The dialog video's `error` handler calls it when the video
+  has a source.
+- `askCaptionCheck(d)` asks `lookupVideo(d.id)`; its `answered` and the `isCurrent(d)` check
+  stay. The flow comment's step 2 says the lookup is kept for the visit.
+- No pytest: script only, and the Results row says so.
+- `ui-check`, counting `/caption_check` requests per ID: open card A's dialog, close, open again:
+  one request, and the second open shows the caption answer at once and Play starts the video
+  with no request. Card B answered `stream_url: null`: two opens, two requests. Card C answered
+  with a link that 404s: Play shows "Preview unavailable"; reopened, it asks again. Card D with
+  its answer delayed 1.5 s on a fresh visit: open, close before the answer, open again: one
+  request, and the second dialog gets its answer.
+
+#### Commit 11: `feat(search): a thumbnail's play button previews its video in the card`
+
+`search_result.html`, `search.html`, `tests/unit/test_search_render.py`. P2-P6, P8, A1, A3-A6.
+
+**Card** (`search_result.html`).
+
+- `.img-frame` gains `<button type="button" class="card-play" aria-label="{{ _('Play preview')
+  }}">` with the play icon: a 56 px circle in `rgba(0, 0, 0, 0.6)` (L20) with a white triangle,
+  centred, as the board draws it. It replaces the wrapper's `::before` and `::after` overlay.
+- `.img-wrapper` loses `data-url`, `cursor: pointer` and its hover dimming and scaling; on
+  desktop the hover belongs to the button (P6).
+
+**Player** (`search.html`). One `#card-player` per page, after the results block and outside
+`#container_search_result`, like the dialog and for the same reason (extend that template
+comment to name both). It holds a `<video playsinline muted preload="metadata">` with no
+`controls` attribute, and the bar:
+
+- along the frame's bottom, 44 px tall (A6), `rgba(0, 0, 0, 0.6)`;
+- from the left: play/pause (`<button type="button">`), the time in 12 px white, the seek
+  (`<input type="range">`: a 3 px `#5e6d6f` track, white fill, an 11 px white knob), and the
+  speaker (`<button type="button">`). No fullscreen (P8).
+- Icons inline SVG from the board: two pause bars, the play triangle, the speaker with an X
+  while muted, and for sound on the same speaker with two arcs. The `aria-label`s swap in the
+  script from `TEXT`: Play/Pause, Unmute/Mute; the seek's is "Seek".
+
+**States.** The previewing `<li>` carries `data-preview`; the script holds the one preview's
+state in one object (the card, its ID, a sequence number), as `_dialog` does.
+
+| `data-preview` | the frame shows | the play button | duration badge |
+|---|---|---|---|
+| (none) | the thumbnail | the play icon | shown |
+| `loading` | the thumbnail; the player is in the frame but transparent and takes no taps (it stays rendered, as the dialog's video does under its thumbnail layer, so `play()` works) | breathing, the dialog's `breathe` (reduced motion: steady at half) | shown |
+| `playing` | the player and its bar | hidden | hidden (P5) |
+| `paused` | the player, paused, and its bar | shown over the video; resumes it | hidden |
+| `unavailable` | the thumbnail; the player back in its home | becomes the "Preview unavailable" notice (the board's pill); a tap tries again | shown |
+
+`playing` and `paused` follow the video's own `playing` and `pause` events, not the taps, so a
+pause the browser makes (the end of the video, a page restored from the back-forward cache)
+shows as paused. A video that ends is paused; its play button plays it again from the start.
+Part 3 hangs P5's badge shrink on `li[data-preview="playing"]` and `li[data-preview="paused"]`.
+
+**Rules.**
+
+- Start: a click on a card's play button, the card idle or unavailable, ends any other preview
+  (A1), moves the player into this card's `.img-frame`, sets `loading`, and asks
+  `lookupVideo`. Inside the tap: with a kept link, set it and `play()`; without one, `play()`
+  the empty video and pause it once it starts, as the dialog's Play does (iOS ties `play()` to
+  the tap). When the answer arrives, dropped unless this preview is still the current one and
+  the player is still on the page: a link is set, `load()`ed and `play()`ed; no link is
+  `unavailable`. A refused `play()` (an autoplay block) goes back to idle, so the next tap, a
+  fresh gesture, tries again. An `AbortError` is expected and not logged (`warnPlayFailed`).
+- A click on the play button of the paused card resumes it; a click on the loading card's own
+  play button does nothing. The bar's play/pause plays or pauses.
+- A click on the playing video pauses it, bound on the `<video>` itself. On the video and not
+  through the rule below, because the tap that pauses would otherwise be followed by a click,
+  which on an iPhone can land on the play button that the pause has just shown, and resume it.
+- A `pointerup` anywhere else on the page pauses a `playing` preview, or cancels a `loading`
+  one (back to idle; its late answer is dropped). It ignores a `pointerup` inside
+  `#card-player` and on the previewing card's own play button. `pointerup`, not `click`:
+  Safari on an iPhone does not bubble a click on a plain element up to the document, and a
+  scroll ends in `pointercancel`, not `pointerup`, so scrolling does not pause (P6). Primary
+  pointer only. Bind it on `document` in the `.search` namespace, so the next visit's
+  `.off(".search")` removes it.
+- End (the card back to idle; the player back in its home, hidden, its `src` removed and the
+  video `load()`ed so the stream stops downloading): another card's play button (A1),
+  `openPreviewModal` (A1, first thing it does), and Clear (before it removes the results).
+- A video `error` while it has a source: `forgetVideo(id)`, then `unavailable`.
+- Mute: the speaker toggles `muted`; its icon and label follow `volumechange`. Nothing resets
+  it between cards (A5).
+- Time: `m:ss / m:ss` (where it is / how long), from the video; a length the video does not
+  report as finite shows the time alone. A local formatter, the app's second after `home.html`'s
+  `fmtTime`. The seek's max is the length at `loadedmetadata`; `input` sets `currentTime`;
+  `timeupdate` moves the knob except while the guest drags it.
+
+**Saved copy.** `saveSearchResults()` saves a copy parsed with `DOMParser`, with `#card-player`
+removed and every `data-preview` dropped: a `cloneNode` or `innerHTML` copy would request the
+video again (What exists). A restored page shows every card idle. A copy saved before this
+commit restores without play buttons until the next search; accepted (once, per open tab).
+
+**Dialog.** The `.img-wrapper` click handler goes, with its comment ("Both thumbnail and Select
+button open the preview modal"); the Queue… binding stays. The flow comment's step 1 says
+Queue… opens the dialog, and step 4 that the link may be in hand already from the card's
+preview.
+
+**Tests** (`test_search_render.py`, through the routes as today):
+
+- every card, owned or not, from `/search` and from `/search/more`, has exactly one
+  `<button type="button"` of class `card-play`, with an `aria-label`, inside its `.img-frame`;
+  no card has `data-url`;
+- `#card-player` is on the bare page and on a results page exactly once, not inside
+  `#container_search_result` (`_ancestor_ids`); its `<video>` has `playsinline` and `muted`
+  and no `controls`; the bar's buttons are `type="button"` with an `aria-label`, and the seek is
+  `type="range"` with an `aria-label`.
+
+**`ui-check`.** The fake search of the commit 6 and 7 rows, a port nobody uses, a
+`p.devices["Pixel 7"]` context and `page.tap`. `/caption_check` answered by the script per ID:
+for most, a link to `http://preview.test/clip.webm`; for one, `stream_url: null`; for one, a
+link that 404s; one answer delayed 1.5 s. `/lyrics_search`, `/lyrics_select` and `/download`
+answered too. The clip is a 10 s VP9/Opus WebM made in the scratchpad
+(`ffmpeg -f lavfi -i testsrc=duration=10:size=640x360:rate=25 -f lavfi -i
+sine=frequency=440:duration=10 -c:v libvpx-vp9 -b:v 200k -c:a libopus -shortest clip.webm`),
+served by a route that answers `Range`:
+
+```python
+def serve_clip(route):
+    m = re.match(r"bytes=(\d+)-(\d*)", route.request.headers.get("range", ""))
+    if not m:
+        return route.fulfill(body=DATA, content_type="video/webm", headers={"Accept-Ranges": "bytes"})
+    start, end = int(m.group(1)), int(m.group(2) or len(DATA) - 1)
+    route.fulfill(status=206, body=DATA[start : end + 1], content_type="video/webm",
+                  headers={"Accept-Ranges": "bytes", "Content-Range": f"bytes {start}-{end}/{len(DATA)}"})
+```
+
+1. A tap on a thumbnail away from its play button: no dialog, no request, nothing changes.
+2. Its play button: `loading` and the button breathing (the delayed answer), then playing in the
+   card: `paused` false, `muted` true, the bar shown, the duration badge hidden, no dialog, one
+   `/caption_check` request.
+3. The speaker unmutes and mutes, its label following; the seek moves `currentTime`.
+4. A tap on the middle of the playing video: paused, and still paused 1 s later; the play
+   button shows, and a tap on it resumes. The bar's play/pause pauses and plays.
+5. While it plays, a tap on the search box, then on the page heading, then on another card's
+   title: each pauses it.
+6. A vertical touch drag that scrolls the page (CDP `Input.dispatchTouchEvent`) while it plays:
+   still playing.
+7. The delayed answer: a play tap, then a tap elsewhere before the answer: idle, and still idle
+   after the answer arrives (nothing plays, no player in the card).
+8. Card A playing, then card B's play button: A idle (no player in its frame), B plays.
+9. An owned card plays; its Queue calls `/enqueue` and pauses the preview.
+10. A playing, then A's Queue…: the dialog opens, A is idle, and the dialog's Play starts at once
+    with no second `/caption_check` request.
+11. The no-link card: "Preview unavailable" in its play button's place; a tap on it asks again
+    (a second request). The 404-link card: unavailable after the video's error; a tap asks again.
+12. A playing, then Show more: A keeps playing; the saved copy in `sessionStorage` holds no
+    `<video>` and no `data-preview`, and the clip was requested no more often than before; SPA to
+    Queue and back: every card idle, and a restored card plays.
+13. Clear while playing: the results go, no console error; a new search works.
+14. A screenshot at 1100 px wide of a playing card (P3 does nothing for it; it must only not
+    break).
+15. No console errors but thumbnail 404s and the 404 link.
+
+#### Commit 12: `feat(search): a preview pauses itself off screen or on a hidden page`
+
+`search.html` only. P7.
+
+- One `IntersectionObserver` per visit watches the previewing card's `.img-frame` from start to
+  end. When none of it is on the screen, the preview pauses (`playing`) or is cancelled
+  (`loading`), as a tap elsewhere does.
+- `visibilitychange` to `hidden` does the same. Bound on `document` with
+  `.on("visibilitychange.search")`, so the next visit's `.off(".search")` removes it.
+- Nothing resumes by itself when the card or the page comes back.
+- No pytest (script only).
+- `ui-check`: playing, then a card ten below scrolled into view: paused; scrolled back, still
+  paused. Scrolled so half the frame is off the screen: still playing. Loading (the delayed
+  answer), scrolled off: idle once the answer arrives. A synthetic `visibilitychange` with
+  `document.visibilityState` overridden to `hidden` (like the review row's synthetic
+  `pageshow`): paused. Then SPA to Queue and back and the same event with no preview: no error
+  (the last visit's handler is gone).
+
+**Stop after commit 12** (and its Results row). Don't land, push or retire anything. Report a
+Review-due checkpoint for commits 10-12: a new state machine in the page script, so it is due.
+
+### Not doing, Part 2b
+
+- Badges (L17, L19, L20) and their shrink (P5): Part 3, which finds the `data-preview` hook.
+- Fullscreen (P8). Anything for the 200 px thumbnail on a wide screen (P3).
+- The stale restored page half of the owned-card issue (A4), and `/download` refusing an ID it
+  owns (that issue's option 3).
+- Regenerating the catalogs: "Play preview", "Preview unavailable", "Mute", "Unmute" and "Seek"
+  show in English until they are.
+- A shared time formatter with `home.html`.
+
+### At landing, Part 2b (not Sonnet's)
+
+- `plans/open-issues.md`: commit 11 fixes the card half of "A search card you already own can
+  be downloaded again"; the Landing order's Stage 2 item 2 loses its Part 2b sentence.
 
 ### Manual checks, Part 2b (Ken, on a phone)
 
-- [ ] A not-yet-downloaded card's thumbnail plays its video in the card, muted; the speaker
-      control unmutes it; no dialog opens.
-- [ ] Same for a card you own.
-- [ ] A second tap on the playing video pauses it; its play button resumes it.
-- [ ] While it plays or is paused, an owned card's In library badge stays, clear of the
-      player's controls, and the duration badge is gone (the player shows the time).
-- [ ] A second card's thumbnail stops the first.
+- [ ] A tap on a thumbnail away from its play button does nothing.
+- [ ] A not-yet-downloaded card's play button plays its video in the card, muted; the speaker
+      unmutes it; no dialog opens. Same for a card you own.
+- [ ] A tap on the playing video pauses it; its play button resumes it; the bar's button pauses
+      and plays; the seek bar moves through the video.
+- [ ] A tap anywhere else (the search box, another card's title, an owned card's Queue) pauses
+      it. Scrolling doesn't, until the card is entirely off the screen; it is paused when you
+      scroll back. Locking the phone pauses it.
+- [ ] While it plays or is paused, the duration badge is gone (the bar shows the length).
+- [ ] A second card's play button stops the first.
+- [ ] Unmute one card, then play another: it plays with sound (A5).
 - [ ] A card previewed first, then Queue…: the dialog opens, the card's video stops, and the
       dialog's Play starts the video at once.
 - [ ] Show more, then go to Queue and back: no card comes back mid-preview.
@@ -849,7 +1142,7 @@ Advanced open", and the download dialog's three boards.
 - **L18. The card's "YouTube ↗" link goes** (Ken, 2026-11-23). Upstream's, never ruled here:
   the thumbnail already opens the dialog's preview, and on a phone the link leaves the app
   for the YouTube app. Canvas: both Search boards drawn without it. After Part 2b the
-  thumbnail plays the video in the card itself; the reason holds.
+  thumbnail's play button plays the video in the card itself; the reason holds.
 - **Canvas drawing choices for Part 3** (Opus, 2026-11-23, not ruled; the plan only lists
   what goes): Search button neutral grey (`#434d4e`, `#5e6d6f` border, bold white), beside a
   dark `#282f2f` input, both 44 px with 6 px corners; Official tag a filled `#434d4e` chip
