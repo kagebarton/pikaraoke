@@ -348,6 +348,19 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
   re-check the cards (a small server call, or running the search again) rather than put back
   the saved HTML. Found in the `/code-review` of `search_official_captions` commits 5-9,
   2026-11-19 (Results log on that branch). Not ruled.
+- **A search card you already own can be downloaded again.** Tapping any card's thumbnail
+  opens the download dialog (`search.html`, the `.img-wrapper` click calls
+  `openPreviewModal`), in-library cards (`data-file-path`) included. The preview plays, but
+  the dialog's Queue sends `/download`, and neither the route (`routes/search.py`
+  `download`) nor `DownloadManager.queue_download` checks whether the video's ID is already a
+  library file; after the library rename the new file name differs from the old, so the song
+  is likely stored twice. Same on `dev` and `search_official_captions`. Options (Opus,
+  2026-11-23): (1) an owned card's thumbnail does nothing (no play overlay; the L17 badge and
+  green Queue are its actions); (2) the dialog, opened from an owned card, plays the preview,
+  hides the lyrics and its Queue enqueues the library file; (3) `/download` refuses an ID it
+  already owns and enqueues the library copy instead, which also covers the stale restored
+  page above. Recommended: 3 in any case, with 1 for simplicity or 2 to keep the preview.
+  Likely home: Search Part 3. Not ruled.
 - **A "Song - Artist" title is read the wrong way round** when the query also names the
   artist: for "queen bohemian rhapsody", "Bohemian Rhapsody - Queen" credits the song name as
   the artist. Official uploads are nearly always "Artist - Song". Left by Ken 2026-11-08.
