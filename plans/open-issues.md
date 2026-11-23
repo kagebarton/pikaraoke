@@ -844,22 +844,50 @@ findings are in `9f1ce8d3`; these two were left open. Record: `plans/now-playing
 tag `archive/now_playing_remote`, "Review 1"; its "Landing" section maps the branch's hashes to
 `dev`'s.
 
-- **Pause's label can flicker.** A tap on Pause flips the button at once (it reads Resume, and
+- ~~**Pause's label can flicker.** A tap on Pause flips the button at once (it reads Resume, and
   is blue, while paused) and the server's push confirms it. If a `now_playing` push triggered
   by another phone lands before the server has handled `/pause`, it carries the old
   `is_paused` and flips the button back until the push that follows `/pause`. Milliseconds on
   a LAN, and only while two phones act at once. A fix would hold the button for the length of
   its own request the way a stepper is held (`_sending`), at the cost of one more piece of
-  state in `home.html`. Not ruled.
+  state in `home.html`. Not ruled.~~ Fixed 2026-11-23 as `335d19d1` (Ken took it from the
+  Review 2 triage): Pause goes through `sendControl`, so a push leaves the button alone until
+  `/pause` settles, then the page reloads the state.
 - **Nothing tests Now Playing's script.** The render tests (`test_home_page.py`) check the
   markup only. The steppers' ends, the held-or-sending rule that keeps a push from moving a
   knob under a finger, the transport, the Paused tag and Resume's colour are covered only by
   Playwright scripts outside the repo, so a regression in any of them passes the suite. The
-  Phase 1 script (89 assertions) is kept untracked at `.claude/ui-check/now_playing_remote/` in
-  the main checkout; Review 1's extension (102 assertions at `9f1ce8d3`) was lost with its
-  session scratchpad, and Ken let it go. Same gap as the search dialog's entry under
-  "Search results (on `dev`)"; closing it needs a JavaScript test setup in the repo, its own
-  plan. Not ruled.
+  Phase 1 script (89 assertions, `np_check.py`) and Review 2's (21 assertions,
+  `np_review2.py`: the reload after a dropped Key change, the timeout, the seek bar's lock, the
+  page hiding mid-drag, Pause held) are kept untracked at `.claude/ui-check/now_playing_remote/`
+  in the main checkout, with `np_app.py`, whose fake now drops a Key change between songs and
+  can make a route slow (`delays`). Review 1's extension (102 assertions at `9f1ce8d3`) was
+  lost with its session scratchpad, and Ken let it go. Same gap as the search dialog's entry
+  under "Search results (on `dev`)"; closing it needs a JavaScript test setup in the repo, its
+  own plan. Not ruled.
+
+Found by the `/code-review high` of `26192b06..c9c3b010` (Review 2), 2026-11-23. Findings 1, 4, 5
+and 7 are fixed in `335d19d1`; finding 3 was dropped (below); these two were left open.
+
+- **A release anywhere lets go of every stepper.** The page clears every stepper's held mark on
+  any `pointerup` or `pointercancel`, so a second finger lifting mid-drag unlocks the stepper
+  still being dragged, and a push then snaps it back under the finger. Key, Subtitle delay and
+  Original vocals send only on `change`, so the held mark is all that protects them during a
+  drag. It is worse if iPhone Safari cancels the pointer early in every slider drag: then those
+  three are unprotected on every iPhone drag. Not checked (no iPhone on hand); the first step
+  is logging the pointer events of one Key drag on an iPhone. Tracking the held finger by
+  `pointerId` covers the second-finger case in a few lines. Marking those three busy from their
+  first `input` covers the rest, but needs another way to let go when a drag ends where it
+  began, since no `change` fires then (the seek bar's old bug). Dropped with it (finding 3): a
+  push landing between letting go and `change`. Browsers fire both from the same input event,
+  so no push fits between them; recheck if the iPhone log shows otherwise. Not ruled.
+- **A Key tap just before a song ends can shift the next song.** The tap goes out after a
+  300 ms debounce, and `transpose_current` applies to whatever is playing when the request
+  arrives, so a tap in a song's last moments transposes the next singer's song. The knob then
+  agrees, because the reload shows the server's new value. Fix: the request names its song
+  (`/transpose/<semitones>?song=...`) and the server drops it when that song is no longer
+  playing, plus route and `Karaoke.transpose_current` tests. Whether Original vocals carries
+  to the next song the same way was not checked. Not ruled.
 
 ## Edit words (on `dev`)
 
