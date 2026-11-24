@@ -65,7 +65,7 @@ from pikaraoke.pipeline.workers.stem_worker import StemWorker  # noqa: E402
 from pikaraoke.pipeline.workers.whisper_worker import WhisperWorker  # noqa: E402
 from scripts.genius_prompt import HELP as GENIUS_HELP  # noqa: E402
 from scripts.genius_prompt import ask_lyrics_source  # noqa: E402
-from scripts.song_select import select_songs  # noqa: E402
+from scripts.song_select import confirm, select_songs  # noqa: E402
 
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".webm", ".mov"}
 
@@ -476,11 +476,8 @@ def main() -> int:
     if args.dry_run:
         return 0
 
-    if not args.yes:
-        reply = input(f"Proceed with {len(jobs)} song(s)? [y/N] ").strip().lower()
-        if reply not in ("y", "yes"):
-            print("Aborted.")
-            return 0
+    if not args.yes and not confirm(len(jobs)):
+        return 0
 
     config = PipelineConfig()
     config.intermediate_dir = get_temp_directory()

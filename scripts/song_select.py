@@ -1,4 +1,4 @@
-"""Resolve command-line song patterns to library videos.
+"""Resolve command-line song patterns to library videos, and confirm the run.
 
 Shared by ``regen_alignment_bundles.py`` and ``backfill_artifacts.py`` so a
 song can be named on the command line (``--song``) instead of scanning the
@@ -41,3 +41,16 @@ def _is_exact_match(video: Path, pattern: str) -> bool:
         video.stem.lower(),
         video.name.lower(),
     )
+
+
+def confirm(count: int) -> bool:
+    """Ask whether to run ``count`` songs; any answer but yes aborts, closed input included."""
+    try:
+        reply = input(f"Proceed with {count} song(s)? [y/N] ").strip().lower()
+    except EOFError:
+        print()
+        reply = ""
+    if reply in ("y", "yes"):
+        return True
+    print("Aborted.")
+    return False

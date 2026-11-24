@@ -96,7 +96,7 @@ from pikaraoke.pipeline.workers.stem_worker import StemWorker  # noqa: E402
 from pikaraoke.pipeline.workers.whisper_worker import WhisperWorker  # noqa: E402
 from scripts.genius_prompt import HELP as GENIUS_HELP  # noqa: E402
 from scripts.genius_prompt import ask_lyrics_source  # noqa: E402
-from scripts.song_select import select_songs  # noqa: E402
+from scripts.song_select import confirm, select_songs  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Reporting
@@ -121,11 +121,7 @@ def print_report(
         scope = "missing/stale bundles"
     print(f"\nScanned: {folder}")
     print(f"Selection: {scope}")
-    if lrclib_auto:
-        retimed = sum(1 for j in jobs if j.plan.kind != "skip")
-        print(f"Songs checked: {len(jobs)}; to re-time: {retimed}\n")
-    else:
-        print(f"Songs to regenerate: {len(jobs)}\n")
+    print("" if lrclib_auto else f"Songs to regenerate: {len(jobs)}\n")
     if not jobs:
         return
     width = max(len(j.song_path.name) for j in jobs)
@@ -211,9 +207,10 @@ def lrclib_auto_refusal(job: SongJob) -> str | None:
     """Why the LRCLIB check does not apply to ``job``, or None when it does.
 
     Only a song the joint matcher still times from its Genius lyrics is checked: a custom
-    sheet, a caption, an LRCLIB timing or a transcription is not. A skip marker or a
-    hand-placed ``.lrc`` is someone's call, and the check needs the words the transcriber
-    heard and the clip length.
+    sheet, a caption, an LRCLIB timing or a transcription is not. A skip marker is an
+    admin's call and an unreadable ``.lrc`` was placed by hand, so both are left alone; a
+    readable ``.lrc`` is checked, and a pick replaces it. The check also needs the words the
+    transcriber heard. The clip length, the last thing it needs, is the caller's to find.
     """
     if not is_genius_reuse(job.plan):
         return f"it is not a Genius song on joint ({job.plan.label})"
@@ -224,21 +221,14 @@ def lrclib_auto_refusal(job: SongJob) -> str | None:
         return "its .lrc can't be read"
     if not job.bundle.get("transcribe_words"):
         return "its bundle holds no transcribe words"
-    if media_duration(job) is None:
-        return "its length is unknown"
     return None
 
 
-def lrclib_auto_plan(job: SongJob) -> Plan:
-    """The plan for one eligible song: its LRCLIB pick on the cue route, or a skip saying why.
+def lrclib_auto_plan(job: SongJob, auto: lrc_auto_timing.AutoCheck) -> Plan:
+    """The plan the check ``auto`` gives one song: its pick on the cue route, or a skip saying why.
 
-    The check is a first-time download's, run on the words the bundle already stores, so
-    the pick is made before any GPU time is spent. A pick is the plan Repair builds for an
-    LRCLIB record, with the automatic sheet's kind.
+    A pick is the plan Repair builds for an LRCLIB record, with the automatic sheet's kind.
     """
-    auto = lrc_auto_timing.check(
-        job.plan.seed["genius"], job.bundle["transcribe_words"], media_duration(job)
-    )
     counts = auto.record()
     if auto.entry is None:
         return Plan(kind="skip", label=_stays_label(counts))
@@ -263,11 +253,17 @@ def _stays_label(counts: dict) -> str:
         return f"stays on joint: no record passed ({counts['records']} records; {refused})"
     if outcome == lrc_auto_timing.NO_RECORDS:
         return "stays on joint: no synced LRCLIB record"
-    return f"stays on joint: LRCLIB check could not run ({outcome}); rerun later"
+    if outcome == lrc_auto_timing.SEARCH_FAILED:
+        return "stays on joint: LRCLIB could not be reached; rerun later"
+    return f"stays on joint: LRCLIB check failed ({outcome}); see the log"
 
 
-def check_lrclib_auto(jobs: list[SongJob], named: bool) -> list[SongJob]:
+def check_lrclib_auto(jobs: list[SongJob], named: bool) -> tuple[list[SongJob], int]:
     """Keep the jobs the LRCLIB check applies to, each with its plan set by the check.
+
+    The check is a first-time download's, run on the words the bundle already stores, so
+    the pick is made before any GPU time is spent. Returns the checked jobs and how many of
+    their checks could not run, which a later run should check again.
 
     ``named``: the songs were chosen with ``--song``, so each one dropped says why. The
     progress goes to stderr, which leaves stdout the report.
@@ -275,14 +271,24 @@ def check_lrclib_auto(jobs: list[SongJob], named: bool) -> list[SongJob]:
     eligible = []
     for job in jobs:
         reason = lrclib_auto_refusal(job)
+        length = None
         if reason is None:
-            eligible.append(job)
+            length = media_duration(job)
+            if length is None:
+                reason = "its length is unknown"
+        if reason is None:
+            eligible.append((job, length))
         elif named:
             print(f"{job.song_path.name}: not checked, {reason}")
-    for i, job in enumerate(eligible, 1):
+    unchecked = 0
+    for i, (job, length) in enumerate(eligible, 1):
         print(f"[{i}/{len(eligible)}] {job.song_path.name}", file=sys.stderr, flush=True)
-        job.plan = lrclib_auto_plan(job)
-    return eligible
+        auto = lrc_auto_timing.check(
+            job.plan.seed["genius"], job.bundle["transcribe_words"], length
+        )
+        unchecked += auto.outcome in (lrc_auto_timing.SEARCH_FAILED, lrc_auto_timing.ERROR)
+        job.plan = lrclib_auto_plan(job, auto)
+    return [job for job, _ in eligible], unchecked
 
 
 # ---------------------------------------------------------------------------
@@ -468,15 +474,6 @@ def resolve_and_run(jobs: list[SongJob]) -> int:
     return 0 if failed == 0 else 1
 
 
-def confirm(count: int) -> bool:
-    """Ask whether to run ``count`` songs; an answer other than yes aborts."""
-    reply = input(f"Proceed with {count} song(s)? [y/N] ").strip().lower()
-    if reply in ("y", "yes"):
-        return True
-    print("Aborted.")
-    return False
-
-
 def back_up(folder: Path, stems: list[str] | None, scope_note: str) -> None:
     """Snapshot the output folders (only ``stems``' own files when given) and say where."""
     backup = backup_text_folders(folder, stems=stems)
@@ -492,19 +489,22 @@ def run_lrclib_auto(
     """The ``--lrclib-auto`` mode after the scan: check, report, then re-time the picks.
 
     The songs no record passes stay in the run as skips, so its final line counts them.
+    Exits 1 when any song's check could not run, even if nothing else went wrong.
     """
-    jobs = check_lrclib_auto(jobs, named)
+    jobs, unchecked = check_lrclib_auto(jobs, named)
     print_report(jobs, folder, False, selected=named, lrclib_auto=True)
     picked = [j for j in jobs if j.plan.kind != "skip"]
+    print(f"Songs checked: {len(jobs)}; to re-time: {len(picked)}; could not check: {unchecked}")
+    incomplete = 1 if unchecked else 0
     if not picked:
         print("Nothing to re-time.")
-        return 0
+        return incomplete
     if args.dry_run:
-        return 0
+        return incomplete
     if not args.yes and not confirm(len(picked)):
         return 0
     back_up(folder, [j.song_path.stem for j in picked], " for the re-timed songs")
-    return resolve_and_run(jobs)
+    return resolve_and_run(jobs) or incomplete
 
 
 def main() -> int:
