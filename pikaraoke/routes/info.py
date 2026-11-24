@@ -85,7 +85,6 @@ def info():
         enable_fair_queue=k.enable_fair_queue,
         languages=LANGUAGES,
         preferred_language=preferred_language,
-        browse_results_per_page=k.browse_results_per_page,
         temp_dir=k.temp_dir,
         blocked_processing_words=k.preferences.get_or_default("blocked_processing_words"),
         genius_token=k.preferences.get("genius_token", ""),

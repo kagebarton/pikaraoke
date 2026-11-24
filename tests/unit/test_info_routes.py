@@ -102,7 +102,6 @@ def _mock_karaoke():
     k.high_quality = False
     k.limit_user_songs_by = 0
     k.enable_fair_queue = True
-    k.browse_results_per_page = 500
     k.temp_dir = "/tmp/pik"
     k.preferences.get_or_default.side_effect = lambda key, *a: _PREF_DEFAULTS[key]
     k.preferences.get.side_effect = lambda key, default=None: {
