@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from pikaraoke.lib.events import EventSystem
+from pikaraoke.lib.genius_query import parse
 from pikaraoke.lib.get_platform import is_windows
 from pikaraoke.lib.karaoke_database import KaraokeDatabase
 from pikaraoke.lib.library_regen import (
@@ -36,16 +37,22 @@ def sanitize_filename(name: str) -> str:
 
 
 def split_title(title: str) -> tuple[str, str]:
-    """Split a display title into ``(artist, song)`` at its first " - ".
+    """Split a display title into ``(artist, song)``.
 
-    A title with no " - ", or with an empty side, has no usable split and comes back
-    as ``("", title)``: a caller shows the whole title as the song.
+    The first " - " splits it: the library's hand-made names are ``Artist - Title``. The YouTube
+    title parser reads a name that has no usable split, because a download keeps its raw title
+    ("Bohemian Rhapsody | Queen") until it is renamed; it counts only when it finds both artist and
+    song. A name neither reads comes back as ``("", title)``, unchanged: a caller shows the whole
+    title as the song. Queue, Now Playing and Browse share this rule.
     """
     artist, separator, song = title.partition(" - ")
     artist, song = artist.strip(), song.strip()
-    if not separator or not artist or not song:
-        return "", title
-    return artist, song
+    if separator and artist and song:
+        return artist, song
+    parsed = parse(title)
+    if parsed.artist and parsed.title:
+        return parsed.artist, parsed.title
+    return "", title
 
 
 class SongManager:
