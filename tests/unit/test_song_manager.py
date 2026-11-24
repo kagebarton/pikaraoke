@@ -129,7 +129,7 @@ BACKED_UP_KINDS = [(sub, tail) for sub, tail in OWNED_KINDS if not tail.endswith
 
 
 class TestSplitTitle:
-    """split_title turns a display title into (artist, song); no usable split gives ("", title)."""
+    """split_title turns a display title into (artist, song); no usable reading gives ("", title)."""
 
     def test_artist_dash_song(self):
         assert split_title("Queen - Bohemian Rhapsody") == ("Queen", "Bohemian Rhapsody")
@@ -149,6 +149,24 @@ class TestSplitTitle:
 
     def test_each_side_is_trimmed(self):
         assert split_title("  Artist   -   Song  ") == ("Artist", "Song")
+
+    @pytest.mark.parametrize(
+        ("title", "expected"),
+        [
+            ("Bohemian Rhapsody | Queen", ("Queen", "Bohemian Rhapsody")),
+            ("Adele 'Hello'", ("Adele", "Hello")),
+            ("Twins《下一站天后》", ("Twins", "下一站天后")),
+        ],
+    )
+    def test_a_name_without_a_split_is_read_by_the_title_parser(self, title, expected):
+        assert split_title(title) == expected
+
+    def test_a_split_name_is_never_re_read_even_when_backwards(self):
+        assert split_title("Hello - Adele") == ("Hello", "Adele")
+
+    def test_a_parse_that_finds_no_artist_leaves_the_name_whole(self):
+        title = "Defying Gravity (From Wicked)"
+        assert split_title(title) == ("", title)
 
 
 @pytest.fixture
