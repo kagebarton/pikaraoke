@@ -859,9 +859,11 @@ tag `archive/now_playing_remote`, "Review 1"; its "Landing" section maps the bra
   Playwright scripts outside the repo, so a regression in any of them passes the suite. The
   Phase 1 script (89 assertions, `np_check.py`) and Review 2's (21 assertions,
   `np_review2.py`: the reload after a dropped Key change, the timeout, the seek bar's lock, the
-  page hiding mid-drag, Pause held) are kept untracked at `.claude/ui-check/now_playing_remote/`
-  in the main checkout, with `np_app.py`, whose fake now drops a Key change between songs and
-  can make a route slow (`delays`). Review 1's extension (102 assertions at `9f1ce8d3`) was
+  page hiding mid-drag, Pause held) and Review 3's (22 assertions, `np_review3.py`: a second
+  finger lifting mid-drag, the volume knob let go after its request settled, two seeks inside
+  the grace, the Paused tag while Pause is out) are kept untracked at
+  `.claude/ui-check/now_playing_remote/` in the main checkout, with `np_app.py`, whose fake now
+  drops a Key change between songs and can make a route slow (`delays`, seek included). Review 1's extension (102 assertions at `9f1ce8d3`) was
   lost with its session scratchpad, and Ken let it go. Same gap as the search dialog's entry
   under "Search results (on `dev`)"; closing it needs a JavaScript test setup in the repo, its
   own plan. Not ruled.
@@ -869,18 +871,19 @@ tag `archive/now_playing_remote`, "Review 1"; its "Landing" section maps the bra
 Found by the `/code-review high` of `26192b06..c9c3b010` (Review 2), 2026-11-23. Findings 1, 4, 5
 and 7 are fixed in `335d19d1`; finding 3 was dropped (below); these two were left open.
 
-- **A release anywhere lets go of every stepper.** The page clears every stepper's held mark on
-  any `pointerup` or `pointercancel`, so a second finger lifting mid-drag unlocks the stepper
-  still being dragged, and a push then snaps it back under the finger. Key, Subtitle delay and
-  Original vocals send only on `change`, so the held mark is all that protects them during a
-  drag. It is worse if iPhone Safari cancels the pointer early in every slider drag: then those
-  three are unprotected on every iPhone drag. Not checked (no iPhone on hand); the first step
-  is logging the pointer events of one Key drag on an iPhone. Tracking the held finger by
-  `pointerId` covers the second-finger case in a few lines. Marking those three busy from their
-  first `input` covers the rest, but needs another way to let go when a drag ends where it
-  began, since no `change` fires then (the seek bar's old bug). Dropped with it (finding 3): a
-  push landing between letting go and `change`. Browsers fire both from the same input event,
-  so no push fits between them; recheck if the iPhone log shows otherwise. Not ruled.
+- **An early pointer cancel may let go of a control mid-drag (iPhone, not checked).** Was "A
+  release anywhere lets go of every stepper". Its second-finger half is fixed in `5c9888bd` (Review 3, below):
+  a control is held by the pointer that pressed it, and only that pointer's `pointerup` or
+  `pointercancel` lets go. Left: if iPhone Safari cancels the pointer early in every slider
+  drag, Key, Subtitle delay, Original vocals and (since `335d19d1`) the seek bar are let go at
+  that cancel and unprotected for the rest of every iPhone drag. The first three send only on
+  `change`, so the held mark is all that protects them; the seek bar used to lock on `input`,
+  which a cancel did not undo. Not checked (no iPhone on hand); the first step is logging the
+  pointer events of one Key drag on an iPhone. Marking the controls busy from their first
+  `input` covers it, but needs another way to let go when a drag ends where it began, since no
+  `change` fires then (the seek bar's old bug). Dropped with it (Review 2 finding 3): a push
+  landing between letting go and `change`. Browsers fire both from the same input event, so no
+  push fits between them; recheck if the iPhone log shows otherwise. Not ruled.
 - **A Key tap just before a song ends can shift the next song.** The tap goes out after a
   300 ms debounce, and `transpose_current` applies to whatever is playing when the request
   arrives, so a tap in a song's last moments transposes the next singer's song. The knob then
@@ -888,6 +891,27 @@ and 7 are fixed in `335d19d1`; finding 3 was dropped (below); these two were lef
   (`/transpose/<semitones>?song=...`) and the server drops it when that song is no longer
   playing, plus route and `Karaoke.transpose_current` tests. Whether Original vocals carries
   to the next song the same way was not checked. Not ruled.
+
+Found by the `/code-review high` of `4d23ac25..335d19d1` (Review 3), 2026-11-23. Findings 1, 3,
+4, 5, 7 and 8 are fixed in `5c9888bd`, checked in Chromium by `np_review3.py` (all
+22 pass; 13 fail on `335d19d1`); these two were left open.
+
+- **A reload's answer can land after a newer state.** The page reloads the state when a
+  control's request settles or a held control is let go, and applies the answer whenever it
+  arrives, even if a newer push or reload got there first. Reloads and pushes travel on separate
+  connections, so their order is not guaranteed. Example: two Pause taps, and the first tap's
+  reload answers after the second's: the button sticks on Resume while the song plays, until
+  the next push, and a tap then pauses it. Rare on a LAN (the older reload must outlast a whole
+  later request and its reload). A page-only guard (number the reloads, drop an answer older
+  than one already applied) covers reload against reload, not push against reload; that needs
+  the server to number each state it sends, reload and push alike, so the page drops anything
+  older than what it shows. Not ruled.
+- **A timed-out Pause can be tapped twice.** `/pause` toggles. When its request times out
+  (5 s), the page lets go and reloads, but the server may still be handling it, so the button
+  shows the old state until the late push. A second tap in that window toggles again, leaving
+  playback where it started. Needs a server too slow to handle a pause in 5 s. The route that
+  sets paused or playing rather than toggling, raised under "Queue page: review findings"
+  (BRB), closes this too. Not ruled.
 
 ## Edit words (on `dev`)
 
