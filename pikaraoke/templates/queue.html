@@ -439,7 +439,9 @@ $(function() {
 
   // SPA navigation re-executes this inline script on every visit. Remove any
   // previously-registered handlers via the .queue namespace before rebinding,
-  // otherwise a single click fires N times after N visits.
+  // otherwise a single click fires N times after N visits. The handlers stay on
+  // the document after the page is left, so each matches only inside #queue-page:
+  // Browse's rows share the .sr-* classes.
   $(document).off('click.queue');
 
   function rowIndex(el) {
@@ -449,20 +451,20 @@ $(function() {
     return window.queuePageState.queue[rowIndex(el)];
   }
 
-  $(document).on('click.queue', '.sr-gear', function(e) {
+  $(document).on('click.queue', '#queue-page .sr-gear', function(e) {
     e.preventDefault();
     openSongOptions(rowIndex(this));
   });
-  $(document).on('click.queue', '.sr-del', function(e) {
+  $(document).on('click.queue', '#queue-page .sr-del', function(e) {
     e.preventDefault();
     openRemoveConfirm(queueItem(this));
   });
   // A failed row's Dismiss does not ask: the song could not play anyway
-  $(document).on('click.queue', '.sr-dismiss', function(e) {
+  $(document).on('click.queue', '#queue-page .sr-dismiss', function(e) {
     e.preventDefault();
     removeSong(queueItem(this).file);
   });
-  $(document).on('click.queue', '.now-playing-options-btn', function(e) {
+  $(document).on('click.queue', '#queue-page .now-playing-options-btn', function(e) {
     e.preventDefault();
     openNowPlayingOptions();
   });
