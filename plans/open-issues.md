@@ -861,7 +861,9 @@ tag `archive/now_playing_remote`, "Review 1"; its "Landing" section maps the bra
   `np_review2.py`: the reload after a dropped Key change, the timeout, the seek bar's lock, the
   page hiding mid-drag, Pause held) and Review 3's (22 assertions, `np_review3.py`: a second
   finger lifting mid-drag, the volume knob let go after its request settled, two seeks inside
-  the grace, the Paused tag while Pause is out) are kept untracked at
+  the grace, the Paused tag while Pause is out) and Review 4's (19 assertions, `np_review4.py`:
+  a second finger on the held control itself, a fresh tap taking over a stranded hold, the
+  Paused tag and bars at the tap, no reload while hidden or off-page) are kept untracked at
   `.claude/ui-check/now_playing_remote/` in the main checkout, with `np_app.py`, whose fake now
   drops a Key change between songs and can make a route slow (`delays`, seek included). Review 1's extension (102 assertions at `9f1ce8d3`) was
   lost with its session scratchpad, and Ken let it go. Same gap as the search dialog's entry
@@ -883,7 +885,10 @@ and 7 are fixed in `335d19d1`; finding 3 was dropped (below); these two were lef
   `input` covers it, but needs another way to let go when a drag ends where it began, since no
   `change` fires then (the seek bar's old bug). Dropped with it (Review 2 finding 3): a push
   landing between letting go and `change`. Browsers fire both from the same input event, so no
-  push fits between them; recheck if the iPhone log shows otherwise. Not ruled.
+  push fits between them; recheck if the iPhone log shows otherwise. The same log answers the
+  opposite case (Review 4 finding 6): a touch that ends with no `pointerup` or `pointercancel`
+  leaves its control held, ignoring pushes, until a fresh tap on that same control (which takes
+  over the hold since `9ccdc8b5`) or the page hiding. No browser is known to do this. Not ruled.
 - **A Key tap just before a song ends can shift the next song.** The tap goes out after a
   300 ms debounce, and `transpose_current` applies to whatever is playing when the request
   arrives, so a tap in a song's last moments transposes the next singer's song. The knob then
@@ -912,6 +917,13 @@ Found by the `/code-review high` of `4d23ac25..335d19d1` (Review 3), 2026-11-23.
   playback where it started. Needs a server too slow to handle a pause in 5 s. The route that
   sets paused or playing rather than toggling, raised under "Queue page: review findings"
   (BRB), closes this too. Not ruled.
+
+Found by the `/code-review high` of `442269f6..5c9888bd` (Review 4), 2026-11-23. Findings 2, 3
+and 7 are fixed in `9ccdc8b5`, checked in Chromium by `np_review4.py` (all 19 pass; 8 fail on
+`5c9888bd`; Reviews 2-3 and Phase 1's scripts still pass). Finding 6 is noted under the iPhone
+entry above. Dropped: 1 (the seek's reload snapping the bar back: real mpv reports the new
+position within a few ms of the seek, measured on a library song), 4 (a spare reload on most
+releases, its answer discarded) and 5 (a zero-delay timer on every send).
 
 ## Edit words (on `dev`)
 
