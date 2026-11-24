@@ -80,21 +80,27 @@ function isBusy(id) {
   return id in _held || id in _sending;
 }
 
-// A control is held from a press until that same pointer lifts (see letGo)
+// A control is held from a press until that same pointer lifts (see letGo). A second finger on a
+// held control leaves the first one holding it. A primary press (no other finger down) takes over
+// whatever hold is there, since that one's release was lost. (jQuery copies pointerId onto its
+// event, not isPrimary.)
 function holdOnPress(selector) {
-  $(selector).on("pointerdown", function (e) { _held[this.id] = e.pointerId; });
+  $(selector).on("pointerdown", function (e) {
+    if (e.originalEvent.isPrimary || !(this.id in _held)) _held[this.id] = e.pointerId;
+  });
 }
 
 // Lets go of the controls `pointerId` holds (all of them when it is undefined), and reloads the
-// state if one has no request out to do it
+// state if one has no request out to do it. A hidden page reloads when it shows again, and a
+// control gone from the page (another page is showing) has nothing to reload.
 function letGo(pointerId) {
   var reload = false;
   for (var id in _held) {
     if (pointerId !== undefined && _held[id] !== pointerId) continue;
     delete _held[id];
-    reload = reload || !(id in _sending);
+    if (!(id in _sending) && document.getElementById(id)) reload = true;
   }
-  if (reload) loadNowPlaying();
+  if (reload && !document.hidden) loadNowPlaying();
 }
 
 // Sends `url` for the control `key`, which stays busy until this request settles and `grace` ms
@@ -129,12 +135,19 @@ function syncStepper(id, value) {
 }
 
 // A button names what a tap does, so Pause reads Resume while the song is paused. The two
-// labels ride on the button (data-label-*), where Jinja translates them.
+// labels ride on the button (data-label-*), where Jinja translates them. The Paused tag and the
+// bars change with the button, so a tap shows on all three at once.
 var _paused = false;
 function showPaused(paused) {
   _paused = paused;
   var button = $("#pause-resume");
   button.text(button.data(paused ? "labelResume" : "labelPause")).toggleClass("is-selected", paused);
+  $("#paused-tag").toggle(paused);
+  if (paused) {
+    $(".playing_gif").attr("src", "{{ url_for('static', filename='images/now-playing.png') }}");
+  } else {
+    $(".playing_gif").attr("src", "{{ url_for('static', filename='images/now-playing.gif') }}");
+  }
 }
 
 // Subtitle mode toggle
@@ -235,14 +248,8 @@ function handleNowPlaying(np) {
     timeElapsed.innerHTML = fmtTime(np.now_playing_position || 0);
   }
 
-  // The Paused tag and the bars go by the button, so the three agree while a tap is out
-  if (!isBusy("pause-resume")) showPaused(np.is_paused);
-  $("#paused-tag").toggle(Boolean(np.now_playing && _paused));
-  if (_paused) {
-    $(".playing_gif").attr("src", "{{ url_for('static', filename='images/now-playing.png') }}");
-  } else {
-    $(".playing_gif").attr("src", "{{ url_for('static', filename='images/now-playing.gif') }}");
-  }
+  // With nothing playing there is nothing paused, so no Paused tag
+  if (!isBusy("pause-resume")) showPaused(Boolean(np.now_playing && np.is_paused));
 }
 
 // SPA navigation re-executes this inline script on every visit, so socket
