@@ -22,6 +22,7 @@ if not hasattr(werkzeug, "__version__"):
 
 import pikaraoke
 from pikaraoke.lib.song_manager import SongManager
+from pikaraoke.routes.admin import admin_bp
 from pikaraoke.routes.info import info_bp
 
 # Endpoints base.html and info.html resolve via url_for; stub the ones not on
@@ -32,15 +33,6 @@ _STUB_ENDPOINTS = (
     "search.search",
     "files.browse",
     "processing.processing",
-    "admin.auth",
-    "admin.expand_fs",
-    "admin.library_stats",
-    "admin.logout",
-    "admin.quit",
-    "admin.reboot",
-    "admin.shutdown",
-    "admin.sync_library",
-    "admin.update_ytdl",
     "images.qrcode",
     "preferences.change_preferences",
     "preferences.clear_preferences",
@@ -67,7 +59,9 @@ def app():
         template_folder=os.path.join(pkg_dir, "templates"),
         static_folder=os.path.join(pkg_dir, "static"),
     )
+    test_app.config["ADMIN_PASSWORD"] = None  # admin_bp's context processor reads it
     test_app.register_blueprint(info_bp)
+    test_app.register_blueprint(admin_bp)  # gives the page its `admin` flag
     for endpoint in _STUB_ENDPOINTS:
         test_app.add_url_rule(
             f"/__stub/{endpoint}", endpoint=endpoint, view_func=lambda *a, **k: ""
@@ -115,7 +109,7 @@ def _mock_karaoke():
 
 
 @patch("pikaraoke.routes.info.get_platform", return_value="linux")
-@patch("pikaraoke.routes.info.is_admin", return_value=True)
+@patch("pikaraoke.routes.admin.is_admin", return_value=True)
 @patch("pikaraoke.routes.info.get_admin_password", return_value="secret")
 @patch("pikaraoke.routes.info.get_site_name", return_value="PiKaraoke")
 @patch("pikaraoke.routes.info.get_karaoke_instance")

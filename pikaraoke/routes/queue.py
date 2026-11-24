@@ -62,7 +62,6 @@ def queue():
         queue=k.queue_manager.queue,
         site_title=site_name,
         title="Queue",
-        admin=is_admin(),
     )
 
 
