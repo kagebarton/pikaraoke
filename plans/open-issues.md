@@ -437,7 +437,11 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
   handlers find the preview paused and do nothing (checked with `ui-check` in commit 12's
   run, check 6). Closing it needs a "page leaving" signal from `spa-navigation.js` (none
   exists) that Search answers by ending the preview. Found in the `/code-review high` of
-  `570a0ad6^..b1e262b7`, 2026-11-23 (finding 3). Not ruled.
+  `570a0ad6^..b1e262b7`, 2026-11-23 (finding 3). Not ruled. Weighed 2026-11-24 (`browse_phone`
+  review): every other page's leftover handlers already do nothing once their page is gone (they
+  check for their own element), so the signal earns its place only when a second thing must be
+  actively stopped on leave (a timer polling the server, a playing preview). Build it then, after
+  the phone branches land, with the JavaScript test setup above; it touches every page's script.
 - **The m:ss clock is on its third copy.** `home.html` (`fmtTime`), `playlist.html`
   (`clock`, with hours) and Search's card bar (`clock`, `search_official_captions` commit
   11) each format a time. One shared formatter (the one with hours) needs a script all
@@ -526,7 +530,9 @@ Record: `plans/queue-hold.md` on tag `archive/queue_hold`, the manual checks row
   browse tests in `test_files_routes.py`, one in `test_info_routes.py`; without that,
   `{{ admin | tojson }}` in `home.html`, `queue.html` and `processing.html` is a 500. Found
   2026-11-23 closing `queue_phone` Phase 3 (an Opus read of the call); record:
-  `plans/queue-phone.md` Results log on tag `archive/queue_phone`. Not ruled.
+  `plans/queue-phone.md` Results log on tag `archive/queue_phone`. Not ruled. `browse_phone`
+  drops `files.py`'s (`c12ea382`) and `info.py`'s and `queue.py`'s (`539c63f3`), with their
+  tests; strike those three when it lands, leaving `home.py` and `processing.py`.
 
 - **The first page's own styles stay on every page tapped to after it.** On an SPA move,
   `injectInlineStyles` (`static/spa-navigation.js`) removes only the `<style>` elements it
@@ -538,6 +544,24 @@ Record: `plans/queue-hold.md` on tag `archive/queue_hold`, the manual checks row
   loaded first leaks the same way. A fix must keep `base.html`'s shared `<style>` in place;
   not designed. Found 2026-11-24 in the `browse_phone` Phase 1 ui-check (`title_gap`);
   record: `plans/browse-phone.md` Results log on `browse_phone`, the judge row. Not ruled.
+
+- **The song edit, rename and delete routes redirect to any `referrer`.** `routes/files.py`
+  sends the browser to the request's `referrer` after the edit page, a rename and a delete,
+  including the refusal for a guest, without checking that it points inside the app:
+  `/files/edit?song=x&referrer=https://evil.example` sends a guest off-site right after the
+  permission flash. Upstream code. Fix: accept only a path (starts with `/`, not `//`), else
+  `url_for("files.browse")`. Found in the `/code-review` of `browse_phone`
+  `40560f98..d86cd2d2`, 2026-11-24 (finding 5), whose new Browse menu passes `referrer` too.
+  Not ruled.
+
+- **A failed song stays "needs fix" while its retry runs.** Its state stays `failed` until the
+  retry ends, and `_do_enqueue` (`routes/queue.py`) refuses a failed song whatever is running,
+  so for the whole retry Queue refuses it and Browse (`browse_phone`) shows the admin "needs
+  fix" and hides it from guests; the old Browse showed "processing". Taking a failed song whose
+  retry is running as processing (`library_tools.is_busy`) would change both, through
+  `QueueHold.add_outcome`. Found by Opus speccing `browse_phone` Phase 1 and again in its
+  `/code-review` (finding 4), 2026-11-24; record: `plans/browse-phone.md` "Checked against the
+  code" on `browse_phone`. Not ruled.
 
 ## Landing order (every open branch)
 
