@@ -104,7 +104,7 @@ def _browse_rows(k, by: str, admin: bool) -> list[dict]:
 
 def _chosen_letter(filed: set[str]) -> str | None:
     """The strip entry to show: the requested one if it has songs, else the first that does."""
-    asked = request.args.get("letter") or request.cookies.get("browse_letter")
+    asked = (request.args.get("letter") or request.cookies.get("browse_letter") or "").lower()
     if asked == "numeric":
         asked = "#"
     if asked in filed:
