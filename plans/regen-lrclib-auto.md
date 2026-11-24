@@ -4,7 +4,8 @@ Model: Claude Sonnet 5.5 (executor). Plan and gates: Claude Opus 5.5.
 
 Branch `regen_lrclib_auto`, worktree `.claude/worktrees/regen_lrclib_auto`, off `dev` `d2ed9a3b`.
 
-**Status 2026-11-24:** PLANNED, no code. Next: Phase 1.
+**Status 2026-11-24:** Phase 1 built (`2a0afe1d`, Results row 1); `/code-review` due. Next:
+Phase 2 (read-only, may run before the review); Phase 3 waits for the review's fixes.
 
 ## Goal
 
@@ -137,7 +138,7 @@ Report and run:
 
 ## Phase 1: the option (Sonnet)
 
-- [ ] **1a. Code** in `scripts/regen_alignment_bundles.py`. The behaviour is script-only
+- [x] **1a. Code** in `scripts/regen_alignment_bundles.py`. The behaviour is script-only
   (Decision 5), so `library_regen` doesn't grow.
   - The `--lrclib-auto` flag. Its help text says what it selects, that it searches LRCLIB
     even with `--dry-run`, and that it can't be combined with `--reset` (`p.error`, exit 2).
@@ -147,14 +148,14 @@ Report and run:
   - The `main()` wiring, the `print_report` scope line (a keyword argument with a default,
     because `add_songs` calls `print_report` too), the confirm count and the backup stems.
   - The module docstring gets a paragraph for the third mode.
-- [ ] **1b. Docstrings that become false.** The `SongJob` docstring in
+- [x] **1b. Docstrings that become false.** The `SongJob` docstring in
   `pikaraoke/lib/library_regen.py` says `first_download` marks "the only kind whose Genius pick
   may be timed from an LRCLIB record" and that "every regen leaves it off". The flag part is
   still true, but the regen flag now times Genius songs from a record too: say so. The first
   line of the `pikaraoke/lib/lrc_auto_timing.py` module docstring says "The LRCLIB check of a
   first-time Genius download": add the regen flag. `lyric_align.py` is unchanged; leave it
   alone.
-- [ ] **1c. Tests** in `tests/unit/test_regen_alignment_bundles.py`. Mock only the network.
+- [x] **1c. Tests** in `tests/unit/test_regen_alignment_bundles.py`. Mock only the network.
   Build a passing record the way `tests/unit/test_lrc_auto_timing.py` does (`_sung`, `_lrc`,
   `_record`, `patch.object(lrclib, "search_query", ...)`), so the real `check` and `evaluate`
   run. If those helpers would get a third copy, move them to a shared test helper instead.
@@ -178,16 +179,16 @@ Report and run:
     record (header `[lrclib_id:<id>]`), and its seed carries the bundle's Genius identity.
   - Through `run_jobs` with a fake orchestrator that raises: after the failure there is no
     auto sheet, and the old `.lrc` bytes are back.
-- [ ] **1d. Checks:**
+- [x] **1d. Checks:**
   - The full suite, `/home/ken/miniconda3/envs/pik/bin/python -m pytest`. Record the pass
     count, and any failure with its output.
   - `pre-commit run --config code_quality/.pre-commit-config.yaml --files <changed files>`.
   - `python scripts/regen_alignment_bundles.py --help` shows the flag.
   - Self-review per CLAUDE.md, and read `git diff --cached` before committing.
-- [ ] **1e. Commit.** One feature commit, with the tests:
+- [x] **1e. Commit.** One feature commit, with the tests:
   `feat(regen): --lrclib-auto moves joint Genius songs to an automatic LRCLIB pick`. Plan
   edits (status, ticks, Results row 1) go in a separate plan-only commit.
-- [ ] **1f. STOP.** Write Results row 1 (hashes, suite count). Give Ken the review line
+- [x] **1f. STOP.** Write Results row 1 (hashes, suite count). Give Ken the review line
   (CLAUDE.md "Review due"):
   `/code-review <base>..<commit>`, with these files in scope:
   `scripts/regen_alignment_bundles.py`, `pikaraoke/lib/library_regen.py`,
@@ -384,6 +385,7 @@ checked at its download: no pick).
 
 | Row | Date | Phase | What was done | Artifacts |
 |---|---|---|---|---|
+| 1 | 2026-11-24 | 1 | `--lrclib-auto` built as planned, plus these differences. `confirm()` and `back_up()` lifted out of `main()` (shared by both modes; `main()` was past 50 lines). Progress `[i/N]` goes to stderr, so stdout is the report only. Pick label has no record duration (`record_meta`'s `duration` is not formatted anywhere public). `add_songs.py` has its own `print_report`; it never calls this one, so the new keyword argument is for the tests' existing calls only. Tests reuse `tests/unit/movie_slices.py` (`heard_words`, `lrc_slice`, `CLIP_S`) instead of copying `test_lrc_auto_timing.py`'s helpers. The `LRC_ORIGINS` comment in `library_regen.py` also updated. 24 new tests; seven injected bugs (no skip-marker refusal, backup of all stems, hand-over of picks only, no `--reset` refusal, dry run proceeding, wrong sheet kind, no record on the plan) each failed one of them. Full suite 4570 passed. pre-commit clean (black reformatted two files, rerun clean). `--help` shows the flag. Smoke run of `--lrclib-auto --dry-run` and `--lrclib-auto --reset` (exit 2) on a one-song tmp library. | code `2a0afe1d` (off plan commit `57c9faf8`); review range `57c9faf8..2a0afe1d` |
 
 ## Dry run output
 
