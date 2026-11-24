@@ -519,20 +519,19 @@ Record: `plans/queue-hold.md` on tag `archive/queue_hold`, the manual checks row
   2026-11-16 as `58ccd638` (landed from `genius_search_accuracy`, where Ken took it
   from the review triage): `downloadSong` reads `#add-to-queue-direct`.
 
-- **Five routes still pass `admin=` that the context processor now supplies.**
+- **Two routes still pass `admin=` that the context processor now supplies.**
   `inject_admin` (`routes/admin.py`, on `dev` as `5079f020`) gives
-  every page `admin`. `home.py`, `files.py`, `info.py`, `queue.py` and `processing.py` (the
+  every page `admin`. `home.py` and `processing.py` (the
   page render only; `processing_status`'s `get_status(admin=...)` is not a render and stays)
   still pass the same value. Nothing is wrong today: both are `is_admin()` in the same
-  request. Drop each when its phone branch next edits that route (`browse_phone` and
-  `processing_phone` restyle `files.py` and `processing.py`). The tests then need `admin_bp`
-  registered and `admin.is_admin` patched: `test_processing_page.py`'s `get()`, the seven
-  browse tests in `test_files_routes.py`, one in `test_info_routes.py`; without that,
-  `{{ admin | tojson }}` in `home.html`, `queue.html` and `processing.html` is a 500. Found
+  request. Drop each when its phone branch next edits that route (`processing_phone`
+  restyles `processing.py`). The tests then need `admin_bp`
+  registered and `admin.is_admin` patched: `test_processing_page.py`'s `get()`; without that,
+  `{{ admin | tojson }}` in `home.html` and `processing.html` is a 500. Found
   2026-11-23 closing `queue_phone` Phase 3 (an Opus read of the call); record:
-  `plans/queue-phone.md` Results log on tag `archive/queue_phone`. Not ruled. `browse_phone`
-  drops `files.py`'s (`c12ea382`) and `info.py`'s and `queue.py`'s (`539c63f3`), with their
-  tests; strike those three when it lands, leaving `home.py` and `processing.py`.
+  `plans/queue-phone.md` Results log on tag `archive/queue_phone`. Not ruled. `files.py`,
+  `info.py` and `queue.py` dropped theirs, with their tests, on `dev` 2026-11-24 (`df3febaf`,
+  `81df2907`; from `archive/browse_phone`).
 
 - **The first page's own styles stay on every page tapped to after it.** On an SPA move,
   `injectInlineStyles` (`static/spa-navigation.js`) removes only the `<style>` elements it
@@ -543,7 +542,8 @@ Record: `plans/queue-hold.md` on tag `archive/queue_hold`, the manual checks row
   full-loaded Home, against 24 px (Bulma's default) on a reload of the same page. Any page
   loaded first leaks the same way. A fix must keep `base.html`'s shared `<style>` in place;
   not designed. Found 2026-11-24 in the `browse_phone` Phase 1 ui-check (`title_gap`);
-  record: `plans/browse-phone.md` Results log on `browse_phone`, the judge row. Not ruled.
+  record: `plans/browse-phone.md` Results log on tag `archive/browse_phone`, the judge row.
+  Not ruled.
 
 - **The song edit, rename and delete routes redirect to any `referrer`.** `routes/files.py`
   sends the browser to the request's `referrer` after the edit page, a rename and a delete,
@@ -556,12 +556,12 @@ Record: `plans/queue-hold.md` on tag `archive/queue_hold`, the manual checks row
 
 - **A failed song stays "needs fix" while its retry runs.** Its state stays `failed` until the
   retry ends, and `_do_enqueue` (`routes/queue.py`) refuses a failed song whatever is running,
-  so for the whole retry Queue refuses it and Browse (`browse_phone`) shows the admin "needs
+  so for the whole retry Queue refuses it and Browse shows the admin "needs
   fix" and hides it from guests; the old Browse showed "processing". Taking a failed song whose
   retry is running as processing (`library_tools.is_busy`) would change both, through
   `QueueHold.add_outcome`. Found by Opus speccing `browse_phone` Phase 1 and again in its
   `/code-review` (finding 4), 2026-11-24; record: `plans/browse-phone.md` "Checked against the
-  code" on `browse_phone`. Not ruled.
+  code" on tag `archive/browse_phone`. Not ruled.
 
 ## Landing order (every open branch)
 
@@ -592,9 +592,10 @@ Stage 1, can run now, side by side:
   the failed row, the pause route, song and artist on queue rows) needs nothing from
   `singer_defaults` and can run now; Phases 2-3 wait for stage 3.~~ Landed on `dev`
   2026-11-23 (`e21cc620`..`5079f020`, as copies); retired as `archive/queue_phone`.
-- `browse_phone` (`c2de136`): Phase 0 (name-source test, offline) and GATE N. Queue's row
+- ~~`browse_phone` (`c2de136`): Phase 0 (name-source test, offline) and GATE N. Queue's row
   names use the file-name split until GATE N rules (`plans/queue-phone.md`, "Names on the
-  rows").
+  rows").~~ Landed on `dev` 2026-11-24 (`e85398e8`..`f708b4ae`, as copies); retired as
+  `archive/browse_phone`.
 
 Stage 2, landing:
 
@@ -621,7 +622,7 @@ change (L14).~~ Landed 2026-11-23 (see Stage 1).
 
 Stage 4, after `queue_phone` lands, side by side:
 
-- `browse_phone` Phase 1, after GATE N.
+- ~~`browse_phone` Phase 1, after GATE N.~~ Landed 2026-11-24 (see Stage 1).
 - `processing_phone` (`f28d582`), after its open question on group order under All is ruled.
 - Search Part 3 (L12, L13), after Parts 1-2 land too (`download_modal_speed` is on `dev`
   already): it restyles the dialog's controls.
@@ -744,6 +745,7 @@ Per page:
    2026-11-21 (`f04a62df`; from `archive/download_modal_speed`).
 8. `browse_phone`: the "Queue / processing" button is green, not info blue `#3298dc`.
    Empty letters take 16's disabled look, not the canvas's dimmer pill (Ken, 2026-11-18).
+   Done on `dev` 2026-11-24 (`df3febaf`; from `archive/browse_phone`).
 9. `queue_phone`: BRB is a grey button when off and blue when on (was teal).
 10. `processing_phone`: Repair is a grey outline; Retry, Preview, Check playlist are
     neutral grey (4). Info blue stays only for the running-job spinner and step bar.
@@ -804,9 +806,9 @@ The "Small gaps inside the v2 group" above were ruled 2026-11-18 (S1-S4 in `plan
   `is-fixed-top` or `position: sticky; top: 0` on `.navbar`, with the burger menu open
   state and the SPA page swap in `spa-navigation.js` checked), not a per-page one. Touches
   `singer_defaults`'s nav pill and `queue_phone`'s Processing icon gate only by sharing
-  the file. Not started. Browse's letter strip (`browse_phone`, `.bp-strip` in
-  `files.html`) is `position: sticky; top: 0`: a navbar kept on screen must push the
-  strip's `top` down to the navbar's height, or the strip slides under it (Opus,
+  the file. Not started. Browse's pinned strip and toggle (`.bp-pin` in `files.html`, on
+  `dev`) is `position: sticky; top: 0`: a navbar kept on screen must push the
+  pin's `top` down to the navbar's height, or the strip slides under it (Opus,
   2026-11-24, `browse_phone` Phase 1 judge read).
 
 ## Queue page: review findings (on `dev`)
