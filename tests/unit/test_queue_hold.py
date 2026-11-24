@@ -112,6 +112,36 @@ class TestWaitingFor:
         assert hold.waiting_for(SONG) == "pick"
 
 
+class TestAddOutcome:
+    """One rule for what a manual Add does with a library song, shared by Queue and Browse."""
+
+    @pytest.mark.parametrize(
+        "state,waiting_for_pick,busy,expected",
+        [
+            ("failed", False, False, "refused"),
+            ("failed", False, True, "refused"),
+            ("pending", True, False, "pick"),
+            ("pending", False, True, "processing"),
+            ("pending", False, False, "refused"),
+            ("ready", False, False, "ready"),
+            ("ready", False, True, "ready"),
+            ("skipped", False, False, "ready"),
+            ("skipped", False, True, "ready"),
+            (None, False, False, "ready"),
+            (None, False, True, "ready"),
+        ],
+    )
+    def test_the_outcome_by_state_pick_and_busy(
+        self, queue_manager, events, state, waiting_for_pick, busy, expected
+    ):
+        library_tools = MagicMock()
+        library_tools.is_waiting_for_pick.return_value = waiting_for_pick
+        library_tools.is_busy.return_value = busy
+        hold = QueueHold(queue_manager, events, library_tools, MagicMock())
+
+        assert hold.add_outcome(SONG, state) == expected
+
+
 class TestDownloadQueued:
     def test_holds_a_slot_keyed_by_the_url(self, hold, queue_manager, events):
         click(events)
