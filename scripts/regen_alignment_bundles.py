@@ -10,7 +10,7 @@ and a reverb-washed song's de-reverb stem is cached to
 re-runs (align + transcribe) — that is how the bundle's word lists are
 produced.
 
-Two modes:
+Three modes:
 
   * default -> trust the existing bundles and on-disk artifacts.  Only songs
     whose bundle is missing or older than the current ``SCHEMA_VERSION`` are
@@ -26,6 +26,14 @@ Two modes:
     none exists, a Genius pick is prompted.  Stems are still reused — only the
     lyric/caption resolution is reset.
 
+  * ``--lrclib-auto`` -> check every song the joint matcher still times from a
+    Genius sheet against LRCLIB (the check a first-time download runs, on the
+    words each bundle already stores), then re-time the songs a record passes
+    from that record, on the cue route.  The pick is made before any GPU time is
+    spent, so ``--dry-run`` lists which songs would switch and to which record.
+    A song no record passes, and one whose ``.lrc`` is a skip marker or unreadable,
+    is left as it is.
+
 Fetched captions are gated by a fixed words-per-minute floor so a dialog-only
 track is sent to the Genius prompt instead of aligned as lyrics.
 
@@ -33,11 +41,12 @@ Before overwriting outputs, the ``subtitles/``, ``karaoke/``, ``lyrics/`` and
 ``alignment_debug/`` folders are copied once into ``<folder>/regen_backup_<UTC>/``.
 
 With ``--song``, only the selected songs run, and the backup and the ``--reset``
-wipe touch only those songs' own files.
+wipe touch only those songs' own files.  With ``--lrclib-auto`` the backup covers
+only the songs a record passes.
 
 Run from the repo root::
 
-    python scripts/regen_alignment_bundles.py [folder] [--reset] [--song PATTERN]... [--dry-run] [--yes]
+    python scripts/regen_alignment_bundles.py [folder] [--reset | --lrclib-auto] [--song PATTERN]... [--dry-run] [--yes]
 """
 
 from __future__ import annotations
@@ -53,6 +62,7 @@ from pathlib import Path
 # Allow running as ``python scripts/regen_alignment_bundles.py`` from repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from pikaraoke.lib import lrc_auto_timing, lrclib  # noqa: E402
 from pikaraoke.lib.genius import GeniusClient  # noqa: E402
 from pikaraoke.lib.get_platform import (  # noqa: E402
     get_default_dl_dir,
@@ -71,10 +81,12 @@ from pikaraoke.lib.library_regen import (  # noqa: E402
     finish_regen_job,
     is_genius_reuse,
     list_videos,
+    media_duration,
     prepare_lyrics,
     put_back_lyric_files,
     resolve_plan,
     scan_folder,
+    sheet_plan,
     snapshot_lyric_files,
 )
 from pikaraoke.lib.preference_manager import PreferenceManager  # noqa: E402
@@ -91,8 +103,17 @@ from scripts.song_select import select_songs  # noqa: E402
 # ---------------------------------------------------------------------------
 
 
-def print_report(jobs: list[SongJob], folder: Path, reset: bool, selected: bool = False) -> None:
-    if selected:
+def print_report(
+    jobs: list[SongJob],
+    folder: Path,
+    reset: bool,
+    selected: bool = False,
+    lrclib_auto: bool = False,
+) -> None:
+    if lrclib_auto:
+        scope = "Genius songs on joint, checked against LRCLIB"
+        scope += " (selected songs)" if selected else ""
+    elif selected:
         scope = "selected songs (reset)" if reset else "selected songs"
     elif reset:
         scope = "all songs (reset)"
@@ -100,7 +121,11 @@ def print_report(jobs: list[SongJob], folder: Path, reset: bool, selected: bool 
         scope = "missing/stale bundles"
     print(f"\nScanned: {folder}")
     print(f"Selection: {scope}")
-    print(f"Songs to regenerate: {len(jobs)}\n")
+    if lrclib_auto:
+        retimed = sum(1 for j in jobs if j.plan.kind != "skip")
+        print(f"Songs checked: {len(jobs)}; to re-time: {retimed}\n")
+    else:
+        print(f"Songs to regenerate: {len(jobs)}\n")
     if not jobs:
         return
     width = max(len(j.song_path.name) for j in jobs)
@@ -175,6 +200,89 @@ def execute_lrclib_backfill(jobs: list[SongJob], config: PipelineConfig) -> None
     print(f"Backfilling LRCLIB variants for {len(targets)} genius-origin song(s)...")
     for job in targets:
         backfill_lrc(job, config)
+
+
+# ---------------------------------------------------------------------------
+# --lrclib-auto: the LRCLIB check of songs the joint matcher times from Genius
+# ---------------------------------------------------------------------------
+
+
+def lrclib_auto_refusal(job: SongJob) -> str | None:
+    """Why the LRCLIB check does not apply to ``job``, or None when it does.
+
+    Only a song the joint matcher still times from its Genius lyrics is checked: a custom
+    sheet, a caption, an LRCLIB timing or a transcription is not. A skip marker or a
+    hand-placed ``.lrc`` is someone's call, and the check needs the words the transcriber
+    heard and the clip length.
+    """
+    if not is_genius_reuse(job.plan):
+        return f"it is not a Genius song on joint ({job.plan.label})"
+    state = lrclib.read_song_lrc(job.song_path).state
+    if state == "skipped":
+        return "its .lrc is a no-match marker"
+    if state == "unreadable":
+        return "its .lrc can't be read"
+    if not job.bundle.get("transcribe_words"):
+        return "its bundle holds no transcribe words"
+    if media_duration(job) is None:
+        return "its length is unknown"
+    return None
+
+
+def lrclib_auto_plan(job: SongJob) -> Plan:
+    """The plan for one eligible song: its LRCLIB pick on the cue route, or a skip saying why.
+
+    The check is a first-time download's, run on the words the bundle already stores, so
+    the pick is made before any GPU time is spent. A pick is the plan Repair builds for an
+    LRCLIB record, with the automatic sheet's kind.
+    """
+    auto = lrc_auto_timing.check(
+        job.plan.seed["genius"], job.bundle["transcribe_words"], media_duration(job)
+    )
+    counts = auto.record()
+    if auto.entry is None:
+        return Plan(kind="skip", label=_stays_label(counts))
+    plan = sheet_plan(job.song_path, "lrclib_auto", auto.entry.fit.srt)
+    plan.lrclib_record = auto.entry.record
+    plan.label = _pick_label(counts["pick"])
+    return plan
+
+
+def _pick_label(pick: dict) -> str:
+    return (
+        f"LRCLIB (auto) {pick['id']}: {pick['trackName']} · {pick['artistName']} "
+        f"(mistimed {pick['mistimed']}, unclaimed run {pick['unclaimed_run']}, "
+        f"shift run {pick['shift_run']}, on {pick['timing_size']} records)"
+    )
+
+
+def _stays_label(counts: dict) -> str:
+    outcome = counts["outcome"]
+    if outcome == lrc_auto_timing.NO_PICK:
+        refused = ", ".join(f"{why} {n}" for why, n in counts["refusals"].items())
+        return f"stays on joint: no record passed ({counts['records']} records; {refused})"
+    if outcome == lrc_auto_timing.NO_RECORDS:
+        return "stays on joint: no synced LRCLIB record"
+    return f"stays on joint: LRCLIB check could not run ({outcome}); rerun later"
+
+
+def check_lrclib_auto(jobs: list[SongJob], named: bool) -> list[SongJob]:
+    """Keep the jobs the LRCLIB check applies to, each with its plan set by the check.
+
+    ``named``: the songs were chosen with ``--song``, so each one dropped says why. The
+    progress goes to stderr, which leaves stdout the report.
+    """
+    eligible = []
+    for job in jobs:
+        reason = lrclib_auto_refusal(job)
+        if reason is None:
+            eligible.append(job)
+        elif named:
+            print(f"{job.song_path.name}: not checked, {reason}")
+    for i, job in enumerate(eligible, 1):
+        print(f"[{i}/{len(eligible)}] {job.song_path.name}", file=sys.stderr, flush=True)
+        job.plan = lrclib_auto_plan(job)
+    return eligible
 
 
 # ---------------------------------------------------------------------------
@@ -296,6 +404,16 @@ def parse_args() -> argparse.Namespace:
         "and reuses their recorded source.",
     )
     p.add_argument(
+        "--lrclib-auto",
+        action="store_true",
+        help="Check every song the joint matcher still times from a Genius sheet "
+        "against LRCLIB, with the bar a first-time download uses, and re-time the "
+        "songs a record passes from that record on the cue route. A song no record "
+        "passes is left as it is. The check searches LRCLIB even with --dry-run, "
+        "which then lists the songs that would switch and stops. Can't be combined "
+        "with --reset. With --song, narrows the check to those songs.",
+    )
+    p.add_argument(
         "--song",
         action="append",
         metavar="PATTERN",
@@ -313,7 +431,10 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip the post-report confirmation prompt.",
     )
-    return p.parse_args()
+    args = p.parse_args()
+    if args.lrclib_auto and args.reset:
+        p.error("--lrclib-auto can't be combined with --reset")
+    return args
 
 
 def resolve_and_run(jobs: list[SongJob]) -> int:
@@ -347,6 +468,45 @@ def resolve_and_run(jobs: list[SongJob]) -> int:
     return 0 if failed == 0 else 1
 
 
+def confirm(count: int) -> bool:
+    """Ask whether to run ``count`` songs; an answer other than yes aborts."""
+    reply = input(f"Proceed with {count} song(s)? [y/N] ").strip().lower()
+    if reply in ("y", "yes"):
+        return True
+    print("Aborted.")
+    return False
+
+
+def back_up(folder: Path, stems: list[str] | None, scope_note: str) -> None:
+    """Snapshot the output folders (only ``stems``' own files when given) and say where."""
+    backup = backup_text_folders(folder, stems=stems)
+    if backup is not None:
+        print(f"Backed up subtitles/karaoke/lyrics/alignment_debug{scope_note} to: {backup}\n")
+    else:
+        print(f"No subtitles/karaoke/lyrics/alignment_debug folders to back up{scope_note}.\n")
+
+
+def run_lrclib_auto(
+    args: argparse.Namespace, folder: Path, jobs: list[SongJob], named: bool
+) -> int:
+    """The ``--lrclib-auto`` mode after the scan: check, report, then re-time the picks.
+
+    The songs no record passes stay in the run as skips, so its final line counts them.
+    """
+    jobs = check_lrclib_auto(jobs, named)
+    print_report(jobs, folder, False, selected=named, lrclib_auto=True)
+    picked = [j for j in jobs if j.plan.kind != "skip"]
+    if not picked:
+        print("Nothing to re-time.")
+        return 0
+    if args.dry_run:
+        return 0
+    if not args.yes and not confirm(len(picked)):
+        return 0
+    back_up(folder, [j.song_path.stem for j in picked], " for the re-timed songs")
+    return resolve_and_run(jobs)
+
+
 def main() -> int:
     setup_process()
 
@@ -364,9 +524,11 @@ def main() -> int:
             print(str(e), file=sys.stderr)
             return 2
 
-    jobs = scan_folder(folder, args.reset, songs=selected)
+    jobs = scan_folder(folder, args.reset or args.lrclib_auto, songs=selected)
     for job in jobs:
         job.plan = resolve_plan(job, reset=args.reset)
+    if args.lrclib_auto:
+        return run_lrclib_auto(args, folder, jobs, named=selected is not None)
     print_report(jobs, folder, args.reset, selected=selected is not None)
     if not jobs:
         return 0
@@ -374,21 +536,14 @@ def main() -> int:
     if args.dry_run:
         return 0
 
-    if not args.yes:
-        reply = input(f"Proceed with {len(jobs)} song(s)? [y/N] ").strip().lower()
-        if reply not in ("y", "yes"):
-            print("Aborted.")
-            return 0
+    if not args.yes and not confirm(len(jobs)):
+        return 0
 
     stems = [p.stem for p in selected] if selected is not None else None
     scope_note = " for the selected songs" if stems is not None else ""
 
     # Back up before any destructive step (folder wipe, caption download, regen).
-    backup = backup_text_folders(folder, stems=stems)
-    if backup is not None:
-        print(f"Backed up subtitles/karaoke/lyrics/alignment_debug{scope_note} to: {backup}\n")
-    else:
-        print(f"No subtitles/karaoke/lyrics/alignment_debug folders to back up{scope_note}.\n")
+    back_up(folder, stems, scope_note)
 
     # Reset rebuilds every output, so wipe the folders up front — no stale
     # caption or transcript survives to be mistaken for current.

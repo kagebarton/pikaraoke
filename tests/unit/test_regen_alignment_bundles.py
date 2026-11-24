@@ -2,8 +2,8 @@
 
 The planning, caption gate, backup/wipe and lyric-prep core lives in
 pikaraoke/lib/library_regen.py (test_library_regen.py).  Here: the report, the
-``--song --reset`` wiring of ``main()``, the shared ``resolve_and_run`` setup and
-the LRCLIB backfill batch.
+``--song --reset`` wiring of ``main()``, the shared ``resolve_and_run`` setup, the
+LRCLIB backfill batch and the ``--lrclib-auto`` check.
 """
 
 import importlib.util
@@ -11,11 +11,14 @@ import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from pikaraoke.lib import library_regen, lrclib
+import pytest
+
+from pikaraoke.lib import library_regen, lrc_auto_timing, lrclib
 from pikaraoke.lib.genius import GeniusHit
 from pikaraoke.pipeline.config import PipelineConfig
+from tests.unit.movie_slices import CLIP_S, heard_words, lrc_slice
 
 # scripts/ is not a package — load the module straight from its file. It must
 # be registered in sys.modules before exec so @dataclass can resolve its own
@@ -501,3 +504,386 @@ class TestRunJobsFinishesEachSong:
 
         assert counts == (0, 1, 0)
         assert sheet.read_bytes() == "Café\n".encode("cp1252")
+
+
+# ---------------------------------------------------------------------------
+# --lrclib-auto: the LRCLIB check of Genius songs on joint
+# ---------------------------------------------------------------------------
+
+GENIUS = {"id": 9, "title": "Some Song", "artist": "Some Artist"}
+OTHER_GENIUS = {"id": 10, "title": "Other Song", "artist": "Other Artist"}
+QUERY = "Some Song Some Artist"
+OLD_LRC = "[ti:Old]\n[lrclib_id:1]\n[00:01.00] old\n"
+
+
+def _record(record_id: int = 42, synced: str | None = None) -> dict:
+    """A synced record of exactly the lines ``heard_words`` sings, so it passes the bar."""
+    return {
+        "id": record_id,
+        "trackName": "Some Song",
+        "artistName": "Some Artist",
+        "albumName": "Album",
+        "duration": CLIP_S,
+        "syncedLyrics": synced if synced is not None else lrc_slice(),
+    }
+
+
+def _genius_song(folder: Path, stem: str = YT_STEM, genius: dict = GENIUS, **bundle) -> Path:
+    """A video with the bundle of a song timed from Genius, and an old ``.lrc`` beside it."""
+    video = _touch_video(folder, stem)
+    fields = {
+        "media_duration_s": CLIP_S,
+        "transcribe_words": heard_words(),
+        "lyrics": {"origin": "genius", "genius": genius, "lines": ["one", "two"]},
+        **bundle,
+    }
+    path = library_regen.bundle_path(folder, stem)
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps(fields), encoding="utf-8")
+    lrc = lrclib.lrc_path(video)
+    lrc.parent.mkdir(exist_ok=True)
+    lrc.write_text(OLD_LRC, encoding="utf-8")
+    return video
+
+
+def _planned(folder: Path, *videos: Path) -> list["regen.SongJob"]:
+    """The jobs ``main()`` hands the mode: every video (or the named ones) with its plan."""
+    jobs = library_regen.scan_folder(folder, True, songs=list(videos) or None)
+    for job in jobs:
+        job.plan = library_regen.resolve_plan(job, reset=False)
+    return jobs
+
+
+@pytest.fixture
+def search():
+    """Patch the LRCLIB search; the real check and bar run on its records."""
+    with patch.object(lrclib, "search_query", return_value=[_record()]) as mock:
+        yield mock
+
+
+class TestLrclibAutoPlan:
+    def test_a_passing_record_gives_the_plan_a_repair_to_it_would(self, tmp_path, search):
+        video = _genius_song(tmp_path)
+
+        (job,) = regen.check_lrclib_auto(_planned(tmp_path), named=False)
+
+        plan = job.plan
+        assert plan.kind == "seed"
+        assert plan.lyrics_path == lrc_auto_timing.sheet_path(video)
+        assert plan.seed == {"lyrics_origin": library_regen.LRC_AUTO_ORIGIN}
+        assert plan.custom_text.startswith("1\n00:00:10,000 --> 00:00:15,000\n")
+        assert plan.lrclib_record == _record()
+        assert "42" in plan.label and "mistimed 0" in plan.label
+        search.assert_called_once_with(QUERY)
+
+    def test_no_record_passing_the_bar_stays_on_joint_and_counts_why(self, tmp_path, search):
+        _genius_song(tmp_path)
+        search.return_value = [_record(synced=lrc_slice(lines=range(3)))]
+
+        (job,) = regen.check_lrclib_auto(_planned(tmp_path), named=False)
+
+        assert job.plan.kind == "skip"
+        assert job.plan.label == "stays on joint: no record passed (1 records; no_fit 1)"
+        assert not (tmp_path / "lyrics" / f"{YT_STEM}.lrclib-auto.srt").exists()
+
+    def test_no_synced_record_stays_on_joint(self, tmp_path, search):
+        _genius_song(tmp_path)
+        search.return_value = [{**_record(), "syncedLyrics": None}]
+
+        (job,) = regen.check_lrclib_auto(_planned(tmp_path), named=False)
+
+        assert job.plan.kind == "skip"
+        assert job.plan.label == "stays on joint: no synced LRCLIB record"
+
+    def test_an_unreachable_lrclib_stays_on_joint_and_says_to_rerun(self, tmp_path, search):
+        _genius_song(tmp_path)
+        search.side_effect = lrclib.LrclibUnavailable("LRCLIB search failed")
+
+        (job,) = regen.check_lrclib_auto(_planned(tmp_path), named=False)
+
+        assert job.plan.kind == "skip"
+        assert job.plan.label == (
+            "stays on joint: LRCLIB check could not run (search_failed); rerun later"
+        )
+        assert lrclib.lrc_path(job.song_path).read_text(encoding="utf-8") == OLD_LRC
+
+    def test_the_progress_goes_to_stderr_and_the_report_stays_clean(self, tmp_path, search, capsys):
+        _genius_song(tmp_path)
+
+        regen.check_lrclib_auto(_planned(tmp_path), named=False)
+
+        captured = capsys.readouterr()
+        assert captured.err == f"[1/1] {YT_STEM}.mp4\n"
+        assert captured.out == ""
+
+
+class TestLrclibAutoEligibility:
+    """A song the check does not apply to is dropped before any search."""
+
+    def _dropped(self, tmp_path, search, capsys, video: Path) -> str:
+        assert regen.check_lrclib_auto(_planned(tmp_path, video), named=True) == []
+        search.assert_not_called()
+        return capsys.readouterr().out
+
+    def test_a_caption_song(self, tmp_path, search, capsys):
+        video = _genius_song(tmp_path, lyrics={"origin": "srt"})
+        _make_srt(tmp_path, YT_STEM)
+
+        out = self._dropped(tmp_path, search, capsys, video)
+
+        assert f"{YT_STEM}.mp4: not checked, it is not a Genius song on joint" in out
+
+    def test_a_song_with_a_custom_sheet(self, tmp_path, search, capsys):
+        video = _genius_song(tmp_path)
+        (tmp_path / "lyrics" / f"{YT_STEM}.custom.txt").write_text("one\ntwo\n", encoding="utf-8")
+
+        out = self._dropped(tmp_path, search, capsys, video)
+
+        assert "it is not a Genius song on joint (custom sheet)" in out
+
+    def test_a_song_already_timed_from_a_record(self, tmp_path, search, capsys):
+        video = _genius_song(tmp_path)
+        (tmp_path / "lyrics" / f"{YT_STEM}.lrclib-auto.srt").write_text("x", encoding="utf-8")
+
+        out = self._dropped(tmp_path, search, capsys, video)
+
+        assert "(LRCLIB timing (auto))" in out
+
+    def test_a_skip_marker(self, tmp_path, search, capsys):
+        video = _genius_song(tmp_path)
+        lrclib.write_skip_marker(lrclib.lrc_path(video))
+
+        out = self._dropped(tmp_path, search, capsys, video)
+
+        assert "its .lrc is a no-match marker" in out
+
+    def test_an_unreadable_lrc(self, tmp_path, search, capsys):
+        video = _genius_song(tmp_path)
+        lrclib.lrc_path(video).write_bytes("[ti:Café]\n".encode("cp1252"))
+
+        out = self._dropped(tmp_path, search, capsys, video)
+
+        assert "its .lrc can't be read" in out
+
+    def test_a_bundle_without_transcribe_words(self, tmp_path, search, capsys):
+        video = _genius_song(tmp_path, transcribe_words=[])
+
+        out = self._dropped(tmp_path, search, capsys, video)
+
+        assert "its bundle holds no transcribe words" in out
+
+    def test_a_song_whose_length_is_unknown(self, tmp_path, search, capsys, monkeypatch):
+        video = _genius_song(tmp_path, media_duration_s=None)
+        monkeypatch.setattr(regen, "media_duration", lambda job: None)
+
+        out = self._dropped(tmp_path, search, capsys, video)
+
+        assert "its length is unknown" in out
+
+    def test_a_song_without_a_bundle(self, tmp_path, search, capsys):
+        video = _touch_video(tmp_path, YT_STEM)
+
+        out = self._dropped(tmp_path, search, capsys, video)
+
+        assert "it is not a Genius song on joint" in out
+
+    def test_without_song_a_dropped_song_is_silent(self, tmp_path, search, capsys):
+        _genius_song(tmp_path, lyrics={"origin": "srt"})
+
+        assert regen.check_lrclib_auto(_planned(tmp_path), named=False) == []
+
+        assert capsys.readouterr().out == ""
+
+
+class TestMainLrclibAuto:
+    """``main()`` with the flag: the report, the dry run, the backup and the hand-off."""
+
+    PICKED = "Some Song---aaaaaaaaaaa"
+    STAYS = "Other Song---bbbbbbbbbbb"
+
+    def _library(self, tmp_path):
+        _genius_song(tmp_path, self.PICKED)
+        _genius_song(tmp_path, self.STAYS, OTHER_GENIUS)
+
+    def _main(self, monkeypatch, tmp_path, *args):
+        monkeypatch.setenv("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+        monkeypatch.setattr(sys, "argv", ["regen", str(tmp_path), "--lrclib-auto", *args])
+        run = MagicMock(return_value=0)
+        monkeypatch.setattr(regen, "resolve_and_run", run)
+        return regen.main(), run
+
+    @pytest.fixture(autouse=True)
+    def only_the_first_song_has_a_record(self, search):
+        search.side_effect = lambda query: [_record()] if query == QUERY else []
+
+    def test_it_cannot_be_combined_with_reset(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr(sys, "argv", ["regen", str(tmp_path), "--lrclib-auto", "--reset"])
+
+        with pytest.raises(SystemExit) as stop:
+            regen.main()
+
+        assert stop.value.code == 2
+        assert "--lrclib-auto can't be combined with --reset" in capsys.readouterr().err
+
+    def test_a_dry_run_searches_lists_the_songs_and_changes_nothing(
+        self, tmp_path, monkeypatch, capsys, search
+    ):
+        self._library(tmp_path)
+        before = sorted(p.name for p in tmp_path.rglob("*"))
+
+        code, run = self._main(monkeypatch, tmp_path, "--dry-run")
+
+        out = capsys.readouterr().out
+        assert code == 0
+        assert search.call_count == 2
+        assert "Selection: Genius songs on joint, checked against LRCLIB\n" in out
+        assert "Songs checked: 2; to re-time: 1" in out
+        assert "LRCLIB (auto) 42: Some Song · Some Artist" in out
+        assert "stays on joint: no synced LRCLIB record" in out
+        run.assert_not_called()
+        assert sorted(p.name for p in tmp_path.rglob("*")) == before
+
+    def test_a_real_run_backs_up_the_picked_songs_only_and_hands_over_every_checked_song(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        self._library(tmp_path)
+
+        code, run = self._main(monkeypatch, tmp_path, "--yes")
+
+        assert code == 0
+        (backup,) = tmp_path.glob("regen_backups/*")
+        assert (backup / "alignment_debug" / f"{self.PICKED}.json").is_file()
+        assert (backup / "lyrics" / f"{self.PICKED}.lrc").is_file()
+        assert not (backup / "alignment_debug" / f"{self.STAYS}.json").exists()
+        assert not (backup / "lyrics" / f"{self.STAYS}.lrc").exists()
+        (jobs,) = run.call_args.args
+        assert {j.song_path.stem: j.plan.kind for j in jobs} == {
+            self.PICKED: "seed",
+            self.STAYS: "skip",
+        }
+        assert "for the re-timed songs" in capsys.readouterr().out
+
+    def test_the_confirmation_counts_the_picked_songs_and_no_answers_abort(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        self._library(tmp_path)
+        prompts = []
+        monkeypatch.setattr("builtins.input", lambda prompt: prompts.append(prompt) or "n")
+
+        code, run = self._main(monkeypatch, tmp_path)
+
+        assert code == 0
+        assert prompts == ["Proceed with 1 song(s)? [y/N] "]
+        assert "Aborted." in capsys.readouterr().out
+        run.assert_not_called()
+        assert not (tmp_path / "regen_backups").exists()
+
+    def test_no_pick_means_nothing_to_re_time_and_no_backup(
+        self, tmp_path, monkeypatch, capsys, search
+    ):
+        self._library(tmp_path)
+        search.side_effect = None
+        search.return_value = []
+
+        code, run = self._main(monkeypatch, tmp_path, "--yes")
+
+        assert code == 0
+        assert "Nothing to re-time." in capsys.readouterr().out
+        run.assert_not_called()
+        assert not (tmp_path / "regen_backups").exists()
+
+    def test_song_narrows_the_check_and_a_song_named_twice_is_checked_once(
+        self, tmp_path, monkeypatch, capsys, search
+    ):
+        self._library(tmp_path)
+
+        code, _ = self._main(
+            monkeypatch, tmp_path, "--dry-run", "--song", "aaaaaaaaaaa", "--song", self.PICKED
+        )
+
+        out = capsys.readouterr().out
+        assert code == 0
+        search.assert_called_once_with(QUERY)
+        assert "Selection: Genius songs on joint, checked against LRCLIB (selected songs)" in out
+        assert self.STAYS not in out
+
+    def test_a_song_named_that_the_check_drops_says_why(
+        self, tmp_path, monkeypatch, capsys, search
+    ):
+        _genius_song(tmp_path, self.PICKED, lyrics={"origin": "srt"})
+        _make_srt(tmp_path, self.PICKED)
+
+        code, _ = self._main(monkeypatch, tmp_path, "--dry-run", "--song", self.PICKED)
+
+        assert code == 0
+        out = capsys.readouterr().out
+        assert f"{self.PICKED}.mp4: not checked, it is not a Genius song on joint" in out
+        assert "Nothing to re-time." in out
+        search.assert_not_called()
+
+    def test_a_cjk_song_name_goes_through_the_report(self, tmp_path, monkeypatch, capsys, search):
+        stem = "歌手 - 歌曲---dQw4w9WgXcQ"
+        _genius_song(tmp_path, stem)
+
+        code, _ = self._main(monkeypatch, tmp_path, "--dry-run")
+
+        assert code == 0
+        assert f"{stem}.mp4" in capsys.readouterr().out
+
+
+class TestLrclibAutoRun:
+    """The picked plan through the real ``prepare_lyrics`` and ``run_jobs``."""
+
+    def _job(self, tmp_path, search):
+        _genius_song(tmp_path)
+        (job,) = regen.check_lrclib_auto(_planned(tmp_path), named=False)
+        return job
+
+    def test_the_run_writes_the_sheet_and_the_record_and_keeps_the_genius_song(
+        self, tmp_path, search
+    ):
+        job = self._job(tmp_path, search)
+        lyrics_dir = tmp_path / "scratch"
+        lyrics_dir.mkdir()
+
+        lyrics_path, stage = regen.prepare_lyrics(job, MagicMock(), lyrics_dir, PipelineConfig())
+
+        sheet = tmp_path / "lyrics" / f"{YT_STEM}.lrclib-auto.srt"
+        assert lyrics_path == sheet
+        assert sheet.read_text(encoding="utf-8") == job.plan.custom_text
+        lrc = lrclib.lrc_path(job.song_path).read_text(encoding="utf-8")
+        assert "[lrclib_id:42]" in lrc and "[lrclib_id:1]" not in lrc
+        ctx = SimpleNamespace(artifacts={})
+        stage.run(ctx)
+        assert ctx.artifacts["lyrics_origin"] == library_regen.LRC_AUTO_ORIGIN
+        assert ctx.artifacts["genius"] == GENIUS
+
+    def test_a_song_that_fails_gets_its_old_lrc_back_and_no_auto_sheet(
+        self, tmp_path, monkeypatch, search
+    ):
+        job = self._job(tmp_path, search)
+        old = lrclib.lrc_path(job.song_path).read_bytes()
+
+        started_from_the_sheet = []
+
+        class FailingOrchestrator:
+            def __init__(self, *args):
+                pass
+
+            def run_one(self, song, lyrics_path):
+                started_from_the_sheet.append(lyrics_path.is_file())
+                raise RuntimeError("boom")
+
+        monkeypatch.setattr(regen, "PipelineOrchestrator", FailingOrchestrator)
+        monkeypatch.setattr(regen, "StemWorker", MagicMock())
+        monkeypatch.setattr(regen, "WhisperWorker", MagicMock())
+        monkeypatch.setattr(regen, "build_stages", lambda *args, **kwargs: [])
+        config = PipelineConfig()
+        config.intermediate_dir = str(tmp_path)
+
+        counts = regen.run_jobs([job], config, MagicMock())
+
+        assert counts == (0, 1, 0)
+        assert started_from_the_sheet == [True]
+        assert lrclib.lrc_path(job.song_path).read_bytes() == old
+        assert not (tmp_path / "lyrics" / f"{YT_STEM}.lrclib-auto.srt").exists()
