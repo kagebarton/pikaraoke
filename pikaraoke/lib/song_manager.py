@@ -4,11 +4,12 @@ import contextlib
 import logging
 import os
 import re
+from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
 
 from pikaraoke.lib.events import EventSystem
-from pikaraoke.lib.genius_query import parse
+from pikaraoke.lib.genius_query import DASH, Parsed, parse
 from pikaraoke.lib.get_platform import is_windows
 from pikaraoke.lib.karaoke_database import KaraokeDatabase
 from pikaraoke.lib.library_regen import (
@@ -36,21 +37,35 @@ def sanitize_filename(name: str) -> str:
     return name.strip()
 
 
+def _misread(title: str, parsed: Parsed) -> bool:
+    """A parse that would mislabel the name on screen.
+
+    The parser serves lyric searches, so it splits at a colon when it finds no dash ("Re: Stacks"
+    gives the act "Re") and says a repeated word once ("Rebel Rebel" gives "Rebel").
+    """
+    if parsed.swap == "dash" and not DASH.search(title):
+        return True
+    said = Counter(word.lower() for word in title.split())
+    kept = Counter(word.lower() for word in f"{parsed.artist} {parsed.title}".split())
+    return any(0 < kept[word] < count for word, count in said.items())
+
+
 def split_title(title: str) -> tuple[str, str]:
     """Split a display title into ``(artist, song)``.
 
     The first " - " splits it: the library's hand-made names are ``Artist - Title``. The YouTube
     title parser reads a name that has no usable split, because a download keeps its raw title
     ("Bohemian Rhapsody | Queen") until it is renamed; it counts only when it finds both artist and
-    song. A name neither reads comes back as ``("", title)``, unchanged: a caller shows the whole
-    title as the song. Queue, Now Playing and Browse share this rule.
+    song, and not when it splits at a colon or drops a repeated word. A name neither reads comes
+    back as ``("", title)``, unchanged: a caller shows the whole title as the song. Queue, Now
+    Playing and Browse share this rule.
     """
     artist, separator, song = title.partition(" - ")
     artist, song = artist.strip(), song.strip()
     if separator and artist and song:
         return artist, song
     parsed = parse(title)
-    if parsed.artist and parsed.title:
+    if parsed.artist and parsed.title and not _misread(title, parsed):
         return parsed.artist, parsed.title
     return "", title
 

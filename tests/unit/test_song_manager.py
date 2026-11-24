@@ -161,6 +161,28 @@ class TestSplitTitle:
     def test_a_name_without_a_split_is_read_by_the_title_parser(self, title, expected):
         assert split_title(title) == expected
 
+    @pytest.mark.parametrize(
+        "title",
+        [
+            "Re: Stacks",
+            "Psalm 23: The Lord is my Shepherd",
+            "Rebel Rebel | David Bowie",
+            "Sugar Sugar | The Archies",
+        ],
+    )
+    def test_a_colon_split_or_a_dropped_repeat_leaves_the_name_whole(self, title):
+        assert split_title(title) == ("", title)
+
+    @pytest.mark.parametrize(
+        ("title", "expected"),
+        [
+            ("Queen – Bohemian Rhapsody", ("Queen", "Bohemian Rhapsody")),
+            ("New York, New York | Frank Sinatra", ("Frank Sinatra", "New York, New York")),
+        ],
+    )
+    def test_a_long_dash_or_a_kept_repeat_still_splits(self, title, expected):
+        assert split_title(title) == expected
+
     def test_a_split_name_is_never_re_read_even_when_backwards(self):
         assert split_title("Hello - Adele") == ("Hello", "Adele")
 
