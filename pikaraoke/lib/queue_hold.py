@@ -59,6 +59,18 @@ class QueueHold:
             return "processing"
         return None
 
+    def add_outcome(self, song_path: str, state: str | None) -> str:
+        """What a manual Add does with a library song in this pipeline ``state``.
+
+        "ready": queue it as playable. "pick" or "processing": a pending song takes a held slot
+        until that finishes. "refused": the song failed, or is pending with nothing to finish it.
+        """
+        if state == "failed":
+            return "refused"
+        if state != "pending":
+            return "ready"
+        return self.waiting_for(song_path) or "refused"
+
     def settle(self, song_path: str) -> None:
         """Bring a song a manual Add has just held up to date, if its event came first.
 

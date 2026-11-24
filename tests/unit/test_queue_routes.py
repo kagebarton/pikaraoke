@@ -427,7 +427,7 @@ class TestEnqueuePipelineGate:
     def test_pending_song_rejected_with_409(self, mock_get_instance, mock_broadcast, client):
         mock_karaoke = MagicMock()
         mock_karaoke.song_manager.get_pipeline_state.return_value = "pending"
-        mock_karaoke.queue_hold.waiting_for.return_value = None
+        mock_karaoke.queue_hold.add_outcome.return_value = "refused"
         mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
         mock_get_instance.return_value = mock_karaoke
 
@@ -448,7 +448,7 @@ class TestEnqueuePipelineGate:
     ):
         mock_karaoke = MagicMock()
         mock_karaoke.song_manager.get_pipeline_state.return_value = "pending"
-        mock_karaoke.queue_hold.waiting_for.return_value = waiting
+        mock_karaoke.queue_hold.add_outcome.return_value = waiting
         mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
         mock_karaoke.queue_manager.enqueue.return_value = [True, "Song added"]
         mock_get_instance.return_value = mock_karaoke
@@ -457,7 +457,7 @@ class TestEnqueuePipelineGate:
 
         assert response.status_code == 200
         assert json.loads(response.data)["success"] == [True, "Song added"]
-        mock_karaoke.queue_hold.waiting_for.assert_called_once_with("/songs/test.mp4")
+        mock_karaoke.queue_hold.add_outcome.assert_called_once_with("/songs/test.mp4", "pending")
         mock_karaoke.queue_manager.enqueue.assert_called_once_with(
             "/songs/test.mp4", "Alice", waiting=waiting
         )
@@ -468,7 +468,7 @@ class TestEnqueuePipelineGate:
     def test_a_refused_hold_is_not_settled(self, mock_get_instance, mock_broadcast, client):
         mock_karaoke = MagicMock()
         mock_karaoke.song_manager.get_pipeline_state.return_value = "pending"
-        mock_karaoke.queue_hold.waiting_for.return_value = "processing"
+        mock_karaoke.queue_hold.add_outcome.return_value = "processing"
         mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
         mock_karaoke.queue_manager.enqueue.return_value = [False, "Song is already in the queue"]
         mock_get_instance.return_value = mock_karaoke
@@ -512,7 +512,7 @@ class TestEnqueuePipelineGate:
     def test_failed_song_is_never_held(self, mock_get_instance, mock_broadcast, client):
         mock_karaoke = MagicMock()
         mock_karaoke.song_manager.get_pipeline_state.return_value = "failed"
-        mock_karaoke.queue_hold.waiting_for.return_value = "processing"
+        mock_karaoke.queue_hold.add_outcome.return_value = "refused"
         mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
         mock_get_instance.return_value = mock_karaoke
 
@@ -526,6 +526,7 @@ class TestEnqueuePipelineGate:
     def test_failed_song_rejected_with_409(self, mock_get_instance, mock_broadcast, client):
         mock_karaoke = MagicMock()
         mock_karaoke.song_manager.get_pipeline_state.return_value = "failed"
+        mock_karaoke.queue_hold.add_outcome.return_value = "refused"
         mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
         mock_get_instance.return_value = mock_karaoke
 
@@ -542,6 +543,7 @@ class TestEnqueuePipelineGate:
     def test_ready_song_accepted(self, mock_get_instance, mock_broadcast, client):
         mock_karaoke = MagicMock()
         mock_karaoke.song_manager.get_pipeline_state.return_value = "ready"
+        mock_karaoke.queue_hold.add_outcome.return_value = "ready"
         mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
         mock_karaoke.queue_manager.enqueue.return_value = True
         mock_get_instance.return_value = mock_karaoke
@@ -560,6 +562,7 @@ class TestEnqueuePipelineGate:
     def test_skipped_song_accepted(self, mock_get_instance, mock_broadcast, client):
         mock_karaoke = MagicMock()
         mock_karaoke.song_manager.get_pipeline_state.return_value = "skipped"
+        mock_karaoke.queue_hold.add_outcome.return_value = "ready"
         mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
         mock_karaoke.queue_manager.enqueue.return_value = True
         mock_get_instance.return_value = mock_karaoke

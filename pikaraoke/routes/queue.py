@@ -194,8 +194,8 @@ def _do_enqueue(song: str, user: str) -> str:
     # processing or a lyrics pick is going to finish it, and is refused when
     # nothing will.
     state = k.song_manager.get_pipeline_state(song)
-    waiting = k.queue_hold.waiting_for(song) if state == "pending" else None
-    if state == "failed" or (state == "pending" and waiting is None):
+    outcome = k.queue_hold.add_outcome(song, state)
+    if outcome == "refused":
         return (
             json.dumps(
                 {
@@ -206,6 +206,7 @@ def _do_enqueue(song: str, user: str) -> str:
             ),
             409,
         )
+    waiting = None if outcome == "ready" else outcome
     rc = k.queue_manager.enqueue(song, user, waiting=waiting)
     if waiting and rc[0]:
         k.queue_hold.settle(song)
