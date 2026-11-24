@@ -130,8 +130,10 @@ class Plan:
 class SongJob:
     """One song's regen. ``replaces_custom`` marks an admin's repair to another
     source, the one job that removes the song's custom lyric sheet. ``first_download``
-    marks a song no run has timed yet, the only kind whose Genius pick may be timed
-    from an LRCLIB record (:mod:`lrc_auto_timing`); every regen leaves it off."""
+    marks a song no run has timed yet, which checks its Genius pick against LRCLIB while
+    it runs (:mod:`lrc_auto_timing`); a regen leaves it off. The regen script's
+    ``--lrclib-auto`` also times Genius songs from a record, but it makes the pick before
+    the run and hands the run the record as a plan."""
 
     song_path: Path
     bundle: dict | None
@@ -147,7 +149,8 @@ CUSTOM_ORIGIN = "custom"
 MOVIE_ORIGIN = "movie_srt"
 LRC_ORIGIN = "lrclib_srt"
 LRC_AUTO_ORIGIN = lrc_auto_timing.ORIGIN
-# Timed from an LRCLIB record, picked by hand on Repair or by the check at download.
+# Timed from an LRCLIB record, picked by hand on Repair or by the check (at download, or
+# the regen script's ``--lrclib-auto``).
 LRC_ORIGINS = (LRC_ORIGIN, LRC_AUTO_ORIGIN)
 
 

@@ -1,9 +1,10 @@
-"""The LRCLIB check of a first-time Genius download (plans/lrclib-fit-pick.md, Phase 4).
+"""The LRCLIB check of a Genius song: a first-time download's (plans/lrclib-fit-pick.md,
+Phase 4) and the regen script's ``--lrclib-auto``, which runs it on a library's stored words.
 
 One search, every synced record fitted to the words the transcriber heard, the pick of
-:mod:`lrc_auto_pick`. Network, no file writes: the stage that calls it decides what lands in
-the library. It imports no pipeline module and not ``library_regen``, which imports the align
-stage, so what both need about the automatic sheet lives here.
+:mod:`lrc_auto_pick`. Network, no file writes: the stage or script that calls it decides what
+lands in the library. It imports no pipeline module and not ``library_regen``, which imports
+the align stage, so what both need about the automatic sheet lives here.
 """
 
 import logging
