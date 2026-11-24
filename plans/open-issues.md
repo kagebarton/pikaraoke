@@ -528,6 +528,17 @@ Record: `plans/queue-hold.md` on tag `archive/queue_hold`, the manual checks row
   2026-11-23 closing `queue_phone` Phase 3 (an Opus read of the call); record:
   `plans/queue-phone.md` Results log on tag `archive/queue_phone`. Not ruled.
 
+- **The first page's own styles stay on every page tapped to after it.** On an SPA move,
+  `injectInlineStyles` (`static/spa-navigation.js`) removes only the `<style>` elements it
+  added (`data-spa-injected`). The page-level styles that came with the full load (its
+  `{% block styles %}`) are never removed, so they apply to every page reached by tapping
+  until a reload. Seen: Home's `header.title:not(:last-child) { margin-bottom: 0.5rem }`
+  (`home.html`) makes the gap under the title 8 px on Browse and Queue after a tap from a
+  full-loaded Home, against 24 px (Bulma's default) on a reload of the same page. Any page
+  loaded first leaks the same way. A fix must keep `base.html`'s shared `<style>` in place;
+  not designed. Found 2026-11-24 in the `browse_phone` Phase 1 ui-check (`title_gap`);
+  record: `plans/browse-phone.md` Results log on `browse_phone`, the judge row. Not ruled.
+
 ## Landing order (every open branch)
 
 Proposed by Claude Opus 5.5, 2026-11-18, from the branch plans and file overlaps at the
@@ -769,7 +780,10 @@ The "Small gaps inside the v2 group" above were ruled 2026-11-18 (S1-S4 in `plan
   `is-fixed-top` or `position: sticky; top: 0` on `.navbar`, with the burger menu open
   state and the SPA page swap in `spa-navigation.js` checked), not a per-page one. Touches
   `singer_defaults`'s nav pill and `queue_phone`'s Processing icon gate only by sharing
-  the file. Not started.
+  the file. Not started. Browse's letter strip (`browse_phone`, `.bp-strip` in
+  `files.html`) is `position: sticky; top: 0`: a navbar kept on screen must push the
+  strip's `top` down to the navbar's height, or the strip slides under it (Opus,
+  2026-11-24, `browse_phone` Phase 1 judge read).
 
 ## Queue page: review findings (on `dev`)
 
