@@ -338,8 +338,9 @@ review's other findings for now. Record: `plans/search-official-first.md` on tag
 `archive/search_official_first`, "Review follow-ups" and the Results log.
 
 The ranking was rewritten on branch `search_official_captions` (2026-11-17, `37ba443`..`a97f945`
-there, not on `dev` yet), and the entries below that say "the rewrite" describe it. Rules,
-"Not doing" and the measurements: `plans/search-official-captions.md` on that branch.
+there) and landed on `dev` 2026-11-24 with the rest of its Parts 1-2b (`64d7d657`..`4c260de3`,
+as copies); the entries below that say "the rewrite" describe it. Rules, "Not doing" and the
+measurements: `plans/search-official-captions.md` on that branch.
 
 - **A restored search page can show a stuck card.** After Show more, the page saves the cards
   so coming back to Search restores them. The copy can catch a card's loading state (an
@@ -364,10 +365,11 @@ there, not on `dev` yet), and the entries below that say "the rewrite" describe 
   hides the lyrics and its Queue enqueues the library file; (3) `/download` refuses an ID it
   already owns and enqueues the library copy instead, which also covers the stale restored
   page above. Recommended: 3 in any case, with 1 for simplicity or 2 to keep the preview.
-  Likely home: Search Part 3. Not ruled. Planned for the card half (Ken, 2026-11-23): every
-  thumbnail plays its video in its card instead of opening the dialog, so an owned card no
-  longer reaches it (`search_official_captions` Part 2b, after that branch rebases onto
-  `dev`). Option 3 would still cover the stale restored page.
+  Likely home: Search Part 3. Not ruled. The card half is fixed (`6a20a163`, landed on `dev`
+  2026-11-24 from `search_official_captions` Part 2b commit 11): every thumbnail's play button
+  previews its video in the card instead of opening the dialog, so an owned card no longer
+  reaches it. Still open: `/download` taking an ID the library already owns (option 3), which
+  would also cover the stale restored page above.
 - **A "Song - Artist" title is read the wrong way round** when the query also names the
   artist: for "queen bohemian rhapsody", "Bohemian Rhapsody - Queen" credits the song name as
   the artist. Official uploads are nearly always "Artist - Song". Left by Ken 2026-11-08.
@@ -513,9 +515,9 @@ there, not on `dev` yet), and the entries below that say "the rewrite" describe 
   (`clock`, with hours) and Search's card bar (`clock`, `search_official_captions` commit
   11) each format a time. One shared formatter (the one with hours) needs a script all
   three load; `home.html` loads none of the shared ones. It was mid-change on
-  `now_playing_remote`, which landed 2026-11-23, so this now waits only for
-  `search_official_captions`. Part 2b's "Not doing" already left it out. Found in the same
-  review (finding 6). Not ruled.
+  `now_playing_remote`, which landed 2026-11-23, and `search_official_captions` landed
+  2026-11-24, so all three copies are on `dev` and nothing blocks it. Part 2b's "Not doing"
+  already left it out. Found in the same review (finding 6). Not ruled.
 
 ## Movie splits (on `dev`)
 
@@ -653,8 +655,9 @@ Stage 1, can run now, side by side:
   on `singer_defaults`.~~ Landed on `dev` 2026-11-21 (`75c3961d`..`61460808`, as copies, with
   the review's fixes and the theme's grey); retired as `archive/download_modal_speed`. Its
   open findings are in "Search results (on `dev`)".
-- `search_official_captions` Parts 1-2 (`5c4e410`): commit 9 (L11) and the review of commits
-  5-9 done (fixes `af48f5a`); Ken's manual checks.
+- ~~`search_official_captions` Parts 1-2 (`5c4e410`): commit 9 (L11) and the review of commits
+  5-9 done (fixes `af48f5a`); Ken's manual checks.~~ Landed on `dev` 2026-11-24 with Part 2b
+  (see Stage 2).
 - ~~`queue_phone` (`0439038`): spec and phases written 2026-11-18. Its Phase 1 (server only:
   the failed row, the pause route, song and artist on queue rows) needs nothing from
   `singer_defaults` and can run now; Phases 2-3 wait for stage 3.~~ Landed on `dev`
@@ -671,16 +674,15 @@ Stage 2, landing:
    It landed after `queue_phone`, not before it as planned here: the two share only
    `base.html`, `karaoke.py` and one test file, in different places, and the seven commits
    applied clean.
-2. ~~`download_modal_speed`~~ (landed 2026-11-21, first), then `search_official_captions`
-   Parts 1-2: both edit `youtube_dl.py`, `routes/search.py`, `search.html` and
+2. ~~`download_modal_speed`~~ (landed 2026-11-21, first), then ~~`search_official_captions`
+   Parts 1-2~~ (landed 2026-11-24, `64d7d657`..`4c260de3`, as copies; Part 3 not yet built):
+   both edit `youtube_dl.py`, `routes/search.py`, `search.html` and
    `search_result.html`, so Search rebases over the dialog now on `dev`. As the second to
    land it points `queueAfterDownload()` at the surviving box: its commit 7 makes
    `#add-to-queue` the surviving box, and `dev` still reads `#add-to-queue-search`
    (`plans/download-modal-speed.md`, "At landing", on tag `archive/download_modal_speed`).
    The dialog's result flashes already carry `is-flash` (`61460808`); keep it when
-   resolving `search.html`. After the rebase and before it lands, its Part 2b (the video
-   previews on its card, added 2026-11-23) builds on the rebased branch; specced 2026-11-23 in
-   its plan, with the rebase as its Step 1.
+   resolving `search.html`.
 
 ~~Stage 3: `queue_phone` code, after `singer_defaults` is on `dev` (it is, since 2026-11-21). It takes L1, L15, L16 from
 `dev`, and its L14 nav half and `singer_defaults`' L6 both rewrite the nav bar in `base.html`;
