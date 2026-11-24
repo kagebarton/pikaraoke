@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import logging
 import os
-from urllib.parse import unquote
+import string
 
 import flask_babel
-from flask import flash, redirect, render_template, request, url_for
-from flask_paginate import Pagination, get_page_parameter
+from flask import flash, make_response, redirect, render_template, request, url_for
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
 
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name, is_admin
 from pikaraoke.lib.metadata_parser import youtube_id_suffix
-from pikaraoke.lib.song_list import browse_letter
+from pikaraoke.lib.song_list import browse_key, browse_letter
+from pikaraoke.lib.song_manager import split_title
 
 _ = flask_babel.gettext
 
@@ -54,95 +54,104 @@ def song_busy_message(k, song_path: str) -> str | None:
     return None
 
 
+# The strip's entries in order: "#" takes digits and other scripts (see browse_letter).
+BROWSE_LETTERS = ["#", *string.ascii_lowercase]
+BROWSE_MODES = ("artist", "song")
+BROWSE_COOKIE_AGE = 10 * 365 * 24 * 3600
+
+
+def _letter_param(letter: str) -> str:
+    """A strip entry as it goes in a URL: a bare "#" would start the fragment."""
+    return "numeric" if letter == "#" else letter
+
+
+def _song_states(k) -> dict[str, str]:
+    """Browse's state for each library song that isn't ready, by path.
+
+    "processing": a Queue tap holds the song's slot until it is ready. "fix": the queue
+    refuses it (failed, or never finished with nothing working on it). Any other song is ready.
+    """
+    states = {}
+    for pipeline_state in ("failed", "pending"):
+        for path in k.song_manager.get_paths_by_pipeline_state([pipeline_state]):
+            outcome = k.queue_hold.add_outcome(path, pipeline_state)
+            states[path] = "fix" if outcome == "refused" else "processing"
+    return states
+
+
+def _browse_rows(k, by: str, admin: bool) -> list[dict]:
+    """One row per library song: the chosen field is the top line, the other the bottom.
+
+    A name that can't be split is one line under its first letter in both modes. A guest
+    never sees a song that needs a fix.
+    """
+    states = _song_states(k)
+    rows = []
+    for path in k.song_manager.songs:
+        state = states.get(path, "ready")
+        if state == "fix" and not admin:
+            continue
+        artist, song = split_title(k.song_manager.filename_from_path(path))
+        if not artist:
+            top, bottom = song, ""
+        elif by == "artist":
+            top, bottom = artist, song
+        else:
+            top, bottom = song, artist
+        rows.append({"path": path, "top": top, "bottom": bottom, "state": state})
+    return rows
+
+
+def _chosen_letter(filed: set[str]) -> str | None:
+    """The strip entry to show: the requested one if it has songs, else the first that does."""
+    asked = request.args.get("letter") or request.cookies.get("browse_letter")
+    if asked == "numeric":
+        asked = "#"
+    if asked in filed:
+        return asked
+    return next((entry for entry in BROWSE_LETTERS if entry in filed), None)
+
+
 @files_bp.route("/browse", methods=["GET"])
 def browse():
-    """Browse available songs page."""
+    """Browse the library one letter at a time, by artist or by song.
+
+    The mode and letter come from the URL, else from the cookies this page last set, so a
+    phone reopens where it left off. Rows show their state as the page loads.
+    """
     k = get_karaoke_instance()
-    site_name = get_site_name()
-    search = False
-    q = request.args.get("q")
-    if q:
-        search = True
-    page = int(request.args.get("page", 1))
-
-    available_songs = k.song_manager.songs
-
-    letter = request.args.get("letter")
-    if letter == "numeric":  # the "#" entry's link: a bare "#" would start the URL's fragment
-        letter = "#"
-    if letter:
-        display_name = k.song_manager.filename_from_path
-        available_songs = [
-            song for song in available_songs if browse_letter(display_name(song)) == letter.lower()
-        ]
-
-    if request.args.get("sort") == "date":
-        songs = sorted(available_songs, key=lambda x: os.path.getmtime(x))
-        songs.reverse()
-        sort_order = "Date"
-    else:
-        songs = available_songs
-        sort_order = "Alphabetical"
-
-    results_per_page = k.browse_results_per_page
-
-    args = request.args.copy()
-    args.pop("_", None)
-
-    current_url = url_for("files.browse", **args.to_dict())
-
-    page_param = get_page_parameter()
-    args[page_param] = "{0}"
-
-    args_dict = args.to_dict()
-    pagination_href = unquote(url_for("files.browse", **args_dict))  # type: ignore
-
-    pagination = Pagination(
-        css_framework="bulma",
-        page=page,
-        total=len(songs),
-        search=search,
-        record_name="songs",
-        per_page=results_per_page,
-        display_msg="Showing <b>{start} - {end}</b> of <b>{total}</b> {record_name}",
-        href=pagination_href,
+    by = request.args.get("by") or request.cookies.get("browse_by")
+    if by not in BROWSE_MODES:
+        by = "artist"
+    rows = _browse_rows(k, by, is_admin())
+    filed = {browse_letter(row["top"]) for row in rows}
+    letter = _chosen_letter(filed)
+    listed = sorted(
+        (row for row in rows if browse_letter(row["top"]) == letter),
+        key=lambda row: (browse_key(row["top"]), browse_key(row["bottom"]), row["path"]),
     )
-    start_index = (page - 1) * results_per_page
-    page_songs = songs[start_index : start_index + results_per_page]
-
-    # Enrich with pipeline_state and tracker status for badge rendering
-    pipeline_states = k.song_manager.get_pipeline_states(page_songs)
-    tracker_items = {
-        item["song_path"]: item for item in k.pipeline_tracker.get_status() if item.get("song_path")
-    }
-    active_job = k.processing_manager.get_active_job()
-
-    enriched_songs = []
-    for song_path in page_songs:
-        persisted = pipeline_states.get(song_path, "skipped")
-        tracker = tracker_items.get(song_path)
-        tracker_status = tracker["processing_status"] if tracker else None
-        enriched_songs.append(
-            {
-                "path": song_path,
-                "pipeline_state": persisted,
-                "tracker_status": tracker_status,
-                "is_active": song_path == active_job,
-            }
+    letter_param = _letter_param(letter) if letter else None
+    response = make_response(
+        render_template(
+            "files.html",
+            site_title=get_site_name(),
+            # MSG: Title of the files page.
+            title=_("Browse"),
+            by=by,
+            letter=letter,
+            letter_param=letter_param,
+            strip=[
+                {"label": entry.upper(), "param": _letter_param(entry), "has_rows": entry in filed}
+                for entry in BROWSE_LETTERS
+            ],
+            songs=listed,
+            current_url=url_for("files.browse", by=by, letter=letter_param),
         )
-
-    return render_template(
-        "files.html",
-        pagination=pagination,
-        sort_order=sort_order,
-        site_title=site_name,
-        letter=letter,
-        # MSG: Title of the files page.
-        title=_("Browse"),
-        songs=enriched_songs,
-        admin=is_admin(),
-        current_url=current_url,
     )
+    response.set_cookie("browse_by", by, max_age=BROWSE_COOKIE_AGE, path="/")
+    if letter_param:
+        response.set_cookie("browse_letter", letter_param, max_age=BROWSE_COOKIE_AGE, path="/")
+    return response
 
 
 @files_bp.route("/files/delete", methods=["GET"])

@@ -1,4 +1,4 @@
-/* The two-line rows of the phone pages (Queue first; Browse and Processing take them next).
+/* The two-line rows of the phone pages (Queue and Browse; Processing takes them next).
 
    One rule for the whole look: SOLID MEANS A TAP, DASHED MEANS A STATE. A solid slot or button
    does something when tapped; a dashed slot only says where a song stands (paused, processing,
@@ -57,6 +57,20 @@
 	color: var(--dark-success);
 }
 
+/* Browse's top line: the field the list is sorted by. A name with no split is one plain line. */
+.sr-title {
+	font-size: 17px;
+	font-weight: 700;
+	line-height: 1.25;
+	color: var(--dark-text-primary);
+}
+
+.sr-one {
+	font-size: 16px;
+	line-height: 1.3;
+	color: var(--dark-text-primary);
+}
+
 .sr-sub {
 	font-size: 13px;
 	line-height: 1.3;
@@ -85,11 +99,16 @@
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	border: 1px solid transparent;
 	border-radius: 6px;
+	line-height: 1.1;
+}
+
+/* A slot that is only a state has its own fill and outline; Browse's Queue slot is a .button and
+   keeps the button's. */
+.sr-slot:where(:not(.button)) {
+	border: 1px solid transparent;
 	background-color: var(--dark-bg-secondary);
 	color: var(--dark-text-primary);
-	line-height: 1.1;
 }
 
 .sr-num {
@@ -110,6 +129,27 @@
 	background: none;
 	border: 1px dashed var(--dark-text-muted);
 	color: var(--dark-text-sub);
+}
+
+/* Browse's green Queue button in the slot's box. "processing" under it says the song is not ready;
+   the tap still holds its place in the queue, so it stays a button. */
+.sr-queue {
+	padding: 0;
+	font-size: 15px;
+	font-weight: 700;
+}
+
+.sr-queue.is-processing {
+	font-size: 14px;
+}
+
+/* A song the queue refuses (failed, or never finished with nothing working on it): a state, so
+   dashed, and shown to the admin only. */
+.sr-slot.is-fix {
+	background: none;
+	border: 1px dashed var(--dark-danger);
+	color: var(--dark-danger-text);
+	font-size: 12px;
 }
 
 /* Failed, for the owner and the admin: a solid red outline, a "!" over the word. */

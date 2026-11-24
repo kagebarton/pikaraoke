@@ -1,171 +1,175 @@
-{% extends 'base.html' %} {% block scripts %}
-<script>
-	$(function () {
-		if ($(window).width() <= 500) {
-			$(document).scroll(function () {
-				var y = $(this).scrollTop();
-				if (y > 100) {
-					$("#alpha-bar").removeClass("mobile-hide");
-					$("#alpha-bar").fadeIn();
-				} else {
-					$("#alpha-bar").fadeOut();
-				}
-			});
-		}
+{% extends 'base.html' %}
 
-		$("a.add-song-link").click(function (e) {
-			e.preventDefault();
-			var user = Cookies.get("user");
-			$.get(this.href + encodeURIComponent(user), function (data) {
-				var obj = JSON.parse(data);
-				if (obj.success[0]) {
-					// {# MSG: Notification when a song gets added to the queue.  The song name comes after this string. #}
-					showNotification(obj.success[1], "is-success");
-				} else {
-					// {# MSG: Notification when a song does not get added to the queue.  The song name comes after this string. #}
-					showNotification(obj.success[1], "is-danger");
-				}
-			}).fail(function (xhr) {
-				// {# MSG: Notification when the server rejects a song (e.g. it is still being processed). #}
-				var msg = "";
-				try { msg = JSON.parse(xhr.responseText).error; } catch (err) {}
-				showNotification(msg || "Could not add song to the queue.", "is-danger");
-			});
-		});
-	});
-</script>
-
-{% endblock %} {% block header %}
-<h1>
-	{% block title %} {% if letter %} {{title}}: "{{ letter.upper() }}" {% else %} {{title}} {% endif %} {% endblock %}
-</h1>
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='phone-rows.css') }}">
 <style>
-	#alpha-bar {
-		padding: 5px 10px;
-		border-radius: 4px;
-		margin-bottom: 10px;
-		position: sticky;
-		display: flex;
-		justify-content: space-between;
-		top: 3px;
-		z-index: 20;
-	}
-	table {
-		width: 100%;
-		table-layout: auto; /* Allows columns to adjust based on content */
-	}
-	td {
-		word-wrap: break-word; /* Ensures long words break to fit within the cell */
-	}
-	.break-word {
-		word-break: break-all; /* Ensures long words break to fit within the cell */
-	}
-
-	@media screen and (max-width: 500px) {
-		#alpha-bar {
-			font-size: 13px;
-			position: fixed;
-			display: flex;
-			align-items: center;
-			right: 8px;
-			top: 15px;
-			flex-direction: column;
-			max-width: 22px;
-			height: 95vh;
-		}
-		.mobile-hide {
-			visibility: hidden;
-		}
-		.batch-edit-btn {
-			position: absolute;
-			top: 10px;
-			right: 10px;
-			font-size: 0.875rem;
-			margin-right: 10px;
-		}
-		.box {
-			position: relative;
-		}
-	}
+  /* What only Browse draws; the rows are phone-rows.css. */
+  .box { position: relative; }
+  .bp-batch { position: absolute; top: 12px; right: 20px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+  .bp-batch .icon { font-size: 14px; }
+  .bp-toggle { display: flex; gap: 4px; padding: 4px; margin-bottom: 12px; border-radius: 10px; background: var(--dark-bg-secondary); }
+  .bp-toggle a { flex: 1; display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 7px; font-size: 15px; color: var(--dark-text-light); }
+  .bp-toggle a[aria-current="true"] { background: var(--dark-primary); color: var(--dark-text-primary); font-weight: 700; }
+  /* The letter strip stays at the top of the screen while the list scrolls under it. It bleeds to
+     the card's edges and is the card's colour, so rows pass behind it. Below Bulma's modals (z 40). */
+  .bp-strip { position: sticky; top: 0; z-index: 10; margin: 0 -20px; padding-bottom: 16px; background: var(--dark-bg-tertiary); }
+  .bp-strip-row { position: relative; display: flex; gap: 6px; padding: 0 20px; overflow-x: auto; scrollbar-width: none; }
+  .bp-strip-row::-webkit-scrollbar { display: none; }
+  /* A fade at each edge that has letters past it; a mask, so it needs no colour to match. */
+  .bp-strip-row.fade-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }
+  .bp-strip-row.fade-left { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent); }
+  .bp-strip-row.fade-left.fade-right { -webkit-mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
+  .bp-letter { flex: none; display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0 6px; border: 1px solid transparent; border-radius: 22px; font-size: 16px; font-weight: 700; background: var(--dark-bg-secondary); color: var(--dark-text-primary); }
+  .bp-letter[aria-current="page"] { background: var(--dark-primary); }
+  /* Empty: the disabled look every page shares, not a fade. */
+  .bp-letter[aria-disabled="true"] { background: none; border-color: var(--dark-border-faded); color: var(--dark-text-muted); }
+  .bp-label { margin-bottom: 8px; font-size: 13px; color: var(--dark-text-sub); }
 </style>
-{% endblock %} {% block content %}
+{% endblock %}
 
-<p class="is-flex is-justify-content-space-between">
-	<span class="is-flex-grow-1">
-		{% if sort_order == "Alphabetical" %} {# MSG: Label which displays that the songs are currently sorted by
-		alphabetical order. #} {% trans %}Sorted Alphabetically{% endtrans %} |
-		<a href="{{ url_for('files.browse') }}?sort=date">
-			{# MSG: Button which changes how the songs are sorted so they become sorted by date. #} {% trans %}Sort by
-			Date{% endtrans %}
-		</a>
-		{% endif %} {% if sort_order == "Date" %} {# MSG: Label which displays that the songs are currently sorted by
-		date. #} {% trans %}Sorted by date{% endtrans %} |
-		<a href="{{ url_for('files.browse') }}">
-			{# MSG: Button which changes how the songs are sorted so they become sorted by name. #} {% trans %}Sort by
-			Alphabetical{% endtrans %}
-		</a>
-		{% endif %}
-	</span>
-	{% if admin %}
-	<a class="batch-edit-btn" href="{{ url_for('batch_song_renamer.browse')}}" title="Edit all songs"
-		><i class="icon icon-edit"></i>{# MSG: Button to open the batch song renamer page. #} {% trans %}Edit all songs{%
-		endtrans %}</a
-	>
-	{% endif%}
-</p>
+{% block scripts %}
+<script>
+  $(function () {
+    // SPA navigation re-runs this script on every visit: drop the last visit's handlers first.
+    $(document).off('click.browse');
 
-<div id="alpha-bar" class="column is-full has-background-dark mobile-hide">
-	<a href="{{ url_for('files.browse') }}" title="Show all"><i class="icon icon-list-bullet"></i></a>
-	<a href="{{ url_for('files.browse') }}?letter=numeric">#</a>
-	{% for letter in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
-	'u', 'v', 'w', 'x', 'y', 'z'] %}
-	<a href="{{ url_for('files.browse') }}?letter={{letter}}">{{letter.upper()}}</a>
-	{% endfor %}
+    var urls = {
+      edit: {{ url_for('files.edit_file') | tojson }},
+      info: {{ url_for('song_info.song_info') | tojson }},
+      here: {{ url_escape(current_url) | tojson }}
+    };
+
+    // The strip: the chosen letter in the middle, and a fade at each edge with letters past it.
+    var row = document.querySelector('.bp-strip-row');
+    function fades() {
+      $(row).toggleClass('fade-left', row.scrollLeft > 1)
+        .toggleClass('fade-right', row.scrollLeft + row.clientWidth < row.scrollWidth - 1);
+    }
+    var chosen = row.querySelector('[aria-current="page"]');
+    if (chosen) {
+      // scrollLeft, not scrollIntoView, which would scroll the page too
+      row.scrollLeft = chosen.offsetLeft - (row.clientWidth - chosen.offsetWidth) / 2;
+    }
+    $(row).on('scroll', fades);
+    fades();
+
+    $(document).on('click.browse', 'a.add-song-link', function (e) {
+      e.preventDefault();
+      var user = Cookies.get("user");
+      $.get(this.href + encodeURIComponent(user), function (data) {
+        var obj = JSON.parse(data);
+        showNotification(obj.success[1], obj.success[0] ? "is-success" : "is-danger");
+      }).fail(function (xhr) {
+        // The server refuses a song that failed since this page loaded
+        var msg = "";
+        try { msg = JSON.parse(xhr.responseText).error; } catch (err) {}
+        showNotification(msg || {{ _('Could not add song to the queue.') | tojson }}, "is-danger");
+      });
+    });
+
+    // The admin's menu, one for the page: filled from the tapped row's gear.
+    $(document).on('click.browse', '.sr-gear', function (e) {
+      e.preventDefault();
+      var song = $(this).attr('data-song');
+      $('#browse-options-title').text($(this).attr('data-title'));
+      $('#browse-options-edit').attr('href', urls.edit + '?song=' + song + '&referrer=' + urls.here);
+      $('#browse-options-info').attr('href', urls.info + '?song=' + song);
+      $('#browse-options').addClass('is-active');
+    });
+    $(document).on('click.browse', '#browse-options .modal-background, #browse-options .delete', function () {
+      $('#browse-options').removeClass('is-active');
+    });
+  });
+</script>
+{% endblock %}
+
+{% block header %}
+<h1>{% block title %}{{ title }}{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+{% if admin %}
+<a class="bp-batch" href="{{ url_for('batch_song_renamer.browse') }}">
+  <i class="icon icon-edit"></i>{# MSG: Button to open the batch song renamer page. #}{% trans %}Edit all songs{% endtrans %}
+</a>
+{% endif %}
+
+<div id="browse-page">
+  <div class="bp-toggle" role="group">
+    <a href="{{ url_for('files.browse', by='artist', letter=letter_param) }}"{% if by == 'artist' %} aria-current="true"{% endif %}>{# MSG: Browse sort toggle: list by the artist's name. #}{% trans %}By artist{% endtrans %}</a>
+    <a href="{{ url_for('files.browse', by='song', letter=letter_param) }}"{% if by == 'song' %} aria-current="true"{% endif %}>{# MSG: Browse sort toggle: list by the song's title. #}{% trans %}By song{% endtrans %}</a>
+  </div>
+
+  {# MSG: Screen-reader name of the row of letters on the Browse page. #}
+  <nav class="bp-strip" aria-label="{% trans %}Songs by letter{% endtrans %}">
+    <div class="bp-strip-row">
+      {% for entry in strip %}
+      {% if entry.has_rows %}
+      <a class="bp-letter" href="{{ url_for('files.browse', by=by, letter=entry.param) }}"{% if entry.param == letter_param %} aria-current="page"{% endif %}>{{ entry.label }}</a>
+      {% else %}
+      <span class="bp-letter" aria-disabled="true">{{ entry.label }}</span>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </nav>
+
+  {% if letter %}
+  <div class="bp-label">
+    {% if by == 'artist' %}{# MSG: Label over the Browse list: the letter, then "artists". #}{% trans letter=letter.upper() %}{{ letter }} artists{% endtrans %}
+    {% else %}{# MSG: Label over the Browse list: the letter, then "songs". #}{% trans letter=letter.upper() %}{{ letter }} songs{% endtrans %}{% endif %}
+  </div>
+  {% else %}
+  <p class="has-text-warning">{% trans %}No songs in this list.{% endtrans %}</p>
+  {% endif %}
+
+  <div id="browse-list">
+  {% for song in songs %}
+  <div class="sr-row">
+    {% if song.state == 'fix' %}
+    <span class="sr-slot is-fix">{# MSG: A song in Browse that cannot be queued until the host repairs it. #}{% trans %}needs fix{% endtrans %}</span>
+    {% else %}
+    <a class="button is-success sr-slot sr-queue add-song-link{% if song.state == 'processing' %} is-processing{% endif %}"
+      href="{{ url_for('queue.enqueue') }}?song={{ url_escape(song.path.encode('utf-8', 'surrogateescape')) }}&user="
+    >{% trans %}Queue{% endtrans %}{% if song.state == 'processing' %}<span class="sr-word">{% trans %}processing{% endtrans %}</span>{% endif %}</a>
+    {% endif %}
+    <div class="sr-main">
+      {% if song.bottom %}
+      <span class="sr-title">{{ song.top }}</span>
+      <span class="sr-sub">{{ song.bottom }}</span>
+      {% else %}
+      <span class="sr-one">{{ song.top }}</span>
+      {% endif %}
+    </div>
+    {% if admin %}
+    <button type="button" class="button sr-btn sr-gear" aria-label="{% trans %}Options{% endtrans %}"
+      data-song="{{ url_escape(song.path.encode('utf-8', 'surrogateescape')) }}"
+      data-title="{{ song.top }}{% if song.bottom %} · {{ song.bottom }}{% endif %}"
+    ><i class="icon icon-cog"></i></button>
+    {% endif %}
+  </div>
+  {% endfor %}
+  </div>
 </div>
 
-{{ pagination.links }} {{ pagination.info }}
-<table>
-	{% for song in songs %}
-	{% set display_name = filename_from_path(song.path) %}
-	<tr value="{{ song.path }}">
-		<td style="padding: 5px 0px">{{loop.index + pagination.skip}}</td>
-		<td style="padding-right: 0">
-			<a
-				class="add-song-link has-text-weight-bold has-text-success"
-				title="Add '{{display_name}}' to queue"
-				href="{{url_for('queue.enqueue')}}?song={{url_escape(song.path.encode('utf-8','surrogateescape'))}}&user="
-				><i class="icon icon-list-add is-size-4"></i>
-			</a>
-		</td>
-		<td class="break-word" style="padding-right: 0">
-			{{display_name}}
-			{% if song.is_active %}
-			<span class="tag is-info is-light ml-2">processing</span>
-			{% elif song.tracker_status in ("waiting", "pending", "active") %}
-			<span class="tag is-warning is-light ml-2">{{ song.tracker_status }}</span>
-			{% elif song.pipeline_state == "pending" %}
-			<span class="tag is-danger is-light ml-2" title="Pipeline incomplete — needs reprocessing">pending</span>
-			{% elif song.pipeline_state == "failed" %}
-			<span class="tag is-danger ml-2" title="Processing failed — check logs">failed</span>
-			{% endif %}
-		</td>
-		{% if admin %}
-		<td style="padding-right: 0; white-space: nowrap">
-			<a
-				class="edit-button"
-				href="{{url_for('files.edit_file')}}?song={{url_escape(song.path.encode('utf-8','surrogateescape'))}}&referrer={{url_escape(current_url)}}"
-				title="Edit song"
-				><i class="icon icon-edit-1 is-size-4"></i>
-			</a>
-			<a
-				class="no-spa ml-2"
-				href="{{url_for('song_info.song_info')}}?song={{url_escape(song.path.encode('utf-8','surrogateescape'))}}"
-				title="Song info"
-				><i class="icon icon-info-circled is-size-4"></i>
-			</a>
-		</td>
-		{% endif %} {% endfor %}
-	</tr>
-</table>
-
-{{ pagination.links }} {% endblock %}
+{% if admin %}
+<div class="modal" id="browse-options">
+  <div class="modal-background"></div>
+  <div class="modal-card" style="width: 90%; max-width: 400px;">
+    <header class="modal-card-head" style="padding: 15px;">
+      <p class="modal-card-title is-size-6" id="browse-options-title" style="max-width: 95%"></p>
+      <button class="delete" aria-label="close"></button>
+    </header>
+    <section class="modal-card-body" style="padding: 0;">
+      <a id="browse-options-edit" class="panel-block py-3" href="#">
+        <span class="icon mr-2"><i class="icon-edit-1"></i></span>
+        {# MSG: Menu entry in Browse: rename this song's file. #}{% trans %}Edit song{% endtrans %}
+      </a>
+      <a id="browse-options-info" class="panel-block py-3 no-spa" href="#">
+        <span class="icon mr-2"><i class="icon-info-circled"></i></span>
+        {% trans %}Song info{% endtrans %}
+      </a>
+    </section>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
