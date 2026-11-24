@@ -54,7 +54,6 @@ def info():
         site_title=site_name,
         title="Info",
         url=url,
-        admin=is_admin(),
         admin_password=admin_password,
         platform=k.platform,
         os_version=k.os_version,
