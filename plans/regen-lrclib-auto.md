@@ -4,8 +4,9 @@ Model: Claude Sonnet 5.5 (executor). Plan and gates: Claude Opus 5.5.
 
 Branch `regen_lrclib_auto`, worktree `.claude/worktrees/regen_lrclib_auto`, off `dev` `d2ed9a3b`.
 
-**Status 2026-11-24:** Phase 1 built (`2a0afe1d`, Results row 1); `/code-review` due. Next:
-Phase 2 (read-only, may run before the review); Phase 3 waits for the review's fixes.
+**Status 2026-11-24:** Phase 1 built (`2a0afe1d`, Results row 1). Phase 2 dry run done (Results
+row 2, Tables D-F under "Dry run output"), stopped at 2e. `/code-review` ran; its fixes are in
+`d13e8484` (Results row 3). Next: GATE D (Opus judges), then Ken says go for Phase 3.
 
 ## Goal
 
@@ -258,8 +259,9 @@ Then Ken says go for Phase 3.
 
   - Run it in the console with no pipe and no `Tee-Object`: a PowerShell pipe garbles the
     Chinese song names.
-  - The report lists the songs. Compare its re-time count with Phase 2's: if it differs,
-    answer `n` and tell the session; otherwise answer `y`.
+  - The report lists the songs, then a count line (`Songs checked: ...; to re-time: ...;
+    could not check: ...`). If its re-time count differs from Phase 2's, or "could not check"
+    is not 0, answer `n` and tell the session; otherwise answer `y`.
   - When it ends, give the session the final `Done.` line, the backup path it printed near
     the start (`Backed up ... to:`), and the lines of any song marked `FAILED`.
 
@@ -274,10 +276,14 @@ Read-only on the library.
 
   For a song the run marked FAILED, confirm the put-back: the `.lrc` bytes equal the
   backup's, and there is no auto sheet.
+
+  The real run searches LRCLIB again, so a pick can change after GATE D with the count
+  unchanged. Any song whose `lrclib_id` differs from its dry-run pick is named in the relay
+  and heads the listen list; Ken then keeps it or has its files put back from the backup.
 - [ ] 4b. Table U, the songs not picked: bundle and `.ass` sha256 against `before.tsv`.
 - [ ] 4c. The listen list, by the rule below, at most 10 rows: song, YouTube id, record id,
   and what Ken said about this record before, if anything.
-- [ ] 4d. **STOP.** Write Results row 3 and relay the listen list to Ken.
+- [ ] 4d. **STOP.** Write the next Results row and relay the listen list to Ken.
 
 **Listen list rule** (pre-registered). Fill in this order and stop at 10:
 
@@ -386,7 +392,144 @@ checked at its download: no pick).
 | Row | Date | Phase | What was done | Artifacts |
 |---|---|---|---|---|
 | 1 | 2026-11-24 | 1 | `--lrclib-auto` built as planned, plus these differences. `confirm()` and `back_up()` lifted out of `main()` (shared by both modes; `main()` was past 50 lines). Progress `[i/N]` goes to stderr, so stdout is the report only. Pick label has no record duration (`record_meta`'s `duration` is not formatted anywhere public). `add_songs.py` has its own `print_report`; it never calls this one, so the new keyword argument is for the tests' existing calls only. Tests reuse `tests/unit/movie_slices.py` (`heard_words`, `lrc_slice`, `CLIP_S`) instead of copying `test_lrc_auto_timing.py`'s helpers. The `LRC_ORIGINS` comment in `library_regen.py` also updated. 24 new tests; seven injected bugs (no skip-marker refusal, backup of all stems, hand-over of picks only, no `--reset` refusal, dry run proceeding, wrong sheet kind, no record on the plan) each failed one of them. Full suite 4570 passed. pre-commit clean (black reformatted two files, rerun clean). `--help` shows the flag. Smoke run of `--lrclib-auto --dry-run` and `--lrclib-auto --reset` (exit 2) on a one-song tmp library. | code `2a0afe1d` (off plan commit `57c9faf8`); review range `57c9faf8..2a0afe1d` |
+| 2 | 2026-11-24 | 2 | Dry run of `--lrclib-auto --dry-run` on the Windows library via the VM, as written in 2a-2d: exit 0, report and `[i/N]` log split as planned (`dry_run.txt` report only, `dry_run.log` 66 progress lines). 2b listed nothing written. 2d: no check failed to run, no rerun. Tables D-F and the printed counts are under "Dry run output". The report prints no couldn't-run count; the plan's third count is the number of labels that say so, counted from the file. `plan.seed["genius"]` holds no sheet text, so the CJK mark reads `bundle["lyrics"]["lines"]`. No code touched. Stopped at 2e: no judging, GATE D not started. | `~/.pikaraoke/tmp/regen_lrclib_auto/` (`dry_run.txt`, `dry_run.log`, `dry_run.exit`, `tables.md`, `cjk_flags.py`, `cjk_flags.tsv`, `build_tables.py`) |
+| 3 | 2026-11-24 | review | `/code-review high 57c9faf8..2a0afe1d` (three angles: correctness, simplicity, robustness): 10 findings, none critical. Fixed in `d13e8484`: a check that could not run is counted on a count line printed after the list (`could not check: N`) and the mode exits 1 (#4); the count is made once (#8); only an unreachable LRCLIB says "rerun later", a failed check says "see the log" (#3); the length is looked up once per song (#5); `confirm()` moved to `scripts/song_select.py`, used by `backfill_artifacts.py` too, closed input aborts (#1, #9); refusal docstring matches Decision 9 (#6). #2 (real run re-searches) handled in the plan: Phase 3 checks the could-not-check count, 4a names any changed record id. Dropped: #7 (Phase 3 already sets UTF-8 and runs without a pipe), #10 (`lrclib_fill` is hard-wired on). Pick logic untouched, so the Phase 2 dry run's picks stand; its report's count line and failure wording predate the fix. 5 new tests; full unit suite 4574 passed; pre-commit clean. | `d13e8484` |
 
 ## Dry run output
 
-(Phase 2c.)
+Phase 2c, run 2026-11-24 on the VM from the worktree at `d0dc08a1`, library
+`/home/ken/shared-drives/D:/Shared/pikaraoke-songs` (the Windows library over RDP). Artifacts in
+`~/.pikaraoke/tmp/regen_lrclib_auto/`: `dry_run.txt` (the report), `dry_run.log` (the 66 `[i/N]`
+progress lines, nothing else), `dry_run.exit`, `tables.md` (the tables below), `cjk_flags.py` and
+`cjk_flags.tsv` (the CJK mark), `build_tables.py`.
+
+- 2a: exit code 0. One run.
+- 2b: `find <library> -newer <out>/started` listed nothing, checked right after the run and again
+  after the CJK read.
+- 2d: no label says the check couldn't run, so no rerun.
+
+Counts as the report prints them (it prints no couldn't-run count; the last line is the number of
+labels that say "could not run", counted from `dry_run.txt`):
+
+```
+Songs checked: 66; to re-time: 32
+labels saying the check could not run: 0
+```
+
+The CJK mark in Table F is `cjk_flags.py`: it reads each song's stored sheet
+(`bundle["lyrics"]["lines"]`; `plan.seed["genius"]` holds only the Genius id, title and artist)
+and tests for Han, kana or Hangul characters. It flags 17 of the 66 songs; the plan text
+elsewhere says 16.
+
+**Table D: every checked song (name, YouTube id, label as printed)**
+
+| # | Song | YouTube id | Label |
+|---|---|---|---|
+| 1 | #OutofOz - 'Defying Gravity' WICKED Studio Sessions _ WICKED the Musical | `EFbuID1QG0Y` | stays on joint: no record passed (19 records; no_fit 19) |
+| 2 | A-Lin - 幸福在歌唱 (Happiness Is Singing) | `jeRu6h4XbUU` | stays on joint: no record passed (8 records; no_fit 8) |
+| 3 | Beyond - 海闊天空 (Boundless Oceans, Vast Skies) | `qu_FSptjRic` | stays on joint: no record passed (20 records; no_fit 20) |
+| 4 | Britney Spears - I'm A Slave 4 U (Official 4K Video) | `Mzybwwf2HoQ` | LRCLIB (auto) 36592252: im a slave 4 u · britney spears (mistimed 0, unclaimed run 6, shift run 2, on 6 records) |
+| 5 | Bruno Mars - Grenade (Official Music Video) | `SR6iYWJxHqs` | LRCLIB (auto) 38953751: Bruno Mars - Grenade (Official Music Video) · Bruno Mars (mistimed 0, unclaimed run 2, shift run 2, on 2 records) |
+| 6 | Bruno Mars - Just The Way You Are (Official Music Video) | `LjhCEhWiKXk` | LRCLIB (auto) 9888181: Just The Way You Are · Bruno Mars (mistimed 0, unclaimed run 7, shift run 0, on 2 records) |
+| 7 | Bruno Mars - Locked Out Of Heaven (Official Music Video) | `e-fA-gBCkj0` | LRCLIB (auto) 6936310: Bruno Mars - Locked Out Of Heaven (Official Music Video) · Bruno Mars (mistimed 0, unclaimed run 3, shift run 1, on 2 records) |
+| 8 | Bruno Mars - The Lazy Song (Official Music Video) | `fLexgOxsZu0` | LRCLIB (auto) 6706711: The Lazy Song · Bruno Mars (mistimed 0, unclaimed run 10, shift run 1, on 6 records) |
+| 9 | Bruno Mars - When I Was Your Man (Official Music Video) | `ekzHIouo8Q4` | LRCLIB (auto) 15816725: bruno mars  when i was your man · bruno mars (mistimed 0, unclaimed run 7, shift run 0, on 2 records) |
+| 10 | Bruno Mars, Anderson .Paak, Silk Sonic - After Last Night w_ Thundercat & Bootsy [Official Audio] | `-cy_tDQPXHk` | stays on joint: no record passed (20 records; unclaimed 20) |
+| 11 | Cast of Camp Rock 2 - It's On (From 'Camp Rock 2 - The Final Jam'_Sing-Along) | `fO4BmrVjqjM` | LRCLIB (auto) 7140272: It's On · Demi Lovato (mistimed 0, unclaimed run 6, shift run 1, on 4 records) |
+| 12 | Colbie Caillat - Fallin' For You | `GPCRbuL4Oh8` | stays on joint: no record passed (19 records; no_fit 2, unclaimed 17) |
+| 13 | Demi Lovato, Joe Jonas - Wouldn't Change a Thing (From 'Camp Rock 2 - The Final Jam'_Sing-Along) | `62llzl7iKkE` | LRCLIB (auto) 33991259: wouldnt change a thing · demi lovato (mistimed 0, unclaimed run 7, shift run 0, on 3 records) |
+| 14 | Donna Murphy - Mother Knows Best (From 'Tangled'_Sing-Along) | `-7jWt3JvJto` | stays on joint: no record passed (20 records; no_fit 3, mistimed 17) |
+| 15 | Eason Chan 陳奕迅 - 明年今日 (This Day Next Year) | `8NJVNkzhJM4` | stays on joint: no record passed (19 records; no_fit 19) |
+| 16 | Encanto - Cast - We Don't Talk About Bruno (From 'Encanto'_Sing-Along) | `YRpvIiz9G8A` | stays on joint: no record passed (15 records; no_fit 3, unclaimed 12) |
+| 17 | I Just Had Sex (feat. Akon) | `lQlIhraqL7o` | LRCLIB (auto) 11579404: I Just Had Sex · The Lonely Island feat. Akon (mistimed 0, unclaimed run 12, shift run 1, on 5 records) |
+| 18 | Idina Menzel, AURORA - Into the Unknown (From 'Frozen 2'_Sing-Along) | `mzhv_dg_UBA` | LRCLIB (auto) 36372778: Into the Unknown · Idina Menzel (mistimed 0, unclaimed run 2, shift run 1, on 10 records) |
+| 19 | Idina Menzel, Evan Rachel Wood - Show Yourself (From 'Frozen 2'_ Sing-Along) | `nrZxwPwmgrw` | stays on joint: no record passed (19 records; unclaimed 19) |
+| 20 | Ingrid Michaelson 'Be OK' (Official Video) | `vpMI8Qu5fsc` | LRCLIB (auto) 326004: Be OK (Acoustic) · Ingrid Michaelson (mistimed 0, unclaimed run 5, shift run 1, on 2 records) |
+| 21 | Jack Sparrow (feat. Michael Bolton) | `GI6CfKcMhjY` | LRCLIB (auto) 22000139: Jack Sparrow · The Lonely Island (mistimed 0, unclaimed run 6, shift run 1, on 7 records) |
+| 22 | Jason Mraz - Lucky (feat. Colbie Caillat) [Official Video] [HD Remaster] | `acvIVA9-FMQ` | LRCLIB (auto) 20759539: Lucky · Jason Mraz (mistimed 0, unclaimed run 3, shift run 0, on 8 records) |
+| 23 | Jay Chou 周杰倫 - 晴天 (Sunny Day) | `DYptgVvkVLQ` | stays on joint: no record passed (19 records; no_fit 19) |
+| 24 | Jessica Darrow - Surface Pressure (From 'Encanto'_Sing-Along) | `X-NH1uUfr0U` | stays on joint: no record passed (20 records; no_fit 4, unclaimed 16) |
+| 25 | Jessie J - Flashlight (from Pitch Perfect 2) (Official Video) | `DzwkcbTQ7ZE` | LRCLIB (auto) 37730119: Flashlight · Jessie J (mistimed 0, unclaimed run 6, shift run 1, on 3 records) |
+| 26 | Jessie J - Price Tag ft. B.o.B | `qMxX-QOV9tI` | LRCLIB (auto) 6900889: Price Tag · Jessie J (mistimed 0, unclaimed run 9, shift run 1, on 2 records) |
+| 27 | Jonathan Groff - Lost in the Woods (From 'Frozen 2'_Sing-Along) | `_8jNbZIsBQU` | stays on joint: no record passed (20 records; unclaimed 20) |
+| 28 | KPop Demon Hunters (2025) - Soda Pop | `983bBbJx0Mk` | stays on joint: no record passed (20 records; no_fit 20) |
+| 29 | Kelly Clarkson - Behind These Hazel Eyes (Official Video) | `yipoOY56MbM` | LRCLIB (auto) 33411593: Behind These Hazel Eyes · Kelly Clarkson (mistimed 0, unclaimed run 6, shift run 1, on 11 records) |
+| 30 | Kristen Bell, Idina Menzel - For the First Time in Forever (From 'Frozen'_Sing-Along) | `ZrX1XKtShSI` | LRCLIB (auto) 14589928: For The First Time In Forever · Kristen Bell (mistimed 0, unclaimed run 2, shift run 1, on 7 records) |
+| 31 | Maia Wilson, Cast of Frozen - Fixer Upper (From 'Frozen'_Sing-Along) | `IyO-vdsgq1s` | LRCLIB (auto) 2263859: Fixer Upper · Maia Wilson (mistimed 0, unclaimed run 4, shift run 1, on 13 records) |
+| 32 | Mandy Moore, Zachary Levi - I See the Light (From 'Tangled'_Sing-Along) | `ILRs2r6lcHY` | stays on joint: no record passed (20 records; no_fit 20) |
+| 33 | Michelle Branch - All You Wanted (Official Music Video) _ Warner Records | `Cbo2n2MzxxE` | LRCLIB (auto) 3617844: All You Wanted · Michelle Branch (mistimed 0, unclaimed run 5, shift run 0, on 6 records) |
+| 34 | Michelle Branch - Are You Happy Now (Official Music Video) _ Warner Vault | `Uxb6RFh3BCw` | LRCLIB (auto) 5593856: Are You Happy Now · Michelle Branch (mistimed 0, unclaimed run 4, shift run 1, on 5 records) |
+| 35 | Michelle Branch - Everywhere [Official Music Video] | `HLCasyAh7ic` | LRCLIB (auto) 19297649: Everywhere · Michelle Branch (mistimed 0, unclaimed run 6, shift run 1, on 8 records) |
+| 36 | NSYNC - Here We Go (Official Video) | `zqVejtQ2qCk` | LRCLIB (auto) 19116608: Here We Go · nsync (mistimed 0, unclaimed run 7, shift run 1, on 14 records) |
+| 37 | NSYNC - I Want You Back (US Version - Official Video) | `n-2C2wOFavc` | LRCLIB (auto) 6955667: I Want You Back (radio edit) · *NSYNC (mistimed 0, unclaimed run 3, shift run 0, on 1 records) |
+| 38 | Pocahontas 'Savages' 1080p HD | `1YiAzyCzZzw` | stays on joint: no record passed (16 records; mistimed 1, unclaimed 15) |
+| 39 | Queen - Don't Stop Me Now (Official Video Remastered 4K) | `HgzGwKwLmgM` | stays on joint: no record passed (20 records; unclaimed 20) |
+| 40 | RENT 2005  - Over The Moon (Film-Cut) [HD] | `pXNd2V88d60` | stays on joint: no synced LRCLIB record |
+| 41 | S Club - Natural | `A4Kba6v5fdg` | LRCLIB (auto) 12518942: Natural · S Club (mistimed 0, unclaimed run 3, shift run 0, on 2 records) |
+| 42 | Sara Bareilles - Gravity (Official HD Video) | `rEXhAMtbaec` | LRCLIB (auto) 36844599: Gravity · Sara Bareilles (mistimed 0, unclaimed run 4, shift run 1, on 8 records) |
+| 43 | Sara Bareilles - King of Anything (Official Video) | `eR7-AUmiNcA` | LRCLIB (auto) 9035250: King of Anything · Sara Bareilles (mistimed 0, unclaimed run 6, shift run 1, on 7 records) |
+| 44 | Some Things Never Change (From 'Frozen 2'_Sing-Along) | `nVW9QOIeqQg` | stays on joint: no record passed (20 records; speed 1, unclaimed 19) |
+| 45 | Sun Yan-Zi 孫燕姿 - 遇見 (Encounter) | `m4nu_F_9dWU` | stays on joint: no record passed (20 records; no_fit 20) |
+| 46 | TENACIOUS D - Kickapoo | `hvvjiE4AdUI` | LRCLIB (auto) 34637521: TENACIOUS D - Kickapoo · NewLine (mistimed 0, unclaimed run 5, shift run 0, on 1 records) |
+| 47 | Take Me Or Leave Me - Rent (2005) (Subtitled) | `DcbEr7Cd_Cc` | stays on joint: no synced LRCLIB record |
+| 48 | Tangled - Cast - I've Got a Dream (From 'Tangled'_Sing-Along) | `zi5Z6rNU9Hw` | LRCLIB (auto) 29290799: I've Got a Dream · Mandy Moore (mistimed 0, unclaimed run 4, shift run 0, on 5 records) |
+| 49 | The Lonely Island - Here I Go (feat. Charli xcx) | `kHwpS0LakeU` | stays on joint: no synced LRCLIB record |
+| 50 | The Lonely Island - I'm On A Boat (Explicit Version) ft. T-Pain (Official Video) | `avaSdC0QOUM` | stays on joint: no record passed (20 records; unclaimed 20) |
+| 51 | Twins《下一站天后》[Official MV] | `cPKfUWDmNbo` | stays on joint: no record passed (16 records; no_fit 16) |
+| 52 | Westlife - Flying Without Wings (Official Video) | `vKPGxGCFgTs` | LRCLIB (auto) 1512603: Flying Without Wings · Westlife (mistimed 0, unclaimed run 3, shift run 0, on 8 records) |
+| 53 | Where You Are (From 'Moana'_Sing-Along) | `RTWhvp_OD6s` | stays on joint: no record passed (20 records; shifted 20) |
+| 54 | Wicked (2024) 4K - Dancing Through Life _ Movieclips | `jniq78mKKcM` | stays on joint: no record passed (12 records; no_fit 12) |
+| 55 | Wicked _ What Is This Feeling | `amgPXKrFZVg` | LRCLIB (auto) 16623226: What Is This Feeling? · Wicked Movie Cast Feat. Ariana Grande & Cynthia Erivo (mistimed 0, unclaimed run 4, shift run 1, on 1 records) |
+| 56 | YOLO (feat. Adam Levine & Kendrick Lamar) | `z5Otla5157c` | LRCLIB (auto) 1019299: Yolo · The Lonely Island feat. Adam Levine & Kendrick Lamar (mistimed 0, unclaimed run 6, shift run 0, on 5 records) |
+| 57 | 周杰倫 Jay Chou【千里之外 Far Away (feat.費玉清 Fei Yu-ching)】-Official Music Video | `ocDo3ySyHSI` | stays on joint: no record passed (18 records; no_fit 18) |
+| 58 | 周杰倫 Jay Chou【雙截棍 Nunchucks】Official MV | `OR-0wptI_u0` | stays on joint: no record passed (17 records; no_fit 17) |
+| 59 | 富士山下 | `7qeShSmmsNg` | stays on joint: no record passed (20 records; no_fit 20) |
+| 60 | 愛情轉移 | `RIq7Tz9nYD8` | stays on joint: no record passed (20 records; no_fit 20) |
+| 61 | 月亮代表我的心 | `IgvDMB5fR-8` | LRCLIB (auto) 31215515: 月亮代表我的心 · Teresa Teng (mistimed 1, unclaimed run 4, shift run 1, on 2 records) |
+| 62 | 林子祥 George Lam  -《男兒當自強》Official MV (電影《黃飛鴻之二》主題曲) | `U_EgeFUTbW4` | stays on joint: no record passed (19 records; no_fit 19) |
+| 63 | 楊千嬅 Miriam Yeung - 少女的祈禱 (Official Music Video) | `CvKvXNiXQZc` | stays on joint: no record passed (17 records; no_fit 17) |
+| 64 | 王菲 - 容易受傷的女人 (粵語版) (Official Music Video) | `tDw_ULjZWA8` | stays on joint: no record passed (20 records; no_fit 20) |
+| 65 | 陳奕迅 Eason Chan《十年(國) [OT  - 明年今日]》[Official MV] | `JM9rx_hN1Ko` | stays on joint: no record passed (20 records; no_fit 20) |
+| 66 | 風繼續吹_ 電影《縱橫四海》主題曲 _ 張國榮 Leslie Cheung _ Official Music Video _ 曲：Uzaki Ryudo _ 詞：Aki Yoko | `UmTB6E5mU5w` | stays on joint: no record passed (16 records; no_fit 16) |
+
+**Table E: the dry run's answer for each "Picks Ken has heard" row**
+
+| Song | YouTube id | Probe record | Dry run |
+|---|---|---|---|
+| *NSYNC - Here We Go | `zqVejtQ2qCk` | 19116608 | 19116608 |
+| *NSYNC - I Want You Back | `n-2C2wOFavc` | 6955667 | 6955667 |
+| Britney Spears - I'm a Slave 4 U | `Mzybwwf2HoQ` | 36592252 | 36592252 |
+| Bruno Mars - Grenade | `SR6iYWJxHqs` | 38953751 | 38953751 |
+| Bruno Mars - Just the Way You Are | `LjhCEhWiKXk` | 9888181 | 9888181 |
+| Bruno Mars - Locked Out of Heaven | `e-fA-gBCkj0` | 6936310 | 6936310 |
+| Bruno Mars - The Lazy Song | `fLexgOxsZu0` | 6706711 | 6706711 |
+| Bruno Mars - When I Was Your Man | `ekzHIouo8Q4` | 15816725 | 15816725 |
+| Demi Lovato - It's On | `fO4BmrVjqjM` | 7140272 | 7140272 |
+| Demi Lovato - Wouldn't Change a Thing | `62llzl7iKkE` | 33991259 | 33991259 |
+| Idina Menzel - Into the Unknown | `mzhv_dg_UBA` | 36372778 | 36372778 |
+| Ingrid Michaelson - Be OK | `vpMI8Qu5fsc` | 326004 | 326004 |
+| Jason Mraz - Lucky | `acvIVA9-FMQ` | 20759539 | 20759539 |
+| Jessie J - Flashlight | `DzwkcbTQ7ZE` | 37730119 | 37730119 |
+| Jessie J - Price Tag | `qMxX-QOV9tI` | 6900889 | 6900889 |
+| Kelly Clarkson - Behind These Hazel Eyes | `yipoOY56MbM` | 33411593 | 33411593 |
+| Kristen Bell - For the First Time in Forever | `ZrX1XKtShSI` | 14589928 | 14589928 |
+| Maia Wilson - Fixer Upper | `IyO-vdsgq1s` | 2263859 | 2263859 |
+| Mandy Moore - I've Got a Dream | `zi5Z6rNU9Hw` | 29290799 | 29290799 |
+| Michelle Branch - All You Wanted | `Cbo2n2MzxxE` | 3617844 | 3617844 |
+| Michelle Branch - Are You Happy Now? | `Uxb6RFh3BCw` | 5593856 | 5593856 |
+| Michelle Branch - Everywhere | `HLCasyAh7ic` | 19297649 | 19297649 |
+| S Club - Natural | `A4Kba6v5fdg` | 12518942 | 12518942 |
+| Sara Bareilles - Gravity | `rEXhAMtbaec` | 36844599 | 36844599 |
+| Tenacious D - Kickapoo | `hvvjiE4AdUI` | 34637521 | 34637521 |
+| The Lonely Island - I Just Had Sex | `lQlIhraqL7o` | 11579404 | 11579404 |
+| The Lonely Island - Jack Sparrow | `GI6CfKcMhjY` | 22000139 | 22000139 |
+| The Lonely Island - YOLO | `z5Otla5157c` | 1019299 | 1019299 |
+| Westlife - Flying Without Wings | `vKPGxGCFgTs` | 1512603 | 1512603 |
+| Wicked Movie Cast - What Is This Feeling? (Sing-Along) | `amgPXKrFZVg` | 16623226 | 16623226 |
+
+**Table F: picks not in "Picks Ken has heard"**
+
+| Song | YouTube id | Record | Numbers as printed | CJK sheet |
+|---|---|---|---|---|
+| Sara Bareilles - King of Anything (Official Video) | `eR7-AUmiNcA` | 9035250 | mistimed 0, unclaimed run 6, shift run 1, on 7 records | no |
+| 月亮代表我的心 | `IgvDMB5fR-8` | 31215515 | mistimed 1, unclaimed run 4, shift run 1, on 2 records | yes |
