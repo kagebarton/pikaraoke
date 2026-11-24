@@ -553,9 +553,10 @@ Stage 1, can run now, side by side:
   open findings are in "Search results (on `dev`)".
 - `search_official_captions` Parts 1-2 (`5c4e410`): commit 9 (L11) and the review of commits
   5-9 done (fixes `af48f5a`); Ken's manual checks.
-- `queue_phone` (`0439038`): spec and phases written 2026-11-18. Its Phase 1 (server only:
+- ~~`queue_phone` (`0439038`): spec and phases written 2026-11-18. Its Phase 1 (server only:
   the failed row, the pause route, song and artist on queue rows) needs nothing from
-  `singer_defaults` and can run now; Phases 2-3 wait for stage 3.
+  `singer_defaults` and can run now; Phases 2-3 wait for stage 3.~~ Landed on `dev`
+  2026-11-23 (`e21cc620`..`5079f020`, as copies); retired as `archive/queue_phone`.
 - `browse_phone` (`c2de136`): Phase 0 (name-source test, offline) and GATE N. Queue's row
   names use the file-name split until GATE N rules (`plans/queue-phone.md`, "Names on the
   rows").
@@ -578,10 +579,10 @@ Stage 2, landing:
    previews on its card, added 2026-11-23) builds on the rebased branch; specced 2026-11-23 in
    its plan, with the rebase as its Step 1.
 
-Stage 3: `queue_phone` code, after `singer_defaults` is on `dev` (it is, since 2026-11-21). It takes L1, L15, L16 from
+~~Stage 3: `queue_phone` code, after `singer_defaults` is on `dev` (it is, since 2026-11-21). It takes L1, L15, L16 from
 `dev`, and its L14 nav half and `singer_defaults`' L6 both rewrite the nav bar in `base.html`;
 landing `singer_defaults` first leaves no conflict to resolve. Failed row first, then the nav
-change (L14).
+change (L14).~~ Landed 2026-11-23 (see Stage 1).
 
 Stage 4, after `queue_phone` lands, side by side:
 
