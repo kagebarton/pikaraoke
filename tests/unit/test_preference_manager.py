@@ -154,12 +154,12 @@ def test_preference_manager_clear_resets_to_defaults(temp_config_file):
 
     # Change some preferences from their defaults
     prefs.set("volume", "0.5")  # Default is 0.85
-    prefs.set("browse_results_per_page", "50")  # Default is 100
+    prefs.set("limit_user_songs_by", "5")  # Default is 0
     prefs.set("splash_delay", "10")  # Default is 2
 
     # Verify non-default values are stored
     assert prefs.get("volume") == 0.5
-    assert prefs.get("browse_results_per_page") == 50
+    assert prefs.get("limit_user_songs_by") == 5
     assert prefs.get("splash_delay") == 10
 
     # Clear preferences
@@ -168,7 +168,7 @@ def test_preference_manager_clear_resets_to_defaults(temp_config_file):
 
     # Verify preferences reset to defaults (using get_or_default)
     assert prefs.get_or_default("volume") == 0.85
-    assert prefs.get_or_default("browse_results_per_page") == 100
+    assert prefs.get_or_default("limit_user_songs_by") == 0
     assert prefs.get_or_default("splash_delay") == 2
 
 
@@ -269,7 +269,6 @@ def test_preference_manager_defaults_exist():
         "overlay_scale",
         "limit_user_songs_by",
         "enable_fair_queue",
-        "browse_results_per_page",
         "hide_clock",
         "subtitle_delay",
         "subtitle_scale",
@@ -301,7 +300,6 @@ def test_preference_manager_defaults_types():
     # Integer preferences
     assert isinstance(defaults["splash_delay"], int)
     assert isinstance(defaults["limit_user_songs_by"], int)
-    assert isinstance(defaults["browse_results_per_page"], int)
     assert isinstance(defaults["subtitle_delay"], (int, float))
     assert isinstance(defaults["audio_delay"], (int, float))
 

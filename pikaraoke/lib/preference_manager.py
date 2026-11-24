@@ -36,7 +36,6 @@ class PreferenceManager:
         "subtitle_scale": 1.0,
         "subtitle_pos_offset": 0,
         "audio_delay": 0.0,
-        "browse_results_per_page": 100,
         "hide_clock": False,
         "temp_dir": "",
         "blocked_processing_words": "",

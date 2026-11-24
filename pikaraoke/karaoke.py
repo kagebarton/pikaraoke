@@ -98,7 +98,6 @@ class Karaoke:
         url: str | None = None,
         youtubedl_proxy: str | None = None,
         # Preference parameters (defaults from PreferenceManager.DEFAULTS)
-        browse_results_per_page: int | None = None,
         hide_notifications: bool | None = None,
         hide_now_playing_overlay: bool | None = None,
         hide_url: bool | None = None,
@@ -135,7 +134,6 @@ class Karaoke:
             limit_user_songs_by: Max songs per user in queue (0 = unlimited).
             subtitle_delay: Subtitle timing delay in seconds (negative = earlier).
             config_file_path: Path to config.ini file.
-            browse_results_per_page: Number of search results per page.
             additional_ytdl_args: Additional yt-dlp command arguments.
             socketio: SocketIO instance for real-time event emission.
             preferred_language: Language code for UI (e.g., 'en', 'de_DE').
