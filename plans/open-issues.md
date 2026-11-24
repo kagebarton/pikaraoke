@@ -337,10 +337,11 @@ Found in the `search_official_first` review and its live checks, 2026-11-08. Ken
 review's other findings for now. Record: `plans/search-official-first.md` on tag
 `archive/search_official_first`, "Review follow-ups" and the Results log.
 
-The ranking was rewritten on branch `search_official_captions` (2026-11-17, `37ba443`..`a97f945`
-there) and landed on `dev` 2026-11-24 with the rest of its Parts 1-2b (`64d7d657`..`4c260de3`,
+The ranking was rewritten on branch `search_official_captions` (now tag
+`archive/search_official_captions`; 2026-11-17, `37ba443`..`a97f945` there) and landed
+on `dev` 2026-11-24 with the rest of its Parts 1-2b (`64d7d657`..`4c260de3`,
 as copies); the entries below that say "the rewrite" describe it. Rules, "Not doing" and the
-measurements: `plans/search-official-captions.md` on that branch.
+measurements: `plans/search-official-captions.md` on the tag.
 
 - **A restored search page can show a stuck card.** After Show more, the page saves the cards
   so coming back to Search restores them. The copy can catch a card's loading state (an
@@ -359,7 +360,7 @@ measurements: `plans/search-official-captions.md` on that branch.
   the dialog's Queue sends `/download`, and neither the route (`routes/search.py`
   `download`) nor `DownloadManager.queue_download` checks whether the video's ID is already a
   library file; after the library rename the new file name differs from the old, so the song
-  is likely stored twice. Same on `dev` and `search_official_captions`. Options (Opus,
+  is likely stored twice. Same on `dev` since the 2026-11-24 landing. Options (Opus,
   2026-11-23): (1) an owned card's thumbnail does nothing (no play overlay; the L17 badge and
   green Queue are its actions); (2) the dialog, opened from an owned card, plays the preview,
   hides the lyrics and its Queue enqueues the library file; (3) `/download` refuses an ID it
@@ -435,7 +436,7 @@ measurements: `plans/search-official-captions.md` on that branch.
     so two acts with different songs of one name, tied exactly, both lift: Adele's and Lionel
     Richie's "Hello", two credits each.
 
-  Not ruled. Record: `/code-review` of `23ad51e..25a3f81` on `search_official_captions`,
+  Not ruled. Record: `/code-review` of `23ad51e..25a3f81` on `archive/search_official_captions`,
   findings 1, 2 and 7.
 - **A "from" or "with" bracket hides a live upload from the "say what it is" check.** Guests
   and the film are dropped before the check, and "from …" or "with …" is dropped to the
@@ -499,8 +500,9 @@ measurements: `plans/search-official-captions.md` on that branch.
   needs a JavaScript test setup in the repo, its own plan. Found in the same review
   (finding 13). Not ruled. Now Playing's script has the same gap (see "Now Playing remote:
   review findings"); one setup would close both.
-- **Leaving Search mid-preview keeps the clip loaded** (branch `search_official_captions`,
-  Part 2b commits 10-12). An SPA move swaps the page out and the browser pauses the removed
+- **Leaving Search mid-preview keeps the clip loaded** (from `search_official_captions`, now
+  `archive/search_official_captions`, Part 2b commits 10-12). An SPA move swaps the page
+  out and the browser pauses the removed
   video, but the page's document handlers and frame watcher hold it, link and buffer
   included, until the next Search visit re-binds them. Nothing plays or misbehaves: the old
   handlers find the preview paused and do nothing (checked with `ui-check` in commit 12's
@@ -694,7 +696,8 @@ Stage 4, after `queue_phone` lands, side by side:
 - ~~`browse_phone` Phase 1, after GATE N.~~ Landed 2026-11-24 (see Stage 1).
 - `processing_phone` (`f28d582`), after its open question on group order under All is ruled.
 - Search Part 3 (L12, L13), after Parts 1-2 land too (`download_modal_speed` is on `dev`
-  already): it restyles the dialog's controls.
+  already): it restyles the dialog's controls. Spec'd 2026-11-24 on branch `search_phone`
+  (`7d111ce9`).
 
 Independent of the phone order:
 
@@ -715,12 +718,17 @@ Retired 2026-11-21: `archive/singer_defaults` (31 code commits copied onto `dev`
 records only on the tag), `archive/download_modal_speed` (11 code commits copied onto `dev`,
 plan, Results log and ui-check records only on the tag).
 
+Retired 2026-11-24: `archive/search_official_captions` (every code commit patch-equal to one
+on `dev`, `64d7d657`..`4c260de3`; the rest are plan records, the Results log and the
+held-out search fixtures, only on the tag).
+
 Not ruled (Ken's calls):
 
 - ~~Land `singer_defaults` Phase 5 commit 1 (the theme) on `dev` ahead of the rest of the
   branch, so `queue_phone`'s code can start sooner.~~ Moot: the whole branch landed 2026-11-21.
-- Search Part 3 on a fresh branch off `dev` after `queue_phone` (proposed), or keep
-  `search_official_captions` open until Part 3 is done and land all three parts together.
+- ~~Search Part 3 on a fresh branch off `dev` after `queue_phone` (proposed), or keep
+  `search_official_captions` open until Part 3 is done and land all three parts together.~~
+  Ruled 2026-11-24: a fresh branch, `search_phone` (K7 in `plans/search-phone.md`).
 
 ## Phone pages: one look (branches `browse_phone`, `queue_phone`, `processing_phone`, `search_official_captions`, `singer_defaults`, `now_playing_remote`, `download_modal_speed`)
 
