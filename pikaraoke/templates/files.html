@@ -31,6 +31,8 @@
 <script>
   $(function () {
     // SPA navigation re-runs this script on every visit: drop the last visit's handlers first.
+    // They stay on the document after the page is left, so the row ones match only inside
+    // #browse-list: Queue's rows share the .sr-* classes.
     $(document).off('click.browse');
 
     var urls = {
@@ -53,7 +55,7 @@
     $(row).on('scroll', fades);
     fades();
 
-    $(document).on('click.browse', 'a.add-song-link', function (e) {
+    $(document).on('click.browse', '#browse-list a.add-song-link', function (e) {
       e.preventDefault();
       var user = Cookies.get("user");
       $.get(this.href + encodeURIComponent(user), function (data) {
@@ -68,7 +70,7 @@
     });
 
     // The admin's menu, one for the page: filled from the tapped row's gear.
-    $(document).on('click.browse', '.sr-gear', function (e) {
+    $(document).on('click.browse', '#browse-list .sr-gear', function (e) {
       e.preventDefault();
       var song = $(this).attr('data-song');
       $('#browse-options-title').text($(this).attr('data-title'));
