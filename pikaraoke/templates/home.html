@@ -64,26 +64,49 @@ function debounceStep(fn, key, delay = 300) {
   _stepTimers[key] = setTimeout(fn, delay);
 }
 
-// A control is busy while a finger or the mouse is on it (_held) and while its latest request is
-// still out (_sending, until it settles or times out). A push leaves a busy control alone: every
-// push repeats the server's whole state (another phone queued a song, say), and applying it then
-// would snap the control back to its old value. A push skipped that way may have been the only
-// one (the server drops a Key change between songs and pushes nothing, then the next song's push
-// lands while the request is out), so when the latest request settles the page reloads the
-// state.
+// A control is busy while a finger or the mouse is on it (_held: the pointer that pressed it) and
+// while its latest request is still out (_sending: until it settles or times out, plus a grace
+// for the seek bar). A push leaves a busy control alone: every push repeats the server's whole
+// state (another phone queued a song, say), and applying it then would snap the control back to
+// its old value. A push skipped that way may have been the only one (the server drops a Key
+// change between songs and pushes nothing, then the next song's push lands while the request is
+// out), so the page reloads the state when a control's latest request settles, and when a
+// control is let go with no request out.
 var _held = {};
 var _sending = {};
 var SEND_TIMEOUT_MS = 5000;
 
-// Sends `url` for the control `key`, which stays busy until this request settles. A later send
-// for the same key takes over, so only the latest one reloads.
-function sendControl(key, url) {
+function isBusy(id) {
+  return id in _held || id in _sending;
+}
+
+// A control is held from a press until that same pointer lifts (see letGo)
+function holdOnPress(selector) {
+  $(selector).on("pointerdown", function (e) { _held[this.id] = e.pointerId; });
+}
+
+// Lets go of the controls `pointerId` holds (all of them when it is undefined), and reloads the
+// state if one has no request out to do it
+function letGo(pointerId) {
+  var reload = false;
+  for (var id in _held) {
+    if (pointerId !== undefined && _held[id] !== pointerId) continue;
+    delete _held[id];
+    reload = reload || !(id in _sending);
+  }
+  if (reload) loadNowPlaying();
+}
+
+// Sends `url` for the control `key`, which stays busy until this request settles and `grace` ms
+// after. A later send for the same key takes over, so only the latest one ends the busy spell and
+// reloads.
+function sendControl(key, url, grace = 0) {
   var send = (_sending[key] = {});
-  $.ajax({ url: url, timeout: SEND_TIMEOUT_MS }).always(() => {
+  $.ajax({ url: url, timeout: SEND_TIMEOUT_MS }).always(() => setTimeout(() => {
     if (_sending[key] !== send) return; // a later send is still to come
     delete _sending[key];
     loadNowPlaying();
-  });
+  }, grace));
 }
 
 // Sends a stepper's value on `event` (input: live while dragged; change: when a drag is
@@ -91,9 +114,8 @@ function sendControl(key, url) {
 // into one request. The value is read when the event fires, not when the request goes out, and
 // the stepper is busy from the event on.
 function sendStepper(selector, event, url, delay) {
-  var range = $(selector);
-  range.on("pointerdown", function () { _held[this.id] = true; });
-  range.on(event, function () {
+  holdOnPress(selector);
+  $(selector).on(event, function () {
     var id = this.id;
     var value = this.value;
     _sending[id] = {}; // busy through the debounce; a request still out no longer counts
@@ -102,7 +124,7 @@ function sendStepper(selector, event, url, delay) {
 }
 
 function syncStepper(id, value) {
-  if (_held[id] || _sending[id]) return;
+  if (isBusy(id)) return;
   stepperSet(document.getElementById(id), value);
 }
 
@@ -131,12 +153,8 @@ function fmtTime(s) {
   return m + ":" + (sec < 10 ? "0" : "") + sec;
 }
 
-// Seek bar state. The bar follows playback unless it is held or a seek is out.
-var _seekSending = false;
+// The song's length, which the seek bar's 0-100 is a share of
 var _seekDuration = 0;
-function seekBusy() {
-  return _held["seek-bar"] || _seekSending;
-}
 
 // Ensure global socket exists
 if (typeof window.socket === 'undefined') {
@@ -211,15 +229,16 @@ function handleNowPlaying(np) {
   var seekBar = document.getElementById("seek-bar");
   if (timeTotal && timeElapsed && seekBar) {
     timeTotal.innerHTML = fmtTime(_seekDuration);
-    if (!seekBusy() && _seekDuration > 0) {
+    if (!isBusy("seek-bar") && _seekDuration > 0) {
       seekBar.value = ((np.now_playing_position || 0) / _seekDuration) * 100;
     }
     timeElapsed.innerHTML = fmtTime(np.now_playing_position || 0);
   }
 
-  if (!_sending["pause-resume"]) showPaused(np.is_paused);
-  $("#paused-tag").toggle(Boolean(np.now_playing && np.is_paused));
-  if (np.is_paused) {
+  // The Paused tag and the bars go by the button, so the three agree while a tap is out
+  if (!isBusy("pause-resume")) showPaused(np.is_paused);
+  $("#paused-tag").toggle(Boolean(np.now_playing && _paused));
+  if (_paused) {
     $(".playing_gif").attr("src", "{{ url_for('static', filename='images/now-playing.png') }}");
   } else {
     $(".playing_gif").attr("src", "{{ url_for('static', filename='images/now-playing.gif') }}");
@@ -234,7 +253,7 @@ window.socket.on("playback_position", function (pos) {
   var seekBar = document.getElementById("seek-bar");
   var elapsed = document.getElementById("time-elapsed");
   if (!seekBar || !elapsed) return; // not on the home page
-  if (!seekBusy() && _seekDuration > 0) {
+  if (!isBusy("seek-bar") && _seekDuration > 0) {
     seekBar.value = (pos / _seekDuration) * 100;
   }
   elapsed.innerHTML = fmtTime(pos);
@@ -245,31 +264,25 @@ $(function () {
 
   // Volume goes out live while it is dragged
   sendStepper("#volume-slider", "input", (v) => "/volume/" + v / 100, 500);
-  // A finger or the mouse can let go off the rail, so the release is heard on the whole page. A
-  // phone locked mid-drag sends no release, so the page hiding counts as one. SPA navigation
-  // re-runs this script, hence the off first.
-  $(document).off(".npHeld").on("pointerup.npHeld pointercancel.npHeld visibilitychange.npHeld",
-    function () { _held = {}; });
+  // A finger or the mouse can let go off the rail, so the release is heard on the whole page,
+  // and a second finger lifting elsewhere lets go of nothing. A phone locked mid-drag sends no
+  // release, so the page hiding lets go of every control. SPA navigation re-runs this script,
+  // hence the off first.
+  $(document).off(".npHeld")
+    .on("pointerup.npHeld pointercancel.npHeld", (e) => letGo(e.pointerId))
+    .on("visibilitychange.npHeld", () => letGo());
   sendStepper("#transpose", "change", (v) => "/transpose/" + v);
   sendStepper("#subtitle-delay-slider", "change", (v) => "/subtitle_delay/" + v);
   sendStepper("#vocal-volume-slider", "change", (v) => "/vocal_volume/" + v / 100);
 
-  // Seek bar handlers (the seek bar is the admin's: no one else's page has it)
-  var seekBar = document.getElementById("seek-bar");
-  if (seekBar) {
-    // Held, not "dragged": a drag that ends where it began fires no change, so nothing would
-    // let go of a lock taken on input.
-    seekBar.addEventListener("pointerdown", function () { _held[this.id] = true; });
-    seekBar.addEventListener("change", function () {
-      var pos = (seekBar.value / 100) * _seekDuration;
-      // Stay busy until *after* the seek confirms AND a small grace window passes, so a stale
-      // playback_position event in flight cannot snap the slider back to the pre-seek position.
-      _seekSending = true;
-      $.ajax({ url: "/seek/" + pos, timeout: SEND_TIMEOUT_MS }).always(function () {
-        setTimeout(function () { _seekSending = false; }, 200);
-      });
-    });
-  }
+  // The seek bar (the admin's: no one else's page has it). Held, not "dragged": a drag that ends
+  // where it began fires no change, so nothing would let go of a lock taken on input. A
+  // playback_position sent before mpv took the seek can still be on its way when /seek answers,
+  // hence the grace before the bar follows playback again.
+  holdOnPress("#seek-bar");
+  $("#seek-bar").on("change", function () {
+    sendControl(this.id, "/seek/" + (this.value / 100) * _seekDuration, 200);
+  });
 
   // The button flips at once, and a push leaves it alone until its request settles
   $("#pause-resume").click(function () {
