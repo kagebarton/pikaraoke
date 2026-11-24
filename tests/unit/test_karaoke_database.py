@@ -246,20 +246,6 @@ class TestPipelineColumns:
         assert db2.get_pipeline_state("/songs/t.mp4") == "ready"
         db2.close()
 
-    def test_get_pipeline_states_batch(self, db):
-        db.insert_songs(
-            [
-                _song("/songs/a.mp4", pipeline_state="ready"),
-                _song("/songs/b.mp4", pipeline_state="pending"),
-            ]
-        )
-        db.set_pipeline_state("/songs/a.mp4", "ready")
-        db.set_pipeline_state("/songs/b.mp4", "pending")
-        result = db.get_pipeline_states(["/songs/a.mp4", "/songs/b.mp4", "/songs/missing.mp4"])
-        assert result["/songs/a.mp4"] == "ready"
-        assert result["/songs/b.mp4"] == "pending"
-        assert "/songs/missing.mp4" not in result
-
     def test_get_paths_by_pipeline_state(self, db):
         db.insert_songs(
             [

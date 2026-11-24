@@ -219,19 +219,6 @@ class KaraokeDatabase:
             ).fetchone()
             return row[0] if row else None
 
-    def get_pipeline_states(self, paths: list[str]) -> dict[str, str]:
-        """Return a dict mapping file_path → pipeline_state for the given paths."""
-        with self._lock:
-            result = {}
-            for path in paths:
-                row = self._conn.execute(
-                    "SELECT pipeline_state FROM songs WHERE file_path = ?",
-                    (path,),
-                ).fetchone()
-                if row and row[0] is not None:
-                    result[path] = row[0]
-            return result
-
     def get_paths_by_pipeline_state(self, states: Iterable[str]) -> list[str]:
         """Return the file_path of every song whose pipeline_state is one of ``states``."""
         states = tuple(states)

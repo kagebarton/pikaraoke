@@ -212,10 +212,6 @@ class SongManager:
         """Forwarder for pipeline_state reads."""
         return self._db.get_pipeline_state(song_path)
 
-    def get_pipeline_states(self, paths: list[str]) -> dict[str, str]:
-        """Batch forwarder: returns dict mapping file_path → pipeline_state."""
-        return self._db.get_pipeline_states(paths)
-
     def get_paths_by_pipeline_state(self, states: Iterable[str]) -> list[str]:
         """Forwarder: the paths of songs whose pipeline_state is one of ``states``."""
         return self._db.get_paths_by_pipeline_state(states)
