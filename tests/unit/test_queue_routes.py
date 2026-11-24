@@ -509,20 +509,6 @@ class TestEnqueuePipelineGate:
 
     @patch("pikaraoke.routes.queue.broadcast_event")
     @patch("pikaraoke.routes.queue.get_karaoke_instance")
-    def test_failed_song_is_never_held(self, mock_get_instance, mock_broadcast, client):
-        mock_karaoke = MagicMock()
-        mock_karaoke.song_manager.get_pipeline_state.return_value = "failed"
-        mock_karaoke.queue_hold.add_outcome.return_value = "refused"
-        mock_karaoke.song_manager.filename_from_path.return_value = "Test Song"
-        mock_get_instance.return_value = mock_karaoke
-
-        response = client.get("/enqueue?song=/songs/test.mp4&user=Alice")
-
-        assert response.status_code == 409
-        mock_karaoke.queue_manager.enqueue.assert_not_called()
-
-    @patch("pikaraoke.routes.queue.broadcast_event")
-    @patch("pikaraoke.routes.queue.get_karaoke_instance")
     def test_failed_song_rejected_with_409(self, mock_get_instance, mock_broadcast, client):
         mock_karaoke = MagicMock()
         mock_karaoke.song_manager.get_pipeline_state.return_value = "failed"
