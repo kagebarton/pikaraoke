@@ -565,7 +565,7 @@ class TestLrclibAutoPlan:
     def test_a_passing_record_gives_the_plan_a_repair_to_it_would(self, tmp_path, search):
         video = _genius_song(tmp_path)
 
-        (job,) = regen.check_lrclib_auto(_planned(tmp_path), named=False)
+        (job,), _ = regen.check_lrclib_auto(_planned(tmp_path), named=False)
 
         plan = job.plan
         assert plan.kind == "seed"
@@ -580,7 +580,7 @@ class TestLrclibAutoPlan:
         _genius_song(tmp_path)
         search.return_value = [_record(synced=lrc_slice(lines=range(3)))]
 
-        (job,) = regen.check_lrclib_auto(_planned(tmp_path), named=False)
+        (job,), _ = regen.check_lrclib_auto(_planned(tmp_path), named=False)
 
         assert job.plan.kind == "skip"
         assert job.plan.label == "stays on joint: no record passed (1 records; no_fit 1)"
@@ -590,7 +590,7 @@ class TestLrclibAutoPlan:
         _genius_song(tmp_path)
         search.return_value = [{**_record(), "syncedLyrics": None}]
 
-        (job,) = regen.check_lrclib_auto(_planned(tmp_path), named=False)
+        (job,), _ = regen.check_lrclib_auto(_planned(tmp_path), named=False)
 
         assert job.plan.kind == "skip"
         assert job.plan.label == "stays on joint: no synced LRCLIB record"
@@ -599,13 +599,32 @@ class TestLrclibAutoPlan:
         _genius_song(tmp_path)
         search.side_effect = lrclib.LrclibUnavailable("LRCLIB search failed")
 
-        (job,) = regen.check_lrclib_auto(_planned(tmp_path), named=False)
+        (job,), unchecked = regen.check_lrclib_auto(_planned(tmp_path), named=False)
 
         assert job.plan.kind == "skip"
-        assert job.plan.label == (
-            "stays on joint: LRCLIB check could not run (search_failed); rerun later"
-        )
+        assert job.plan.label == "stays on joint: LRCLIB could not be reached; rerun later"
+        assert unchecked == 1
         assert lrclib.lrc_path(job.song_path).read_text(encoding="utf-8") == OLD_LRC
+
+    def test_a_failed_check_stays_on_joint_and_points_at_the_log(self, tmp_path, search):
+        _genius_song(tmp_path, genius={"title": "Some Song"})
+
+        (job,), unchecked = regen.check_lrclib_auto(_planned(tmp_path), named=False)
+
+        assert job.plan.kind == "skip"
+        assert job.plan.label == "stays on joint: LRCLIB check failed (error); see the log"
+        assert unchecked == 1
+        search.assert_not_called()
+
+    def test_a_song_without_a_stored_length_is_probed_once(self, tmp_path, search, monkeypatch):
+        _genius_song(tmp_path, media_duration_s=None)
+        probe = MagicMock(return_value=CLIP_S)
+        monkeypatch.setattr(library_regen, "probe_duration", probe)
+
+        (job,), _ = regen.check_lrclib_auto(_planned(tmp_path), named=False)
+
+        assert job.plan.kind == "seed"
+        probe.assert_called_once()
 
     def test_the_progress_goes_to_stderr_and_the_report_stays_clean(self, tmp_path, search, capsys):
         _genius_song(tmp_path)
@@ -621,7 +640,7 @@ class TestLrclibAutoEligibility:
     """A song the check does not apply to is dropped before any search."""
 
     def _dropped(self, tmp_path, search, capsys, video: Path) -> str:
-        assert regen.check_lrclib_auto(_planned(tmp_path, video), named=True) == []
+        assert regen.check_lrclib_auto(_planned(tmp_path, video), named=True) == ([], 0)
         search.assert_not_called()
         return capsys.readouterr().out
 
@@ -690,7 +709,7 @@ class TestLrclibAutoEligibility:
     def test_without_song_a_dropped_song_is_silent(self, tmp_path, search, capsys):
         _genius_song(tmp_path, lyrics={"origin": "srt"})
 
-        assert regen.check_lrclib_auto(_planned(tmp_path), named=False) == []
+        assert regen.check_lrclib_auto(_planned(tmp_path), named=False) == ([], 0)
 
         assert capsys.readouterr().out == ""
 
@@ -737,7 +756,7 @@ class TestMainLrclibAuto:
         assert code == 0
         assert search.call_count == 2
         assert "Selection: Genius songs on joint, checked against LRCLIB\n" in out
-        assert "Songs checked: 2; to re-time: 1" in out
+        assert "Songs checked: 2; to re-time: 1; could not check: 0" in out
         assert "LRCLIB (auto) 42: Some Song · Some Artist" in out
         assert "stays on joint: no synced LRCLIB record" in out
         run.assert_not_called()
@@ -792,6 +811,32 @@ class TestMainLrclibAuto:
         run.assert_not_called()
         assert not (tmp_path / "regen_backups").exists()
 
+    def test_an_lrclib_outage_is_counted_and_exits_1(self, tmp_path, monkeypatch, capsys, search):
+        self._library(tmp_path)
+        search.side_effect = lrclib.LrclibUnavailable("LRCLIB search failed")
+
+        code, run = self._main(monkeypatch, tmp_path, "--dry-run")
+
+        out = capsys.readouterr().out
+        assert code == 1
+        assert "Songs checked: 2; to re-time: 0; could not check: 2" in out
+        assert "Nothing to re-time." in out
+        run.assert_not_called()
+
+    def test_closed_input_at_the_prompt_aborts(self, tmp_path, monkeypatch, capsys):
+        self._library(tmp_path)
+
+        def closed(prompt):
+            raise EOFError
+
+        monkeypatch.setattr("builtins.input", closed)
+
+        code, run = self._main(monkeypatch, tmp_path)
+
+        assert code == 0
+        assert "Aborted." in capsys.readouterr().out
+        run.assert_not_called()
+
     def test_song_narrows_the_check_and_a_song_named_twice_is_checked_once(
         self, tmp_path, monkeypatch, capsys, search
     ):
@@ -836,7 +881,7 @@ class TestLrclibAutoRun:
 
     def _job(self, tmp_path, search):
         _genius_song(tmp_path)
-        (job,) = regen.check_lrclib_auto(_planned(tmp_path), named=False)
+        (job,), _ = regen.check_lrclib_auto(_planned(tmp_path), named=False)
         return job
 
     def test_the_run_writes_the_sheet_and_the_record_and_keeps_the_genius_song(
