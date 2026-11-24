@@ -7,12 +7,14 @@
   .box { position: relative; }
   .bp-batch { position: absolute; top: 12px; right: 20px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
   .bp-batch .icon { font-size: 14px; }
-  .bp-toggle { display: flex; gap: 4px; padding: 4px; margin-bottom: 12px; border-radius: 10px; background: var(--dark-bg-secondary); }
+  .bp-toggle { display: flex; gap: 4px; padding: 4px; margin: 0 20px 12px; border-radius: 10px; background: var(--dark-bg-secondary); }
   .bp-toggle a { flex: 1; display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 7px; font-size: 15px; color: var(--dark-text-light); }
   .bp-toggle a[aria-current="true"] { background: var(--dark-primary); color: var(--dark-text-primary); font-weight: 700; }
-  /* The letter strip stays at the top of the screen while the list scrolls under it. It bleeds to
-     the card's edges and is the card's colour, so rows pass behind it. Below Bulma's modals (z 40). */
-  .bp-strip { position: sticky; top: 0; z-index: 10; margin: 0 -20px; padding-bottom: 16px; background: var(--dark-bg-tertiary); }
+  /* The toggle and the letter strip stay together near the top of the screen while the list
+     scrolls under them. The block bleeds to the card's edges and is the card's colour, so rows
+     pass behind it; its 12px top padding is the gap above the toggle, and the matching negative
+     margin keeps the unpinned layout where it was. Below Bulma's modals (z 40). */
+  .bp-pin { position: sticky; top: 0; z-index: 10; margin: -12px -20px 0; padding: 12px 0 16px; background: var(--dark-bg-tertiary); }
   .bp-strip-row { position: relative; display: flex; gap: 6px; padding: 0 20px; overflow-x: auto; scrollbar-width: none; }
   .bp-strip-row::-webkit-scrollbar { display: none; }
   /* A fade at each edge that has letters past it; a mask, so it needs no colour to match. */
@@ -97,23 +99,25 @@
 {% endif %}
 
 <div id="browse-page">
-  <div class="bp-toggle" role="group">
-    <a href="{{ url_for('files.browse', by='artist', letter=letter_param) }}"{% if by == 'artist' %} aria-current="true"{% endif %}>{# MSG: Browse sort toggle: list by the artist's name. #}{% trans %}By artist{% endtrans %}</a>
-    <a href="{{ url_for('files.browse', by='song', letter=letter_param) }}"{% if by == 'song' %} aria-current="true"{% endif %}>{# MSG: Browse sort toggle: list by the song's title. #}{% trans %}By song{% endtrans %}</a>
-  </div>
-
-  {# MSG: Screen-reader name of the row of letters on the Browse page. #}
-  <nav class="bp-strip" aria-label="{% trans %}Songs by letter{% endtrans %}">
-    <div class="bp-strip-row">
-      {% for entry in strip %}
-      {% if entry.has_rows %}
-      <a class="bp-letter" href="{{ url_for('files.browse', by=by, letter=entry.param) }}"{% if entry.param == letter_param %} aria-current="page"{% endif %}>{{ entry.label }}</a>
-      {% else %}
-      <span class="bp-letter" aria-disabled="true">{{ entry.label }}</span>
-      {% endif %}
-      {% endfor %}
+  <div class="bp-pin">
+    <div class="bp-toggle" role="group">
+      <a href="{{ url_for('files.browse', by='artist', letter=letter_param) }}"{% if by == 'artist' %} aria-current="true"{% endif %}>{# MSG: Browse sort toggle: list by the artist's name. #}{% trans %}By artist{% endtrans %}</a>
+      <a href="{{ url_for('files.browse', by='song', letter=letter_param) }}"{% if by == 'song' %} aria-current="true"{% endif %}>{# MSG: Browse sort toggle: list by the song's title. #}{% trans %}By song{% endtrans %}</a>
     </div>
-  </nav>
+
+    {# MSG: Screen-reader name of the row of letters on the Browse page. #}
+    <nav class="bp-strip" aria-label="{% trans %}Songs by letter{% endtrans %}">
+      <div class="bp-strip-row">
+        {% for entry in strip %}
+        {% if entry.has_rows %}
+        <a class="bp-letter" href="{{ url_for('files.browse', by=by, letter=entry.param) }}"{% if entry.param == letter_param %} aria-current="page"{% endif %}>{{ entry.label }}</a>
+        {% else %}
+        <span class="bp-letter" aria-disabled="true">{{ entry.label }}</span>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </nav>
+  </div>
 
   {% if letter %}
   <div class="bp-label">
