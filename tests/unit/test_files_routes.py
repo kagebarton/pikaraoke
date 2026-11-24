@@ -196,6 +196,7 @@ def _karaoke(tmp_path, songs, *, states=None, busy=(), picking=()):
     k.song_manager.get_paths_by_pipeline_state.side_effect = lambda wanted: [
         path for path, state in pipeline.items() if state in wanted
     ]
+    k.library_tools = library_tools
     k.queue_hold = QueueHold(queue_manager, events, library_tools, k.song_manager)
     return k
 
@@ -330,6 +331,13 @@ def test_a_missing_or_empty_letter_gives_the_first_one_with_songs(browse):
     assert browse(songs, query="?letter=b").label == "Q artists"
     assert browse(songs, query="?letter=1").label == "Q artists"
     assert browse(songs, query="?by=bogus").chosen_mode == "By artist"
+
+
+def test_a_capital_letter_in_the_url_is_the_same_letter(browse):
+    songs = [_song("Queen - Bohemian Rhapsody", 1), _song("Zedd - Clarity", 2)]
+
+    assert browse(songs, query="?letter=Z").label == "Z artists"
+    assert browse(songs, query="?letter=NUMERIC").label == "Q artists"
 
 
 def test_the_mode_and_letter_are_remembered_for_a_plain_visit(browse):
