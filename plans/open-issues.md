@@ -1546,3 +1546,8 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   discussed. Moved out of `tv_screens` 2026-11-25: that branch only puts the new
   `gpukaraoke` wordmark logo on the inter-song screen. Record: `plans/tv-screens.md`
   on branch `tv_screens`, Decisions 2026-11-23 item 1.
+- **Translate the TV screens.** The phone pages go through gettext; the TV overlays
+  (`overlay_manager.py`) never have, so their text is English whatever the language
+  setting. Ken, 2026-11-25: the new inter-song and during-song screens stay English
+  for now. Record: `plans/tv-screens.md` on branch `tv_screens`, Decisions 2026-11-25
+  (inter-song screen).
