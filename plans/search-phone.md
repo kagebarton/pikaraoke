@@ -246,6 +246,15 @@ Where this file and the canvas differ, this file wins.
   their message in a red line under Queue (the board draws the download's). The page's notice
   sits under the dialog's backdrop, so it is used only when the dialog has closed or been
   replaced meanwhile.
+- **A15. The search row pins to the top, through a shared class** (Ken, 2026-11-25). Only the
+  search box and its Search button pin; Clear, Advanced and the Advanced panel scroll away
+  (seldom used). Processing and Queue will pin too, later and on their own branches, so
+  Browse's `.bp-pin` moves now to one `.pin-top` class in `phone-rows.css` (every phone page
+  links it) rather than waiting for a third copy. It is Browse's rule unchanged, so Browse
+  looks the same: sticky at the top, z-index 10, bleeding to the card's edges on the card's
+  background; the pinned content sets its own side inset. Its `top` is 0 here; when
+  `ui_tweaks` pins the nav bar it moves to below the nav in this one place. A shared class is
+  not a leak under A13: it styles only what carries it.
 
 ## What exists (checked 2026-11-24 on `dev` at `d2ed9a3b`)
 
@@ -420,6 +429,10 @@ never restated hex values. Every new rule is scoped under Search's ids (A13).
 
 **The page (`search.html`), commit 5.**
 
+- The pin (A15): `search.html` links `phone-rows.css` from a `{% block styles %}`, as Queue and
+  Browse do (moved here from commit 6). `#search-form` is wrapped in a `.pin-top` div with a
+  20 px side inset; the Clear / Advanced row and everything below stay outside it. Browse's
+  `.bp-pin` rule and class go; its pin div takes `.pin-top`.
 - Search form: one flex row, gap 8 px. `#search-input` dark (A8), 44 px, 6 px corners, 0 12 px
   padding. `#search-link` a plain `.button` (grey), 44 px, 6 px corners, 15 px bold, 0 16 px
   padding; `is-warning` goes. Its `is-loading` wait state stays.
@@ -439,7 +452,6 @@ never restated hex values. Every new rule is scoped under Search's ids (A13).
 
 **The card (`search_result.html`, `search.html`), commit 6.**
 
-- `search.html` links `phone-rows.css` from a `{% block styles %}`, as Queue and Browse do.
 - `--thumb-overlay` (A7) replaces each `rgba(0, 0, 0, 0.6)` on the page and the duration's 80%.
 - Thumbnail: `.img-frame` gets 6 px corners and clips (`overflow: hidden`), so the card player
   inside it is clipped too.
@@ -622,10 +634,12 @@ get_youtube_id_from_url`).
 
 ### Phase 3
 
-**5. `feat(search): the search box, Advanced and the results label take the phone look`.**
-`search.html`, `test_search_render.py`.
+**5. `feat(search): the search box pins to the top and the page takes the phone look`.**
+`search.html`, `files.html`, `phone-rows.css`, `test_search_render.py`.
 
-- Tests: `#search-link` has no `is-warning`; `#advanced-settings` has no `box` class; no `<hr`
+- Tests: `#search-form` sits inside a `.pin-top` element and `#clear-search` does not; the page
+  links `phone-rows.css`; Browse renders a `.pin-top` and no `bp-pin`; `#search-link` has no
+  `is-warning`; `#advanced-settings` has no `box` class; no `<hr`
   between the search form and the results; the results label and Advanced's URL label keep
   their text (K1); Show more reads "Show more".
 - Existing form and add-to-queue tests pass unchanged.
@@ -662,9 +676,13 @@ YouTube link`.** `search_result.html`, `search.html`, `test_search_render.py`.
   Download, the card buttons, Show more and the typed search; the badge fill
   `rgba(0, 0, 0, 0.6)`; the emblem's fill the Info blue beside In library and alone; the dialog
   card's background `--dark-bg-tertiary`. The X closes the dialog and gets focus on open; a
-  backdrop tap closes it. Nothing on the page is white but text.
+  backdrop tap closes it. Nothing on the page is white but text. The pin (A15): scrolled to the
+  tenth card, the search row's top is at 0 and the cards pass under it (a playing card
+  preview too); Clear has scrolled away; the open dialog sits above the pin. Browse, before
+  and after commit 5, at the same scroll: the toggle and letter strip pin at the same place,
+  with the same computed styles.
 
-**Stop after Phase 3.** Review due (commits 5-7: markup and styles across two templates).
+**Stop after Phase 3.** Review due (commits 5-7: markup and styles across three templates and `phone-rows.css`).
 
 ### Phase 4
 
@@ -703,6 +721,8 @@ scripts in the session scratchpad and name them in the Results row.
 
 - [ ] The page looks like "Search: results" and "Search: Advanced open": grey Search beside a
       dark box, red Clear, the dark Advanced inset, the small grey results line, no rule.
+- [ ] Scroll down the results: the search box and Search stay at the top, Clear and Advanced
+      scroll away. Browse's toggle and letter strip still pin as before.
 - [ ] A video you own: first, an In library badge on its thumbnail (green folder), green Queue.
 - [ ] An official video: an "Official video" badge with a blue check; an owned official video:
       both badges, In library first, the check blue too.
