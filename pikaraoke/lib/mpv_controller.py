@@ -43,6 +43,33 @@ from pikaraoke.lib.overlay_manager import (  # noqa: E402
 
 log = logging.getLogger(__name__)
 
+# One `xrandr --listmonitors` row: " 1: +HDMI-A-0 1920/521x1080/293+0+0  HDMI-A-0",
+# where a `*` before the name marks the primary monitor.
+_MONITOR_ROW = re.compile(r"^\s*(\d+):\s+\+?(\*?)\S")
+
+
+def _tv_screen_index() -> int | None:
+    """mpv screen index of the first non-primary monitor, or None with fewer than two.
+
+    The TV is the second screen on a box that also has its own display; mpv numbers
+    X11 screens in `xrandr --listmonitors` order. None (no xrandr, one monitor, or a
+    failed query) leaves the window where the window manager puts it.
+    """
+    if not shutil.which("xrandr"):
+        return None
+    try:
+        out = subprocess.run(
+            ["xrandr", "--listmonitors"], capture_output=True, text=True, timeout=2, check=True
+        ).stdout
+    except (OSError, subprocess.SubprocessError) as e:
+        log.warning("Could not list monitors (%s); opening the player windowed", e)
+        return None
+    rows = [m for m in map(_MONITOR_ROW.match, out.splitlines()) if m]
+    if len(rows) < 2:
+        return None
+    return next((int(m.group(1)) for m in rows if not m.group(2)), None)
+
+
 # ── Rubberband filter presets (from mpv/ prototype) ─────────────────────────
 _RB_VOCAL = (
     "pitchq=quality:transients=mixed:detector=compound"
@@ -222,6 +249,9 @@ class MpvController:
                 video so externally-routed audio (e.g. SPDIF loop through a mixer)
                 lines up at the TV.
         """
+        tv = _tv_screen_index()
+        # Fullscreen on the TV when there is a second screen; `f` still toggles it.
+        tv_opts = {"screen": tv, "fs_screen": tv, "fullscreen": True} if tv is not None else {}
         self._player = mpv.MPV(
             idle=True,
             force_window=True,
@@ -234,6 +264,7 @@ class MpvController:
             sub_ass_force_margins=True,
             terminal=False,
             input_vo_keyboard=True,
+            **tv_opts,
         )
         p = self._player
 

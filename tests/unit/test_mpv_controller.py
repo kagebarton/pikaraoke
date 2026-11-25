@@ -19,6 +19,7 @@ from pikaraoke.lib.mpv_controller import (
     _RB_NONVOCAL,
     _RB_VOCAL,
     MpvController,
+    _tv_screen_index,
 )
 
 
@@ -347,3 +348,55 @@ def test_play_karaoke_with_file_selects_it_without_clearing_first(ready_controll
     ready_controller.play("/tmp/song.mp4", initial_sub_mode="karaoke", ass_path=str(ass))
     ready_controller._player.sub_add.assert_called_once_with(str(ass), "select")
     assert ready_controller._player.sid == 1  # sub_add replaces the pick; no sid write
+
+
+# ── TV screen pick ───────────────────────────────────────────────────────────
+
+_LAPTOP_AND_TV = (
+    "Monitors: 2\n"
+    " 0: +*eDP 1920/344x1080/194+0+1080  eDP\n"
+    " 1: +HDMI-A-0 1920/521x1080/293+0+0  HDMI-A-0\n"
+)
+
+
+def _xrandr(monkeypatch, stdout=None, error=None, installed=True):
+    monkeypatch.setattr(
+        "pikaraoke.lib.mpv_controller.shutil.which",
+        lambda name: "/usr/bin/xrandr" if installed else None,
+    )
+
+    def run(*_args, **_kwargs):
+        if error:
+            raise error
+        return SimpleNamespace(stdout=stdout)
+
+    monkeypatch.setattr("pikaraoke.lib.mpv_controller.subprocess.run", run)
+
+
+def test_tv_screen_is_the_first_non_primary_monitor(monkeypatch):
+    _xrandr(monkeypatch, _LAPTOP_AND_TV)
+    assert _tv_screen_index() == 1
+
+
+def test_tv_screen_found_when_primary_is_listed_second(monkeypatch):
+    _xrandr(
+        monkeypatch,
+        "Monitors: 2\n 0: +HDMI-A-0 1920/521x1080/293+0+0  HDMI-A-0\n"
+        " 1: +*eDP 1920/344x1080/194+0+1080  eDP\n",
+    )
+    assert _tv_screen_index() == 0
+
+
+def test_no_tv_screen_with_one_monitor(monkeypatch):
+    _xrandr(monkeypatch, "Monitors: 1\n 0: +*eDP 1920/344x1080/194+0+0  eDP\n")
+    assert _tv_screen_index() is None
+
+
+def test_no_tv_screen_without_xrandr(monkeypatch):
+    _xrandr(monkeypatch, installed=False)
+    assert _tv_screen_index() is None
+
+
+def test_no_tv_screen_when_xrandr_fails(monkeypatch):
+    _xrandr(monkeypatch, error=subprocess.CalledProcessError(1, "xrandr"))
+    assert _tv_screen_index() is None
