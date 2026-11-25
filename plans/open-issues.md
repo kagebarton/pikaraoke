@@ -1541,3 +1541,8 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   same, 4 worse, 7 with no caption). The replacement records were not heard. Not
   done: Ken kept the measured order (Decision 32). Record: `plans/lrclib-fit-pick.md`
   on tag `archive/lrclib_fit_pick`, "Sizing for Decision 32".
+- **Rename PiKaraoke to gpukaraoke.** Ken, 2026-11-23, "to better reflect what the
+  project is now". Not decided, and the scope (package, repo, UI strings) not
+  discussed. Moved out of `tv_screens` 2026-11-25: that branch only puts the new
+  `gpukaraoke` wordmark logo on the inter-song screen. Record: `plans/tv-screens.md`
+  on branch `tv_screens`, Decisions 2026-11-23 item 1.
