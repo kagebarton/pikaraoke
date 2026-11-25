@@ -85,6 +85,12 @@ class TestGetYoutubeIdFromUrl:
         url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ?extra=param"
         assert get_youtube_id_from_url(url) == "dQw4w9WgXcQ"
 
+    @pytest.mark.parametrize("suffix", ["&list=PLabc123", "&t=30", "&list=PLabc123&index=2"])
+    def test_watch_url_with_ampersand_params(self, suffix):
+        """A playlist or time parameter after the ID is not part of the ID."""
+        url = f"https://www.youtube.com/watch?v=dQw4w9WgXcQ{suffix}"
+        assert get_youtube_id_from_url(url) == "dQw4w9WgXcQ"
+
     def test_short_url_with_params(self):
         """Test parsing short URL with parameters."""
         url = "https://youtu.be/dQw4w9WgXcQ?t=30"

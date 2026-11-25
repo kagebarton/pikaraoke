@@ -1,4 +1,4 @@
-"""Unit tests for search routes: /lyrics_search, /lyrics_select and /caption_check."""
+"""Unit tests for search routes: /lyrics_search, /lyrics_select, /download and /caption_check."""
 
 import json
 from pathlib import Path
@@ -22,6 +22,10 @@ from pikaraoke.routes.search import search_bp
 # ---------------------------------------------------------------------------
 
 
+# A library file whose ID no test asks for, so the guard looks at a real, non-matching library.
+OTHER_SONG = "/fake/path/Other Song---aaaaaaaaaaa.mp4"
+
+
 @pytest.fixture
 def app(tmp_path):
     """Create a Flask app for testing with mocked Karaoke instance."""
@@ -34,7 +38,7 @@ def app(tmp_path):
     mock_karaoke = MagicMock()
     mock_karaoke.genius_client = GeniusClient(api_token="")  # always constructed (DD2)
     mock_karaoke.song_manager = MagicMock()
-    mock_karaoke.song_manager.songs = MagicMock()
+    mock_karaoke.song_manager.songs = [OTHER_SONG]
     mock_karaoke.download_path = "/fake/path"
 
     test_app.config["KARAOKE_INSTANCE"] = mock_karaoke
@@ -341,6 +345,136 @@ class TestLyricsSelect:
         assert resp.status_code == 204
         call_args = mock_write.call_args
         assert call_args[0][1]["genius_id"] == 12345
+
+    @patch("pikaraoke.routes.search.write_choice")
+    @patch("pikaraoke.routes.search.get_karaoke_instance")
+    def test_owned_video_answers_in_library_and_writes_nothing(
+        self, mock_get_k, mock_write, client
+    ):
+        """The lyrics stage reads a pending choice by video ID, so one written for a song the
+        library has would change that song's next run."""
+        k = _get_karaoke(client.application)
+        mock_get_k.return_value = k
+        owned = "/fake/path/Rick Astley - Never Gonna Give You Up---dQw4w9WgXcQ.mp4"
+        k.song_manager.songs = [OTHER_SONG, owned]
+
+        resp = client.post(
+            "/lyrics_select",
+            data=json.dumps({"yt_id": "dQw4w9WgXcQ", "genius_id": 4848515}),
+            content_type="application/json",
+        )
+
+        assert resp.status_code == 200
+        assert resp.get_json() == {"status": "in_library", "song_path": owned}
+        mock_write.assert_not_called()
+
+    @patch("pikaraoke.routes.search.write_choice")
+    @patch("pikaraoke.routes.search.get_karaoke_instance")
+    def test_invalid_choice_is_refused_before_the_library_is_asked(
+        self, mock_get_k, mock_write, client
+    ):
+        k = _get_karaoke(client.application)
+        mock_get_k.return_value = k
+        k.song_manager.songs = ["/fake/path/Song---dQw4w9WgXcQ.mp4"]
+
+        resp = client.post(
+            "/lyrics_select",
+            data=json.dumps({"yt_id": "dQw4w9WgXcQ"}),
+            content_type="application/json",
+        )
+
+        assert resp.status_code == 400
+        mock_write.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# /download
+# ---------------------------------------------------------------------------
+
+OWNED_ID = "dQw4w9WgXcQ"
+OWNED_URL = f"https://www.youtube.com/watch?v={OWNED_ID}"
+
+
+def _post_download(client, url=OWNED_URL, queue=True):
+    return client.post(
+        "/download",
+        data=json.dumps(
+            {"song_url": url, "song_added_by": "Ken", "song_title": "A Title", "queue": queue}
+        ),
+        content_type="application/json",
+    )
+
+
+class TestDownload:
+    """POST /download queues a download, unless the library already has the video."""
+
+    @pytest.fixture(autouse=True)
+    def _karaoke(self, client):
+        with patch("pikaraoke.routes.search.get_karaoke_instance") as mock_get_k:
+            mock_get_k.return_value = _get_karaoke(client.application)
+            yield
+
+    @pytest.mark.parametrize("queue", [True, False])
+    @pytest.mark.parametrize(
+        "owned",
+        [
+            f"/fake/path/Title---{OWNED_ID}.mp4",
+            f"/fake/path/Title [{OWNED_ID}].mp4",
+            f"/fake/path/Some Folder/Title---{OWNED_ID}.mp4",
+        ],
+    )
+    def test_owned_video_answers_in_library_and_queues_nothing(self, client, owned, queue):
+        k = _get_karaoke(client.application)
+        k.song_manager.songs = [OTHER_SONG, owned]
+
+        resp = _post_download(client, queue=queue)
+
+        assert resp.status_code == 200
+        assert resp.get_json() == {"status": "in_library", "song_path": owned}
+        k.download_manager.queue_download.assert_not_called()
+
+    @pytest.mark.parametrize("suffix", ["&list=PLabc123", "&t=30", "&list=PLabc123&index=2"])
+    def test_link_with_extra_parameters_to_an_owned_video_is_caught(self, client, suffix):
+        k = _get_karaoke(client.application)
+        owned = f"/fake/path/Title---{OWNED_ID}.mp4"
+        k.song_manager.songs = [owned]
+
+        resp = _post_download(client, url=OWNED_URL + suffix)
+
+        assert resp.get_json() == {"status": "in_library", "song_path": owned}
+        k.download_manager.queue_download.assert_not_called()
+
+    def test_short_link_to_an_owned_video_is_caught(self, client):
+        k = _get_karaoke(client.application)
+        owned = f"/fake/path/Title [{OWNED_ID}].mp4"
+        k.song_manager.songs = [owned]
+
+        resp = _post_download(client, url=f"https://youtu.be/{OWNED_ID}?t=30")
+
+        assert resp.get_json() == {"status": "in_library", "song_path": owned}
+        k.download_manager.queue_download.assert_not_called()
+
+    @pytest.mark.parametrize("queue", [True, False])
+    def test_unowned_video_is_queued_for_download(self, client, queue):
+        k = _get_karaoke(client.application)
+
+        resp = _post_download(client, queue=queue)
+
+        assert resp.status_code == 200
+        assert resp.get_json() == {"status": "ok"}
+        k.download_manager.queue_download.assert_called_once_with(
+            OWNED_URL, queue, "Ken", "A Title"
+        )
+
+    def test_a_link_that_is_not_a_video_still_reaches_the_download_queue(self, client):
+        """No ID to look up, so the guard has nothing to say; the download manager decides."""
+        k = _get_karaoke(client.application)
+        k.song_manager.songs = [f"/fake/path/Title---{OWNED_ID}.mp4"]
+
+        resp = _post_download(client, url="https://example.com/video")
+
+        assert resp.get_json() == {"status": "ok"}
+        k.download_manager.queue_download.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

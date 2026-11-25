@@ -9,7 +9,14 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 
 import flask_babel
-from flask import get_template_attribute, jsonify, render_template, request, url_for
+from flask import (
+    Response,
+    get_template_attribute,
+    jsonify,
+    render_template,
+    request,
+    url_for,
+)
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
 
@@ -25,7 +32,11 @@ from pikaraoke.lib.official_rank import (
     read_first_page,
 )
 from pikaraoke.lib.song_match import SongIndex, similar_songs
-from pikaraoke.lib.youtube_dl import SearchResult, get_search_results
+from pikaraoke.lib.youtube_dl import (
+    SearchResult,
+    get_search_results,
+    get_youtube_id_from_url,
+)
 
 _ = flask_babel.gettext
 
@@ -96,13 +107,31 @@ def _note_library_copies(songs: Iterable[str], rows: list[SearchRow]) -> list[Se
     return noted_rows
 
 
+def _library_ids(songs: Iterable[str]) -> dict[str, str]:
+    """``{video_id: path}`` for the library files that carry a YouTube ID."""
+    # Read from the song list, not find_by_id, which misses "Title [ID].mp4" and subfolders.
+    return {video_id: path for path in songs if (video_id := extract_youtube_id(path))}
+
+
+def _in_library_reply(video_id: str | None) -> Response | None:
+    """The reply that points the page at the library's copy of a video, or None when the
+    library has none.
+
+    Sent instead of acting: the page queues the path through ``/enqueue``, so the queue hold,
+    the refusal of a failed song and "already queued" all stay in one place.
+    """
+    path = _library_ids(get_karaoke_instance().song_manager.songs).get(video_id)
+    if path is None:
+        return None
+    return jsonify({"status": "in_library", "song_path": path})
+
+
 def _search_rows(
     songs: Iterable[str], results: list[SearchResult], query: str, acts: Acts
 ) -> list[SearchRow]:
     """Result cards in display order: the songs already in the library, then the official
     uploads, then YouTube's order."""
-    # Read from the song list, not find_by_id, which misses "Title [ID].mp4" and subfolders.
-    library_ids = {video_id: path for path in songs if (video_id := extract_youtube_id(path))}
+    library_ids = _library_ids(songs)
     rows = [
         SearchRow(r, library_ids.get(r.id), official)
         for r, official in official_first(results, query, acts)
@@ -183,12 +212,19 @@ def caption_check():
 @search_bp.route("/download", methods=["POST"])
 @search_bp.arguments(DownloadBody, location="json")
 def download(form):
-    """Download a video from YouTube."""
+    """Download a video from YouTube, unless the library already has it.
+
+    A stale page or a pasted link must not store a song twice, so a video the library carries
+    is answered ``{"status": "in_library", "song_path"}`` and nothing is queued.
+    """
     k = get_karaoke_instance()
     song = form["song_url"]
     user = form["song_added_by"]
     title = form["song_title"]
     queue = form.get("queue", False)
+
+    if (owned := _in_library_reply(get_youtube_id_from_url(song))) is not None:
+        return owned
 
     # Queue the download (processed serially by the download worker)
     k.download_manager.queue_download(song, queue, user, title)
@@ -238,6 +274,8 @@ def lyrics_select():
     Validates *yt_id* is the 11-char YouTube ID.  One of
     ``{genius_id, mode}`` must be present, and ``mode`` can only be ``srt``
     (the video's own caption).  Writes the sidecar; does not fetch lyrics yet.
+    A video the library already has is answered ``{"status": "in_library", "song_path"}``
+    instead, and nothing is written.
 
     Replaces the prototype's ``/lyrics_download`` route — the prototype
     fetched and saved lyrics text immediately; we only record the choice.
@@ -272,6 +310,10 @@ def lyrics_select():
         payload = {"yt_id": yt_id, "mode": mode_str}
     else:
         return jsonify({"error": "One of genius_id or mode is required"}), 400
+
+    # A choice written for a video the library has would be read by that song's next lyrics run.
+    if (owned := _in_library_reply(yt_id)) is not None:
+        return owned
 
     write_choice(yt_id, payload)
     return "", 204

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -80,7 +81,8 @@ def get_youtubedl_version() -> str:
 def get_youtube_id_from_url(url: str) -> str | None:
     """Extract the YouTube video ID from a URL.
 
-    Supports youtube.com/watch?v=, m.youtube.com/?v=, and youtu.be/ formats.
+    Supports youtube.com/watch?v=, m.youtube.com/?v=, and youtu.be/ formats. Parameters after the
+    ID (``&list=``, ``&t=``, ``?t=``) are dropped.
 
     Args:
         url: YouTube video URL.
@@ -93,9 +95,7 @@ def get_youtube_id_from_url(url: str) -> str | None:
     else:  # accommodates youtu.be/
         s = url.split("u.be/")
     if len(s) == 2:
-        if "?" in s[1]:  # Strip unneeded YouTube params
-            s[1] = s[1][0 : s[1].index("?")]
-        return s[1]
+        return re.split(r"[?&]", s[1], maxsplit=1)[0]  # Strip unneeded YouTube params
     else:
         logging.error(f"Error parsing youtube id from url: {url}")
         return None
