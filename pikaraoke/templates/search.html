@@ -301,6 +301,11 @@
 #lyrics-search-none { margin: 4px 0 0; font-size: 13px; color: var(--dark-warning); }
 #lyrics-search-open { height: 44px; gap: 8px; }
 #lyrics-queue-btn { height: 48px; margin-top: 8px; font-size: var(--lyrics-dropdown-font-size); font-weight: 700; }
+/* Why Queue did not go through, under it; it stays until the next tap or the dialog closes. */
+#lyrics-send-error { margin: -4px 0 0; text-align: center; font-size: 13px; color: var(--dark-danger-text); }
+/* "In library" on a button shows a green folder. */
+#lyrics-queue-btn .icon-folder-open-empty,
+#direct-download-button .icon-folder-open-empty { color: var(--dark-success); }
 #lyrics-other { display: block; margin: -4px auto 0; min-height: 44px; padding: 0 12px; background: none; border: 0; font-size: 14px; color: #a3b0b2; cursor: pointer; }
 #lyrics-other:hover { color: #fff; }
 /* The wait line sits where the Queue button will appear, 36px below the thumbnail. */
@@ -453,98 +458,124 @@
 			if (_dialog && !_dialog.sent) syncQueue();
 		});
 
-		function downloadSong(songUrl, songTitle, button) {
-			var $btn = $(button);
-			var originalText = $btn.html();
-			$btn.css("min-width", $btn.outerWidth() + "px");
-			$btn.addClass("is-loading").attr("disabled", true);
-			$.ajax({
-				url: "{{ url_for('search.download') }}",
-				type: "POST",
-				contentType: "application/json",
-				data: JSON.stringify({
-					song_url: songUrl,
-					song_title: songTitle || "",
-					song_added_by: getUserCookie() || "",
-					queue: $("#add-to-queue").is(":checked"),
-				}),
-				success: function () {
-					$btn.removeClass("is-loading").addClass("is-success is-flash")
-						.html('<i class="icon icon-ok"></i>');
-					setTimeout(function () {
-						$btn.removeClass("is-success is-flash").html(originalText)
-							.removeAttr("disabled").css("min-width", "");
-					}, 3000);
-				},
-				error: function () {
-					$btn.removeClass("is-loading").addClass("is-danger is-flash")
-						.text("!");
-					setTimeout(function () {
-						$btn.removeClass("is-danger is-flash").html(originalText)
-							.removeAttr("disabled").css("min-width", "");
-					}, 3000);
-				},
-			});
-		}
-
 		// The box the dialog's button label reads and its tap sends, so what the button says and
 		// what happens cannot disagree.
 		function queueAfterDownload() {
 			return $("#add-to-queue").is(":checked");
 		}
 
-		// The dialog's /download POST. It touches no button: by the time it is sent the dialog's
-		// Queue says Queued or Added, or the dialog has closed, so a failure can only be a notice.
-		function postDownload(songUrl, songTitle, queue) {
-			$.ajax({
-				url: "{{ url_for('search.download') }}",
-				type: "POST",
-				contentType: "application/json",
-				data: JSON.stringify({
-					song_url: songUrl,
-					song_title: songTitle || "",
-					song_added_by: getUserCookie() || "",
-					queue: queue,
-				}),
-				error: function (xhr) {
-					console.warn("Download failed:", xhr && xhr.responseText ? xhr.responseText : "network error");
-					showNotification(TEXT.downloadFailed, "is-danger");
-				},
+		// One /enqueue for a library file, as a card's Queue sends it. Resolves {queued: true}, or
+		// {queued: false, message} when the queue says no (already queued); rejects with the message
+		// to show when the queue refuses the song (a 409) or cannot be reached.
+		function enqueueFile(filePath) {
+			return new Promise(function (resolve, reject) {
+				$.ajax({
+					url: "{{ url_for('queue.enqueue') }}",
+					type: "GET",
+					data: { song: filePath, user: getUserCookie() || "" },
+					success: function (data) {
+						var result = typeof data === "string" ? JSON.parse(data) : data;
+						resolve(result.success[0] ? { queued: true } : { queued: false, message: result.success[1] });
+					},
+					error: function (xhr) {
+						var msg = "";
+						try { msg = JSON.parse(xhr.responseText).error; } catch (err) {}
+						reject(msg || TEXT.couldNotQueue);
+					},
+				});
+			});
+		}
+
+		// The library already has the video: queue its file when the box is ticked, as a card's Queue
+		// would, else there is nothing more to do. Resolves the outcome; rejects with the message to
+		// show.
+		function useLibraryCopy(filePath, queue) {
+			if (!queue) return Promise.resolve("in-library");
+			return enqueueFile(filePath).then(function (result) {
+				return result.queued ? "queued" : "already-queued";
+			});
+		}
+
+		// The one /download call. Resolves how it ended: "queued" or "added" (a download was
+		// accepted, with the box ticked or not), or useLibraryCopy's outcome when the library
+		// already has the video. Rejects with the message to show.
+		function requestDownload(songUrl, songTitle, queue) {
+			return new Promise(function (resolve, reject) {
+				$.ajax({
+					url: "{{ url_for('search.download') }}",
+					type: "POST",
+					contentType: "application/json",
+					data: JSON.stringify({
+						song_url: songUrl,
+						song_title: songTitle || "",
+						song_added_by: getUserCookie() || "",
+						queue: queue,
+					}),
+					success: function (data) {
+						if (data.status === "in_library") resolve(useLibraryCopy(data.song_path, queue));
+						else resolve(queue ? "queued" : "added");
+					},
+					error: function (xhr) {
+						console.warn("Download failed:", xhr && xhr.responseText ? xhr.responseText : "network error");
+						reject(TEXT.downloadFailed);
+					},
+				});
+			});
+		}
+
+		// The lyric choice, saved before the download starts. Resolves the library file's path when
+		// the server answers that the library already has the video (it wrote nothing), else null.
+		function postLyricChoice(choice) {
+			return new Promise(function (resolve, reject) {
+				$.ajax({
+					url: "{{ url_for('search.lyrics_select') }}",
+					type: "POST",
+					contentType: "application/json",
+					data: JSON.stringify(choice),
+					success: function (data) {
+						resolve(data && data.status === "in_library" ? data.song_path : null);
+					},
+					error: function (xhr) {
+						console.warn("Lyrics select failed:", xhr && xhr.responseText ? xhr.responseText : "network error");
+						reject(TEXT.lyricsSelectFailed);
+					},
+				});
+			});
+		}
+
+		// A small button waiting for an answer: a spinner, disabled, held at its width. What it
+		// returns shows the answer for 3 seconds, then puts the button back as it was.
+		function waitOnButton($btn) {
+			var original = { html: $btn.html(), className: $btn.attr("class") };
+			$btn.css("min-width", $btn.outerWidth() + "px").addClass("is-loading").attr("disabled", true);
+			return function (answer) {
+				$btn.removeClass("is-loading").addClass("is-flash " + answer.tone);
+				showAnswer($btn, answer, true);
+				setTimeout(function () {
+					$btn.attr("class", original.className).html(original.html)
+						.removeAttr("disabled").css("min-width", "");
+				}, 3000);
+			};
+		}
+
+		function downloadSong(songUrl, songTitle, button) {
+			var show = waitOnButton($(button));
+			requestDownload(songUrl, songTitle, queueAfterDownload()).then(function (outcome) {
+				show(ANSWERS[outcome]);
+			}, function (message) {
+				showNotification(message, "is-danger");
+				show(ANSWERS.failed);
 			});
 		}
 
 		function enqueueLocalSong(filePath, button) {
-			var $btn = $(button);
-			var originalText = $btn.html();
-			$btn.css("min-width", $btn.outerWidth() + "px");
-			$btn.addClass("is-loading").attr("disabled", true);
-			$.ajax({
-				url: "{{ url_for('queue.enqueue') }}",
-				type: "GET",
-				data: { song: filePath, user: getUserCookie() || "" },
-				success: function (data) {
-					var result = typeof data === "string" ? JSON.parse(data) : data;
-					if (result.success[0]) {
-						$btn.removeClass("is-loading").addClass("is-flash").html('<i class="icon icon-ok"></i>');
-					} else {
-						showNotification(result.success[1], "is-danger");
-						$btn.removeClass("is-loading").addClass("is-warning is-flash").text("Already queued");
-					}
-					setTimeout(function () {
-						$btn.removeClass("is-warning is-flash").html(originalText)
-							.removeAttr("disabled").css("min-width", "");
-					}, 3000);
-				},
-				error: function (xhr) {
-					var msg = "";
-					try { msg = JSON.parse(xhr.responseText).error; } catch (err) {}
-					showNotification(msg || "Could not add to the queue.", "is-danger");
-					$btn.removeClass("is-loading").addClass("is-danger is-flash").text("!");
-					setTimeout(function () {
-						$btn.removeClass("is-danger is-flash").html(originalText)
-							.removeAttr("disabled").css("min-width", "");
-					}, 3000);
-				},
+			var show = waitOnButton($(button));
+			enqueueFile(filePath).then(function (result) {
+				if (!result.queued) showNotification(result.message, "is-danger");
+				show(result.queued ? ANSWERS.queued : ANSWERS["already-queued"]);
+			}, function (message) {
+				showNotification(message, "is-danger");
+				show(ANSWERS.failed);
 			});
 		}
 
@@ -606,7 +637,11 @@
 //        is safe to preselect; with none, the list opens on "Choose the lyrics" and Queue
 //        stays off. With nothing to offer at all, the search box opens by itself and Queue
 //        stays off.
-//   4. Queue posts the lyric choice, then the download. Play: the thumbnail covers the video
+//   4. Queue waits for both answers before it says what happened: it posts the lyric choice,
+//      then the download, with a spinner on the button until then. A video the library already
+//      has is answered by either call with its file, which is queued from the library (or only
+//      noted, with the box unticked), never downloaded again. A failure shows in a red line
+//      under Queue, and Queue comes back for another tap. Play: the thumbnail covers the video
 //      until the guest taps Play. The link came with the lookup, so there is no second
 //      request, and a tap before it arrives starts the video when it does. A card's own preview
 //      (its thumbnail's play button) may have fetched the link already, so Play can start at
@@ -640,6 +675,12 @@ var TEXT = {
   addToLibrary: {{ _("Add to library") | tojson }},
   queued: {{ _("Queued") | tojson }},
   added: {{ _("Added") | tojson }},
+  {# MSG: What the download dialog's button, or Advanced's Download button, shows for a moment when the library already has the video, so nothing was downloaded. #}
+  inLibrary: {{ _("In library") | tojson }},
+  {# MSG: What a button shows for a moment when the song is in the queue already. #}
+  alreadyQueued: {{ _("Already queued") | tojson }},
+  {# MSG: Shown when adding a library song to the queue failed. #}
+  couldNotQueue: {{ _("Could not add to the queue.") | tojson }},
   lyricsSelectFailed: {{ _("Could not save the lyric choice, so the song was not downloaded.") | tojson }},
   downloadFailed: {{ _("Could not start the download.") | tojson }},
   play: {{ _("Play") | tojson }},
@@ -648,6 +689,25 @@ var TEXT = {
   mute: {{ _("Mute") | tojson }},
   unmute: {{ _("Unmute") | tojson }},
 };
+
+// What a button shows for each way a tap can end: its colour, an icon and a label. Green means
+// the song is queued. A small button (a card's Queue, Advanced's Download) shows the icon alone
+// where `bare` is set.
+var ANSWERS = {
+  queued: { tone: "is-success", icon: "icon-ok", label: TEXT.queued, bare: true },
+  added: { tone: "", icon: "icon-ok", label: TEXT.added, bare: true },
+  "in-library": { tone: "", icon: "icon-folder-open-empty", label: TEXT.inLibrary },
+  "already-queued": { tone: "is-warning", icon: "", label: TEXT.alreadyQueued },
+  failed: { tone: "is-danger", icon: "", label: "!" },
+};
+
+// The label goes in its own span: Bulma spaces an icon from its label only when the label is an
+// element, and pulls a lone icon into the middle of the button.
+function showAnswer($btn, answer, small) {
+  $btn.empty();
+  if (answer.icon) $btn.append($("<i>").addClass("icon " + answer.icon));
+  if (!(small && answer.bare)) $btn.append($("<span>").text(answer.label));
+}
 
 // Puts back every element the dialog changes, on open and on close.
 function resetDialog() {
@@ -672,9 +732,10 @@ function resetDialog() {
     .find(".info-tip-btn").attr("aria-expanded", "false");
   $("#lyrics-queue-btn")
     .addClass("is-hidden")
-    .removeClass("is-success is-danger is-flash")
+    .removeClass("is-loading is-success is-warning is-danger is-flash")
     .prop("disabled", false)
     .text(TEXT.queue);
+  $("#lyrics-send-error").addClass("is-hidden").text("");
 }
 
 // Whether the captions view shows: the caption passed and the guest has not asked for the list.
@@ -920,49 +981,55 @@ $(document).on("click.search", "#lyrics-other", function () {
   renderLyrics();
 });
 
-// Queue: write the lyric choice, then send the download. Everything sent is taken now, the
-// queue box included, so a dialog that closes before the answer still sends what was tapped;
-// the list is held still so it keeps showing it.
+// Queue: write the lyric choice, then send the download, and show what happened once both have
+// answered. Everything sent is taken at the tap, the queue box included, so a dialog that closes
+// before the answer still sends what was tapped; the list is held still so it keeps showing it.
+function showQueueAnswer($btn, answer) {
+  $btn.removeClass("is-loading is-success").addClass("is-flash " + answer.tone);
+  showAnswer($btn, answer, false);
+}
+
 $(document).on("click.search", "#lyrics-queue-btn", function () {
   var d = _dialog;
   var $btn = $(this);
   if (!d || d.sent || $btn.is(":disabled")) return;
   var picked = inCaptionsView(d) ? "__srt__" : $("#lyrics-dropdown").val();
   if (!picked) return;
-  var id = d.id;
-  var title = d.title;
-  var url = d.url;
   var queued = queueAfterDownload();
   var choice = picked === "__srt__" ? { mode: "srt" } : { genius_id: parseInt(picked, 10) };
   d.sent = true;
-  $btn.prop("disabled", true);
+  $("#lyrics-send-error").addClass("is-hidden").text("");
   $("#lyrics-dropdown").prop("disabled", true);
-  $.ajax({
-    url: "{{ url_for('search.lyrics_select') }}",
-    type: "POST",
-    contentType: "application/json",
-    data: JSON.stringify($.extend({ yt_id: id, yt_title: title }, choice)),
-    success: function () {
-      postDownload(url, title, queued);
-      if (!isCurrent(d)) return;
-      $btn.toggleClass("is-success", queued).addClass("is-flash").html('<i class="icon icon-ok"></i>')
-        .append(document.createTextNode("  " + (queued ? TEXT.queued : TEXT.added)));
-      fadeOutPreviewModal(d, 1000);
-    },
-    error: function (xhr) {
-      console.warn("Lyrics select failed:", xhr && xhr.responseText ? xhr.responseText : "network error");
-      showNotification(TEXT.lyricsSelectFailed, "is-danger");
-      if (!isCurrent(d)) return;
-      $btn.addClass("is-danger is-flash").text("!");
-      setTimeout(function () {
+  $btn.prop("disabled", true).addClass("is-loading");
+  postLyricChoice($.extend({ yt_id: d.id, yt_title: d.title }, choice))
+    .then(function (libraryFile) {
+      return libraryFile
+        ? useLibraryCopy(libraryFile, queued)
+        : requestDownload(d.url, d.title, queued);
+    })
+    .then(
+      function (outcome) {
         if (!isCurrent(d)) return;
-        $btn.removeClass("is-danger is-flash");
-        $("#lyrics-dropdown").prop("disabled", false);
-        d.sent = false;
-        renderLyrics();
-      }, 3000);
-    },
-  });
+        showQueueAnswer($btn, ANSWERS[outcome]);
+        fadeOutPreviewModal(d, 1000);
+      },
+      function (message) {
+        // The page's notice sits under the dialog's backdrop: it serves only once the dialog is gone.
+        if (!isCurrent(d)) {
+          showNotification(message, "is-danger");
+          return;
+        }
+        showQueueAnswer($btn, ANSWERS.failed);
+        $("#lyrics-send-error").text(message).removeClass("is-hidden");
+        setTimeout(function () {
+          if (!isCurrent(d)) return;
+          $btn.removeClass("is-danger is-flash");
+          $("#lyrics-dropdown").prop("disabled", false);
+          d.sent = false;
+          renderLyrics();
+        }, 3000);
+      }
+    );
 });
 
 // ── Card preview ─────────────────────────────────────────────────────────
@@ -1442,6 +1509,7 @@ $(document).on("click.search", ".search_result_items_select", function () {
 				</div>
 				<p id="lyrics-wait" class="is-hidden"></p>
 				<button id="lyrics-queue-btn" type="button" class="button is-fullwidth is-hidden"></button>
+				<p id="lyrics-send-error" class="is-hidden" role="alert"></p>
 				<button id="lyrics-other" type="button" class="is-hidden">{% trans %}Other lyrics…{% endtrans %}</button>
 			</div>
 		</div>
