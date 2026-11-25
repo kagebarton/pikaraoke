@@ -78,27 +78,18 @@ def get_youtubedl_version() -> str:
         return "Error"
 
 
+_URL_VIDEO_ID_RE = re.compile(r"(?:[?&]v=|youtu\.be/|/v/)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])")
+
+
 def get_youtube_id_from_url(url: str) -> str | None:
-    """Extract the YouTube video ID from a URL.
+    """The 11-character video ID in a YouTube link, or None when it carries none.
 
-    Supports youtube.com/watch?v=, m.youtube.com/?v=, and youtu.be/ formats. Parameters after the
-    ID (``&list=``, ``&t=``, ``?t=``) are dropped.
-
-    Args:
-        url: YouTube video URL.
-
-    Returns:
-        The video ID string, or None if parsing failed.
+    Reads the forms the search page accepts (``watch?v=``, ``youtu.be/``, ``/v/``); whatever
+    follows the ID (``&list=``, ``?t=``, ``#t=``) is not part of it. Callers compare the ID
+    with a library file's, so a link without one is an answer, not an error.
     """
-    if "v=" in url:  # accommodates youtube.com/watch?v= and m.youtube.com/?v=
-        s = url.split("watch?v=")
-    else:  # accommodates youtu.be/
-        s = url.split("u.be/")
-    if len(s) == 2:
-        return re.split(r"[?&]", s[1], maxsplit=1)[0]  # Strip unneeded YouTube params
-    else:
-        logging.error(f"Error parsing youtube id from url: {url}")
-        return None
+    match = _URL_VIDEO_ID_RE.search(url)
+    return match.group(1) if match else None
 
 
 def upgrade_youtubedl() -> str:
