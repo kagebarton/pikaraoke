@@ -342,44 +342,54 @@
 			downloadSong(url, "", this);
 		});
 
-		// The saved copy is parsed by DOMParser, which requests nothing: a copy of a playing video
-		// made by cloneNode or innerHTML would request the video again. A restored page shows every
-		// card idle, with no player.
-		function saveSearchResults() {
-			var copy = new DOMParser().parseFromString(
-				document.getElementById("container_search_result").outerHTML,
-				"text/html"
-			);
-			copy.querySelectorAll("#card-player").forEach(function (el) { el.remove(); });
-			copy.querySelectorAll("[data-preview]").forEach(function (el) {
-				el.removeAttribute("data-preview");
-			});
-			sessionStorage.setItem("pikaraoke_search_results", copy.body.innerHTML);
-		}
+		// The cards a returning visit puts back, kept in sessionStorage as the server sent them: the
+		// copy is made at load, before anything can be tapped, and Show more adds to it from the answer
+		// it received, never from the live cards, which can hold a button mid-flash or a playing
+		// preview. The key changed when saving stopped reading the live cards: a copy under the old
+		// name can hold such state, and is never put back.
+		const CARDS_KEY = "pikaraoke_search_cards";
 
 		function forgetSearchResults() {
-			sessionStorage.removeItem("pikaraoke_search_results");
+			sessionStorage.removeItem(CARDS_KEY);
 			sessionStorage.removeItem("pikaraoke_search_term");
+		}
+
+		// Show more's answer in a results container: the new cards at the end of the list, and the
+		// button gone, or "No more results" in its place when the answer held nothing new.
+		function endShowMore($root, cardsHtml) {
+			$root.find("#search-results").append(cardsHtml);
+			var $btn = $root.find("#show-more");
+			if (cardsHtml) {
+				$btn.remove();
+			} else {
+				$btn.replaceWith('<p class="has-text-centered has-text-grey mt-3">No more results</p>');
+			}
+		}
+
+		// Show more's answer in the saved copy. DOMParser requests nothing, so no thumbnail is fetched.
+		function saveMoreCards(cardsHtml) {
+			var saved = sessionStorage.getItem(CARDS_KEY);
+			if (!saved) return;
+			var copy = new DOMParser().parseFromString(saved, "text/html");
+			endShowMore($(copy.body), cardsHtml);
+			sessionStorage.setItem(CARDS_KEY, copy.body.innerHTML);
 		}
 
 		// A submitted search replaces the saved cards, even when it found nothing; only a visit
 		// without a query (the nav link) brings them back.
 		const searchString = {{ search_string | tojson }};
 		if (searchString !== null) {
-			if (document.getElementById("container_search_result")) {
-				saveSearchResults();
+			var results = document.getElementById("container_search_result");
+			if (results) {
+				sessionStorage.setItem(CARDS_KEY, results.outerHTML);
 				sessionStorage.setItem("pikaraoke_search_term", searchString);
 			} else {
 				forgetSearchResults();
 			}
 		} else {
-			const savedResults = sessionStorage.getItem("pikaraoke_search_results");
+			const savedResults = sessionStorage.getItem(CARDS_KEY);
 			if (savedResults) {
-				// A copy saved before the dialog moved out of the results holds its own dialog,
-				// with the page's ids: drop it, so the page's own is the only one.
-				var $saved = $("<div>").html(savedResults);
-				$saved.find("#modal-js-example").remove();
-				$("#searching_loader").after($saved.children());
+				$("#searching_loader").after(savedResults);
 				const savedTerm = sessionStorage.getItem("pikaraoke_search_term");
 				if (savedTerm) {
 					$("#search-input").val(savedTerm);
@@ -597,16 +607,12 @@
 					var onPage = new Set(
 						$("#search-results > li").map(function () { return $(this).attr("data-ytID"); }).get()
 					);
-					var $cards = $($.parseHTML(html)).filter("li").filter(function () {
+					// Taken as strings before the cards are inserted: the saved copy must be what arrived.
+					var cardsHtml = $($.parseHTML(html)).filter("li").filter(function () {
 						return !onPage.has($(this).attr("data-ytID"));
-					});
-					$("#search-results").append($cards);
-					if ($cards.length) {
-						$btn.remove();
-					} else {
-						$btn.replaceWith('<p class="has-text-centered has-text-grey mt-3">No more results</p>');
-					}
-					saveSearchResults();
+					}).map(function () { return this.outerHTML; }).get().join("");
+					endShowMore($(document), cardsHtml);
+					saveMoreCards(cardsHtml);
 				},
 				error: function () {
 					showNotification("Couldn't load more results.", "is-danger");

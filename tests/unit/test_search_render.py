@@ -153,6 +153,16 @@ def test_only_a_visit_without_a_query_restores_the_saved_cards(
     assert _script_search_string(body) == script_value
 
 
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_saved_cards_use_a_new_session_key_so_an_old_copy_is_never_put_back(mock_get, client):
+    """A copy saved by the old script can hold a stuck button or pre-restyle markup; it sits
+    under the old key, which nothing reads or writes any more."""
+    body = _search_body(client, mock_get, _RESULTS, _karaoke_with_library([]))
+
+    assert "pikaraoke_search_cards" in body
+    assert "pikaraoke_search_results" not in body
+
+
 @patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
 @patch("pikaraoke.routes.search.get_karaoke_instance")
 def test_bare_search_renders(mock_get, _site, client):
