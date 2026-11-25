@@ -254,6 +254,14 @@ class TestLyricsSelect:
 
         assert resp.status_code == 400
 
+    @pytest.mark.parametrize("body", ['["dQw4w9WgXcQ"]', '"dQw4w9WgXcQ"', "4848515", "null"])
+    @patch("pikaraoke.routes.search.write_choice")
+    def test_a_body_that_is_not_an_object_returns_400(self, mock_write, client, body):
+        resp = client.post("/lyrics_select", data=body, content_type="application/json")
+
+        assert resp.status_code == 400
+        mock_write.assert_not_called()
+
     @patch("pikaraoke.routes.search.get_karaoke_instance")
     def test_yt_id_exactly_11_chars_accepted(self, mock_get_k, client):
         """Exactly 11 alphanumeric/underscore/dash chars should be accepted."""
@@ -444,12 +452,20 @@ class TestDownload:
         assert resp.get_json() == {"status": "in_library", "song_path": owned}
         k.download_manager.queue_download.assert_not_called()
 
-    def test_short_link_to_an_owned_video_is_caught(self, client):
+    @pytest.mark.parametrize(
+        "url",
+        [
+            f"https://youtu.be/{OWNED_ID}?t=30",
+            f"https://www.youtube.com/v/{OWNED_ID}",
+            f"{OWNED_URL}#t=30",
+        ],
+    )
+    def test_other_link_forms_to_an_owned_video_are_caught(self, client, url):
         k = _get_karaoke(client.application)
         owned = f"/fake/path/Title [{OWNED_ID}].mp4"
         k.song_manager.songs = [owned]
 
-        resp = _post_download(client, url=f"https://youtu.be/{OWNED_ID}?t=30")
+        resp = _post_download(client, url=url)
 
         assert resp.get_json() == {"status": "in_library", "song_path": owned}
         k.download_manager.queue_download.assert_not_called()

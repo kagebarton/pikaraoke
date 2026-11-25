@@ -166,14 +166,16 @@ class TestDownloadManagerExecuteDownload:
         mock_popen.return_value = mock_process
 
         # Mock find_by_id to return a path
-        song_manager.songs.find_by_id.return_value = "/songs/Artist - Song---abc123.mp4"
+        song_manager.songs.find_by_id.return_value = "/songs/Artist - Song---abc12345678.mp4"
 
         # Mock Path.mkdir to avoid filesystem operations
         with patch("pathlib.Path.mkdir"):
-            rc = download_manager._execute_download("https://youtube.com/watch?v=abc123", "Title")
+            rc = download_manager._execute_download(
+                "https://youtube.com/watch?v=abc12345678", "Title"
+            )
 
         assert rc == 0
-        song_manager.songs.find_by_id.assert_called_once_with("/songs", "abc123")
+        song_manager.songs.find_by_id.assert_called_once_with("/songs", "abc12345678")
         # add_if_valid is no longer called directly; a "song_downloaded" event is emitted instead
         assert any("Downloaded" in n for n in notifications)
         assert not any("Error downloading" in n for n in notifications)

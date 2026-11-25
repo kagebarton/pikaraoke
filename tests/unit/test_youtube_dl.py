@@ -96,6 +96,29 @@ class TestGetYoutubeIdFromUrl:
         url = "https://youtu.be/dQw4w9WgXcQ?t=30"
         assert get_youtube_id_from_url(url) == "dQw4w9WgXcQ"
 
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://www.youtube.com/v/dQw4w9WgXcQ",
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ#t=30",
+            "https://www.youtube.com/watch?feature=share&v=dQw4w9WgXcQ",
+            "https://m.youtube.com/?v=dQw4w9WgXcQ",
+        ],
+    )
+    def test_other_forms_the_page_accepts(self, url):
+        """Each form isYoutubeURL lets through gives the bare ID, so the library check sees it."""
+        assert get_youtube_id_from_url(url) == "dQw4w9WgXcQ"
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://www.youtube.com/watch?v=dQw4w9WgXc",
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ1",
+        ],
+    )
+    def test_an_id_not_exactly_eleven_characters_is_none(self, url):
+        assert get_youtube_id_from_url(url) is None
+
     def test_invalid_url_returns_none(self):
         """Test that invalid URL returns None."""
         url = "https://example.com/video"

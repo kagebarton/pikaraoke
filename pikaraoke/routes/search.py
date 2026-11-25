@@ -280,7 +280,9 @@ def lyrics_select():
     Replaces the prototype's ``/lyrics_download`` route — the prototype
     fetched and saved lyrics text immediately; we only record the choice.
     """
-    data = request.get_json(force=True, silent=True) or {}
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):  # a body that is not a JSON object has no yt_id either
+        data = {}
     yt_id = str(data.get("yt_id", "")).strip()
 
     if not _YT_ID_RE.match(yt_id):

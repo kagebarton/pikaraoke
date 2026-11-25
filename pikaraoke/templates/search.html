@@ -339,7 +339,9 @@
 		$("#direct-download-button").click(function () {
 			var url = $("#direct-download-url").val();
 			if (!url) return;
-			downloadSong(url, "", this);
+			answerOnButton(this, function () {
+				return requestDownload(url, "", queueAfterDownload());
+			});
 		});
 
 		// The cards a returning visit puts back, kept in sessionStorage as the server sent them: the
@@ -366,13 +368,25 @@
 			}
 		}
 
+		// Storage can be full or blocked. The page then works on with nothing to put back, rather
+		// than stopping here or keeping an older search's copy.
+		function saveCards(cardsHtml, term) {
+			try {
+				sessionStorage.setItem(CARDS_KEY, cardsHtml);
+				if (term != null) sessionStorage.setItem("pikaraoke_search_term", term);
+			} catch (err) {
+				console.warn("Could not save the search results:", err);
+				forgetSearchResults();
+			}
+		}
+
 		// Show more's answer in the saved copy. DOMParser requests nothing, so no thumbnail is fetched.
 		function saveMoreCards(cardsHtml) {
 			var saved = sessionStorage.getItem(CARDS_KEY);
 			if (!saved) return;
 			var copy = new DOMParser().parseFromString(saved, "text/html");
 			endShowMore($(copy.body), cardsHtml);
-			sessionStorage.setItem(CARDS_KEY, copy.body.innerHTML);
+			saveCards(copy.body.innerHTML);
 		}
 
 		// A submitted search replaces the saved cards, even when it found nothing; only a visit
@@ -381,8 +395,7 @@
 		if (searchString !== null) {
 			var results = document.getElementById("container_search_result");
 			if (results) {
-				sessionStorage.setItem(CARDS_KEY, results.outerHTML);
-				sessionStorage.setItem("pikaraoke_search_term", searchString);
+				saveCards(results.outerHTML, searchString);
 			} else {
 				forgetSearchResults();
 			}
@@ -474,9 +487,11 @@
 			return $("#add-to-queue").is(":checked");
 		}
 
-		// One /enqueue for a library file, as a card's Queue sends it. Resolves {queued: true}, or
-		// {queued: false, message} when the queue says no (already queued); rejects with the message
-		// to show when the queue refuses the song (a 409) or cannot be reached.
+		// One /enqueue for a library file, as a card's Queue sends it. Resolves the answer to show:
+		// queued, or "Already queued" carrying the queue's own message when it says no (the song is
+		// in the queue already, or the guest has reached the per-user limit). Rejects with the
+		// message to show when the queue refuses the song (a 409), cannot be reached, or answers
+		// something unreadable.
 		function enqueueFile(filePath) {
 			return new Promise(function (resolve, reject) {
 				$.ajax({
@@ -484,8 +499,16 @@
 					type: "GET",
 					data: { song: filePath, user: getUserCookie() || "" },
 					success: function (data) {
-						var result = typeof data === "string" ? JSON.parse(data) : data;
-						resolve(result.success[0] ? { queued: true } : { queued: false, message: result.success[1] });
+						// A throw here would never reach the promise and leave the spinner turning.
+						try {
+							var result = typeof data === "string" ? JSON.parse(data) : data;
+							resolve(result.success[0]
+								? ANSWERS.queued
+								: $.extend({ message: result.success[1] }, ANSWERS["already-queued"]));
+						} catch (err) {
+							console.warn("Enqueue answer unreadable:", err);
+							reject(TEXT.couldNotQueue);
+						}
 					},
 					error: function (xhr) {
 						var msg = "";
@@ -497,18 +520,15 @@
 		}
 
 		// The library already has the video: queue its file when the box is ticked, as a card's Queue
-		// would, else there is nothing more to do. Resolves the outcome; rejects with the message to
-		// show.
+		// would, else there is nothing more to do. Resolves the answer to show; rejects with the
+		// message to show.
 		function useLibraryCopy(filePath, queue) {
-			if (!queue) return Promise.resolve("in-library");
-			return enqueueFile(filePath).then(function (result) {
-				return result.queued ? "queued" : "already-queued";
-			});
+			return queue ? enqueueFile(filePath) : Promise.resolve(ANSWERS["in-library"]);
 		}
 
-		// The one /download call. Resolves how it ended: "queued" or "added" (a download was
-		// accepted, with the box ticked or not), or useLibraryCopy's outcome when the library
-		// already has the video. Rejects with the message to show.
+		// The one /download call. Resolves the answer to show: queued or added (a download was
+		// accepted, with the box ticked or not), or useLibraryCopy's when the library already has
+		// the video. Rejects with the message to show.
 		function requestDownload(songUrl, songTitle, queue) {
 			return new Promise(function (resolve, reject) {
 				$.ajax({
@@ -522,8 +542,8 @@
 						queue: queue,
 					}),
 					success: function (data) {
-						if (data.status === "in_library") resolve(useLibraryCopy(data.song_path, queue));
-						else resolve(queue ? "queued" : "added");
+						if (data && data.status === "in_library") resolve(useLibraryCopy(data.song_path, queue));
+						else resolve(queue ? ANSWERS.queued : ANSWERS.added);
 					},
 					error: function (xhr) {
 						console.warn("Download failed:", xhr && xhr.responseText ? xhr.responseText : "network error");
@@ -553,47 +573,41 @@
 			});
 		}
 
-		// A small button waiting for an answer: a spinner, disabled, held at its width. What it
-		// returns shows the answer for 3 seconds, then puts the button back as it was.
-		function waitOnButton($btn) {
+		// A small button (a card's Queue, Advanced's Download) waits on its request: a spinner,
+		// disabled, held at its width. The answer shows for 3 seconds, its message (or a failure's)
+		// in the page's notice, then the button is put back as it was. A tap on a button already
+		// waiting does nothing: Advanced's link box can enable it mid-wait, and a second wait would
+		// save the first one's spinner as the look to put back.
+		function answerOnButton(button, request) {
+			var $btn = $(button);
+			if ($btn.data("waiting")) return;
 			var original = { html: $btn.html(), className: $btn.attr("class") };
-			$btn.css("min-width", $btn.outerWidth() + "px").addClass("is-loading").attr("disabled", true);
-			return function (answer) {
-				$btn.removeClass("is-loading").addClass("is-flash " + answer.tone);
+			$btn.data("waiting", true).css("min-width", $btn.outerWidth() + "px")
+				.addClass("is-loading").attr("disabled", true);
+			function show(answer) {
 				showAnswer($btn, answer, true);
 				setTimeout(function () {
 					$btn.attr("class", original.className).html(original.html)
-						.removeAttr("disabled").css("min-width", "");
+						.removeAttr("disabled").css("min-width", "").removeData("waiting");
 				}, 3000);
-			};
-		}
-
-		function downloadSong(songUrl, songTitle, button) {
-			var show = waitOnButton($(button));
-			requestDownload(songUrl, songTitle, queueAfterDownload()).then(function (outcome) {
-				show(ANSWERS[outcome]);
+			}
+			request().then(function (answer) {
+				if (answer.message) showNotification(answer.message, "is-danger");
+				show(answer);
 			}, function (message) {
 				showNotification(message, "is-danger");
 				show(ANSWERS.failed);
 			});
 		}
 
-		function enqueueLocalSong(filePath, button) {
-			var show = waitOnButton($(button));
-			enqueueFile(filePath).then(function (result) {
-				if (!result.queued) showNotification(result.message, "is-danger");
-				show(result.queued ? ANSWERS.queued : ANSWERS["already-queued"]);
-			}, function (message) {
-				showNotification(message, "is-danger");
-				show(ANSWERS.failed);
-			});
+		function enqueueOnTap(button, filePath) {
+			answerOnButton(button, function () { return enqueueFile(filePath); });
 		}
-
 		$(document).on("click.search", ".search_result_items_enqueue", function () {
-			enqueueLocalSong($(this).closest("li").attr("data-file-path"), this);
+			enqueueOnTap(this, $(this).closest("li").attr("data-file-path"));
 		});
 		$(document).on("click.search", ".library-copy-enqueue", function () {
-			enqueueLocalSong($(this).attr("data-file-path"), this);
+			enqueueOnTap(this, $(this).attr("data-file-path"));
 		});
 
 		// Show more appends the next page of cards once. YouTube can reorder between the two
@@ -707,10 +721,11 @@ var ANSWERS = {
   failed: { tone: "is-danger", icon: "", label: "!" },
 };
 
+// A button showing how its tap ended, in the answer's colour alone (a green Queue drops its green).
 // The label goes in its own span: Bulma spaces an icon from its label only when the label is an
 // element, and pulls a lone icon into the middle of the button.
 function showAnswer($btn, answer, small) {
-  $btn.empty();
+  $btn.removeClass("is-loading is-success").addClass("is-flash " + answer.tone).empty();
   if (answer.icon) $btn.append($("<i>").addClass("icon " + answer.icon));
   if (!(small && answer.bare)) $btn.append($("<span>").text(answer.label));
 }
@@ -990,9 +1005,11 @@ $(document).on("click.search", "#lyrics-other", function () {
 // Queue: write the lyric choice, then send the download, and show what happened once both have
 // answered. Everything sent is taken at the tap, the queue box included, so a dialog that closes
 // before the answer still sends what was tapped; the list is held still so it keeps showing it.
-function showQueueAnswer($btn, answer) {
-  $btn.removeClass("is-loading is-success").addClass("is-flash " + answer.tone);
-  showAnswer($btn, answer, false);
+// A message (a failure's, or the queue's own "no") goes in the line under Queue; the page's notice
+// sits under the dialog's backdrop, so it serves only once the dialog is gone.
+function showSendMessage(d, message) {
+  if (isCurrent(d)) $("#lyrics-send-error").text(message).removeClass("is-hidden");
+  else showNotification(message, "is-danger");
 }
 
 $(document).on("click.search", "#lyrics-queue-btn", function () {
@@ -1014,19 +1031,16 @@ $(document).on("click.search", "#lyrics-queue-btn", function () {
         : requestDownload(d.url, d.title, queued);
     })
     .then(
-      function (outcome) {
+      function (answer) {
+        if (answer.message) showSendMessage(d, answer.message);
         if (!isCurrent(d)) return;
-        showQueueAnswer($btn, ANSWERS[outcome]);
+        showAnswer($btn, answer, false);
         fadeOutPreviewModal(d, 1000);
       },
       function (message) {
-        // The page's notice sits under the dialog's backdrop: it serves only once the dialog is gone.
-        if (!isCurrent(d)) {
-          showNotification(message, "is-danger");
-          return;
-        }
-        showQueueAnswer($btn, ANSWERS.failed);
-        $("#lyrics-send-error").text(message).removeClass("is-hidden");
+        showSendMessage(d, message);
+        if (!isCurrent(d)) return;
+        showAnswer($btn, ANSWERS.failed, false);
         setTimeout(function () {
           if (!isCurrent(d)) return;
           $btn.removeClass("is-danger is-flash");
@@ -1452,8 +1466,8 @@ $(document).on("click.search", ".search_result_items_select", function () {
 	</div>
 	{% endif %}
 
-	{# The dialog and the card player are outside #container_search_result: Show more saves that
-	element's copy for a return visit, and a saved copy must carry neither. #}
+	{# The dialog and the card player are outside #container_search_result: that element is saved
+	for a return visit, and putting the copy back must not add a second of either. #}
 	<div id="modal-js-example" class="modal">
 		<div class="modal-background"></div>
 		<div class="modal-content">
