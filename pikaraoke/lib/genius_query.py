@@ -19,6 +19,7 @@ from typing import Literal
 
 from pikaraoke.lib.genius import HITS_LISTED, GeniusHit
 from pikaraoke.lib.metadata_parser import EMOJI_PATTERN
+from pikaraoke.lib.youtube_channel import channel_words
 
 SEARCH_PAGE_CALLS = 3
 LIBRARY_CALLS = 2
@@ -62,9 +63,6 @@ VARIANT = re.compile(rf"\b({_VARIANT_WORDS})\b", re.I)
 STAGE = re.compile(r"\b(?:broadway|west end|musical|stage|tour)\b", re.I)
 SCREEN = re.compile(r"\b(?:movie|film|motion picture)\b", re.I)
 DUB = re.compile(r"\bOST\b")
-CHANNEL_NOISE = re.compile(
-    r"\s*-\s*topic$|vevo$|\bofficial\b|\bvideos?\b|\bchannel\b|\bmusic\b|\btv\b|官方專屬頻道", re.I
-)
 
 BRACKET = re.compile(r"\(([^()]*)\)|\[([^\[\]]*)\]")
 CJK_QUOTE = re.compile(r"[【《]([^】》]*)[】》]")
@@ -200,7 +198,7 @@ def channel_name(channel: str) -> str:
     """
     if not channel or NOT_AN_ACT.search(channel):
         return ""
-    name = CHANNEL_NOISE.sub(" ", channel)
+    name = re.sub(r"vevo$", "", _tidy(channel_words(channel)), flags=re.I)
     return _tidy(re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name))  # BackstreetBoys -> Backstreet Boys
 
 
