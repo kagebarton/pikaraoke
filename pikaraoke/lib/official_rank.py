@@ -18,6 +18,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Literal, NamedTuple
 
+from pikaraoke.lib.youtube_channel import channel_words
 from pikaraoke.lib.youtube_dl import SearchResult
 
 OfficialKind = Literal["video", "audio"]
@@ -37,7 +38,6 @@ _QUOTED = re.compile(r"""(?<!\w)(?:'[^']*'|"[^"]*"|‘[^’]*’|“[^”]*”)|
 _COLLAB = re.compile(
     r"\s*(?:,|&|\bx\b|\bft\b\.?|\bfeat\b\.?|\bfeaturing\b|\bwith\b|\band\b)\s*", re.I
 )
-_CHANNEL_NOISE = re.compile(r"\b(official|vevo|music|videos?|records|topic|channel|tv)\b", re.I)
 _CHANNEL_SUFFIX = re.compile(r"(?:official|vevo|music|tv|videos?|show)$")
 _LABEL_CHANNEL = re.compile(r"vevo$|\b(?:records|recordings|labels?)\b", re.I)
 # Uploads that are about the song but are not the record: the app overlays its own lyrics, and
@@ -138,8 +138,7 @@ def _is_trusted(result: SearchResult) -> bool:
 
 def _channel_artist(result: SearchResult) -> str:
     """The channel's compact name without "- Topic", "Official", "VEVO" and the like."""
-    name = result.channel.removesuffix(" - Topic")
-    return _compact(_CHANNEL_NOISE.sub(" ", name))
+    return _compact(channel_words(result.channel))
 
 
 def _channel_name(result: SearchResult) -> str:
