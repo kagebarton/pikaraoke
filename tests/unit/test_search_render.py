@@ -715,6 +715,19 @@ def test_the_dialogs_queue_button_takes_its_colour_from_the_box_not_the_markup(m
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_dialog_has_one_hidden_error_line_after_queue(mock_get, client):
+    """Queue waits for the download's answer, so a failure has somewhere to say why: one hidden
+    line under the button, inside the lyrics section, announced to screen readers."""
+    body = _search_body(client, mock_get, _RESULTS, _karaoke_with_library([]))
+
+    assert body.count('id="lyrics-send-error"') == 1
+    assert "lyrics-section" in _ancestor_ids(body, "lyrics-send-error")
+    line = re.search(r'<p id="lyrics-send-error"[^>]*>', body).group(0)
+    assert "is-hidden" in line and 'role="alert"' in line
+    assert body.index('id="lyrics-queue-btn"') < body.index('id="lyrics-send-error"')
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
 def test_the_official_video_comes_first_and_audio_beside_it_keeps_its_place_with_a_badge(
     mock_get, client
 ):
