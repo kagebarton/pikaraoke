@@ -702,8 +702,8 @@ Stage 4, after `queue_phone` lands, side by side:
 Independent of the phone order:
 
 - `repair_lrc_fit_list`: Repair's LRCLIB timing list scored by Check fit's fit, length limit
-  dropped, lyrics preview. Landed on `dev` 2026-11-26 (`6c82af7f`..`1b6fefe3`, as copies, suite
-  4575 passed); plan stays on the branch until retired.
+  dropped, lyrics preview. Landed on `dev` 2026-11-26 (`03895fc7`..`25e8c9bf`, as copies, suite
+  4580 passed); retired as `archive/repair_lrc_fit_list` (plan on the tag).
 - `defer_timing` (`9e7f6da`): plan only, parked behind `lrclib_fit_pick` (Ken, 2026-11-10),
   which has now landed.
 - `chinese_karaoke` (`9900277`): probe scripts under `scripts/zh_probe/` only; research, not a
