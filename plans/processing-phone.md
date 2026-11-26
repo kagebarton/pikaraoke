@@ -26,9 +26,10 @@ file and the mockup differ, this file wins.
 From the style review across the seven phone-page branches (`plans/open-issues.md` on `dev`,
 "Phone pages: one look"; numbers are that list's, prefixed L). Visual reference: the canvas
 https://claude.ai/artifact/RLxbcwiEeprw1MfaspcMkL (private to Ken), boards "Processing: Jobs",
-"Processing: a failed job opened", "Processing: Library tools" and "Reference palette". Its
-rows, Now card and step strip are still draft 1 (below, not ruled); only its colours and chips
-are settled. For those it wins over this branch's mockup; this file wins over both.
+"Processing: a failed job opened", "Processing: Library tools" and "Reference palette". Since
+2026-11-26 its three Processing boards are draft 2: they draw the 2026-11-26 rulings below, and
+whatever is still under "Drafted, not yet ruled". It wins over this branch's mockup; this file
+wins over both.
 
 - **L10. Buttons are neutral grey.** Retry, Preview and Check playlist are a row's main action:
   filled grey with a `#5e6d6f` border and bold white text (L4), the fill `#434d4e` (L15). Song
@@ -42,46 +43,83 @@ are settled. For those it wins over this branch's mockup; this file wins over bo
   no opacity fade; the canvas draws a disabled Check playlist so) land in `bulma-dark.css` on
   `singer_defaults`, its Phase 5. This branch takes them from `dev` once that lands.
 
+## Decided (Ken, 2026-11-26)
+
+These answer the draft 1 open questions (group order, headings, the step strip) and rule on its
+rows. Canvas boards "Processing: Jobs" and "Processing: a failed job opened" draw them.
+
+3. **Order under All: Attention, then Active, then Finished.** The running job's Now card sits
+   above the list, under the pinned area.
+4. **One flat list, no group headings.** The chips do the sorting.
+5. **Pinned while the page scrolls: the Jobs / Library tools toggle and the filter chips**, as
+   Browse pins its toggle and letter row (`.bp-pin` in `files.html`: sticky, top 0). The
+   "Processing" heading scrolls away. On Library tools only the toggle is pinned. The running
+   job's card is not pinned (too tall on a phone), nor is "Clear N finished" (it already ends the
+   list, under the finished rows it clears).
+6. **The running job shows three steps: Download, Vocals, Lyrics.** Vocals covers extract,
+   loudnorm, stem_separation and transcode. Lyrics covers align, transcribe and dereverb. In one
+   Windows run (`D:\Shared\whisper_regen\win\w0_run.log`) extract took about 2 s, loudnorm 14 s,
+   stem separation 68 s and transcode 21 s, so steps of their own would only flicker. The large
+   line still names the exact phase. A regen that skips download and separation shows those
+   two steps already ticked. `dereverb` has no label in `T.phases` today (it falls back to
+   "processing"): give it one.
+7. **No Queue button on finished rows, and no Add to queue in the opened row.** Today Add to
+   queue is offered on every finished download (`pipeline_tracker.py`, `actions.append("enqueue")`),
+   even when the song already holds its queue slot from the download dialog, so a tap queues it
+   twice. Songs downloaded without queueing are queued from Browse or Search. The enqueue
+   action, its route and their tests go.
+8. **A narrow strip replaces the 60 px slot on every row**, active ones and the Now card included.
+   This is Processing's exception to the shared rule that every page uses a 60 px slot, solid for
+   a tap and dashed for a state (`plans/queue-phone.md` S1-S4, on tag `archive/queue_phone`).
+   Processing is admin-only, so the shared look matters less here, and the strip gives the song
+   name the width. The strip is 6 px wide, full row height. Its colours: red failed or
+   cancelling, amber needs a pick or unfinished, grey downloading or waiting, green done, info
+   blue the running job. A colour on every row, not only on rows that need the host (ratified
+   2026-11-26). The state is always in words on the row too, so colour is never the only sign.
+9. **Pick lyrics moves into the opened row.** Rows open from a tap anywhere on them, as well as
+   from the chevron (which still expands the row, per S1-S4).
+10. **Three lines per row, grouped by what each line answers:**
+    - the song, 17 px bold;
+    - the artist, who or what started it (a guest's name, playlist, update, regenerate), and
+      when: 13 px grey;
+    - what happened, then what to do: 15 px. Bold red or amber when the row needs the host
+      ("Processing failed: retry or delete", "Download failed: retry or delete", "No usable
+      caption: pick lyrics", "Didn't finish: reprocess or delete"), plain light grey otherwise
+      ("Downloading", "2nd in line", "Cancelling", "Done · Genius"). A finished row's lyric source
+      sits here, with any guessed-lines warning in amber beside it.
+    The action words are text, not buttons: they name what the opened row offers. The failure
+    line says only "Download failed" or "Processing failed": the row has nothing shorter than
+    the raw `error_message`, which shows in full when the row opens. "No usable caption" is
+    always true of a pick row (`_on_needs_pick`). Draft 1's "caption too sparse" is not something
+    the server reports, and is dropped.
+11. **Sizes:** the action line at 15 px (above), the step names under the bar at 13 px, the
+    opened row's error text at 13 px. The song name and the artist line keep the shared 17 / 13 px.
+
+Checked: a failed download shows as Failed. `_on_download_error` sets `processing_status` to
+`error` as well as `download_status`, and `statusOf()` reads that.
+
 ## Drafted, not yet ruled
 
-Draft 1 shows these; Ken has not accepted or rejected them.
+Draft 2 still shows these from draft 1; Ken has not accepted or rejected them.
 
-- Rows in the shared Queue/Browse style: song name 17 px bold on top, "artist · details" 13 px
-  grey under it, a 60 px state slot on the left, a 40 px chevron button on the right, alternate
-  rows shaded.
-- The slot carries the state. Solid means tappable: green Queue on finished songs (queues
-  straight from the row; today Add to queue sits inside the opened row), amber Pick on songs
-  waiting for lyrics. Dashed means a state: grey with the place in line (waiting, downloading),
-  red "failed", amber "unfinished", red "cancelling".
-- Under All, the list is grouped Attention, Active, Finished with a small heading each ("Active ·
-  5 more songs": the running job is in the Now card). Another chip shows just its group.
-- The running job is Queue v2's Now card plus a four-step strip (Download, Audio, Vocals, Lyrics)
-  and a large line saying what it is doing and for how long.
-- Rows open from the chevron. The error shows in a dark box; buttons Retry (blue; grey since
-  L10), Song info, Dismiss, Delete song (red outline). Cancel confirms in place (Cancel job /
-  Keep it).
+- The Now card: the song in Queue v2's card with its strip, a spinner beside a large line saying
+  what it is doing and for how long, and the step bar under it.
+- The opened row: the error in a dark box; buttons Retry (grey since L10), Song info, Dismiss,
+  Delete song (red outline). Cancel confirms in place (Cancel job / Keep it).
 - Jobs / Library tools becomes Browse v2's By artist / By song toggle.
-- Library tools: each list is a row with its count in the slot (red dashed Looks poor, amber
-  dashed Behind); explanations move into (i) tips; Regenerate rows each with a Preview button.
-- Guest: Queue v2's guest look. Own songs tinted green, red delete button on own songs still
-  getting ready (asks first), green Queue on ready ones. Dropped by L14.
+- Library tools: each list is a row with its count in a slot (red dashed Looks poor, amber dashed
+  Behind); explanations move into (i) tips; Regenerate rows each with a Preview button. The
+  count slots stay there, not strips: there the number is the information.
 
-## Open questions (on the mockup's yellow note)
+## For the spec
 
-1. Group order under All: Attention first (what the host must act on) or Active first (today's
-   order)? Drawn Attention first.
-2. Under All, keep the small group headings, or one flat list like today?
-3. Do guests still see other people's failed songs, or only their own? Moot since L14: guests
-   get no Processing view.
-4. Is the four-step strip right? It groups the real phases (download, extract, loudnorm,
-   stem_separation, transcode, align, transcribe) into four.
-
-## Unchecked assumptions in the mockup
-
-- A failed download shows as Failed for the host; `statusOf()` in `processing.html` only checks
-  `processing_status === 'error'`.
-- Guests get a cancel button on every own song still getting ready, including the running one.
-  Moot since L14.
+- The branch is still on `dev` at `764df44`. `queue_phone` (the shared row style), `browse_phone`
+  and the theme (L1, L15, L16) have all landed on `dev` since: rebase before the spec is written.
+- `processing.py` stops passing `admin=` to its page render, with `test_processing_page.py`'s
+  `get()` registering `admin_bp` and patching `admin.is_admin` (`plans/open-issues.md` on `dev`,
+  "Two routes still pass `admin=`...").
+- The unruled open issue "A Processing job row never says 'edited'" touches the same line 3. Ask
+  Ken whether to fold it in.
 
 ## Results log
 
