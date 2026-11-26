@@ -1432,7 +1432,7 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   the opening line at 3.2 s (clip time, after the fit's shift), after the transcriber hears its
   three words (1.6-2.9 s), and the karaoke shows it later still, at 5.4 s, on top of the second
   line, so both are lit at once. No rescue step touched it (it is in none of the bundle's repace
-  id lists). Record: `plans/regen-lrclib-auto.md` on branch `regen_lrclib_auto`, Results rows
+  id lists). Record: `plans/regen-lrclib-auto.md` on tag `archive/regen_lrclib_auto`, Results rows
   7 and 9.
 - **Echo lines beside the lead overlap it on screen (Rolling in the Deep).** Ken
   (2026-11-18): the echoes overlap the main lines and are "more or less correct"; he asks
