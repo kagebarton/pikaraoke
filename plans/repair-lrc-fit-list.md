@@ -6,8 +6,8 @@ Branch `repair_lrc_fit_list` off `dev` at `efb91f2d`, worktree
 `.claude/worktrees/repair_lrc_fit_list`.
 
 **Status: Phase 1 built and ui-checked 2026-11-26 (`535c817e`, `5a7e397e`, `503090f1`); raw readings in the
-Results log. Opus judged it 2026-11-26: passes, three fixes ruled (Results log, "Phase 1 rulings"). Next: Ken's
-`/code-review`, whose fix pass also makes the three ruled fixes.**
+Results log. Opus judged it 2026-11-26: passes, three fixes ruled (Results log, "Phase 1 rulings"). `/code-review` of
+`c1f938a7..503090f1` ran 2026-11-26; its fixes and R1-R3 are `1d88edea`. Next: Ken's phone checks.**
 
 ## The problem
 
@@ -250,7 +250,8 @@ verdicts. Then Opus judges (read-only), then Ken's `/code-review`.
 | 2026-11-26 | 1, commit 2 | `5a7e397e` | Rows scored with Check fit's fit. `evaluate`/`pick` take streams; `lrc_auto_timing.check` passes `heard_streams({"transcribe_words": words}, None)`, the probe `{TRANSCRIBE: words}`; `LibraryTools.lrc_timing_candidates`, `_search_synced`, `_lrc_on_disk_id`, `_lrc_check` (the check built from a fit, shared with `_fit_lrc_timing`); `current_lines` and its tests deleted; `/song_info/lrc_search` rewritten with `verdict`; `matchOption` takes a `score` element. Touched test files (library tools, library routes, lrc auto pick, lrc auto timing, probe): 1056 passed after. |
 | 2026-11-26 | 1, commit 3 | `503090f1` | `#lt-preview-toggle` / `#lt-preview`, `_lrc_match(status, song)` carries the disk text, `showTimingPreview(which, picked)` and `toggleTimingPreview` shared by step 2 and LRCLIB timing. Full suite after commit 3: 4561 passed (86.8 s). |
 | 2026-11-26 | 1, ui-check | (artifacts, untracked) | Port 5743 on this worktree at `503090f1`, four songs, readings below. Artifacts: `.claude/ui-check/repair_lrc_fit_list/` (`results.json`, 25 screenshots, `check_repair_lrc.py`, `extra_readings.py`). Regenerate never pressed. |
-| 2026-11-26 | 1, judge | (this commit) | Opus judged the readings and commits 1-3 against decisions 1-8 and the Phase 1 spec, read-only. Passes; rulings R1-R4 below. No code. |
+| 2026-11-26 | 1, judge | `aada52b1` | Opus judged the readings and commits 1-3 against decisions 1-8 and the Phase 1 spec, read-only. Passes; rulings R1-R4 below. No code. |
+| 2026-11-26 | 1, review fixes | `1d88edea` | `/code-review` of `c1f938a7..503090f1` (angles: correctness, simplicity, robustness): 9 findings, 1 important, 8 nits, no robustness finding; all fixed with R1-R3, below. Full suite after: 4563 passed (87.8 s). Not re-run in ui-check. |
 
 ### Phase 1 executor notes (facts, no verdicts)
 
@@ -471,6 +472,30 @@ Logged, not fixed here:
   decision 1, which covers search results. Fitting it with the rest raises whether the disk record joins the pick
   order and can take `best`. Proposed `plans/open-issues.md` entry, added at landing: "Repair's LRCLIB timing: the
   match on disk gets no verdict when the search doesn't list it."
+
+### Review fixes (`1d88edea`)
+
+The review's findings, as fixed:
+
+1. (important) The disk row copied the verdict and `best` of the search row with its LRCLIB id, fitted from LRCLIB's
+   copy, while Check fit on the disk row fits the file. `current` from `lrc_timing_candidates` now means same id and
+   same `timing_key` as the `.lrc` on disk (ID tags stripped); `lrcRows` merges only a `current` row, and a record of
+   the same id with other times stays a row of its own. `isOnDisk` deleted. Test: a hand-edited `.lrc` is not current.
+2. A `TOO_LONG` row said "matches 0 of N lines"; the count now shows only for `FITS` and `REFUSED`.
+3. `current` was never read by the page; it is now (finding 1), and the second `.lrc` read is that check's one read.
+4. `show_speed` and the `next()` by tip text: `_fit_lines(speed_warn=)` adds the speed line already marked; card lines
+   may be `(text, tip, True)` (`_card_line`), which also marks the bar's warning line where it is added.
+5. `fit_near` dropped from the timing rows and the disk row (step 2's rows keep theirs).
+6. `lrc_auto_pick.pick` deleted; its order tests run on `evaluate` through a test helper; the probe comment reworded.
+7. The repair page read the `.lrc` twice; `_lrc_match` reads it once and gives the row and the preview (R3's strip,
+   `lrclib.without_id_tags`, which keeps a bare break stamp).
+8. A search row built a whole refusal card for its tone and head; `_refusal_head` gives them, used by
+   `_refusal_card`, `_lrc_verdict` and `_lrc_refusal_card`.
+9. Stale wording: the `lrcCandidates` comment, and the test renamed
+   `test_a_search_fits_each_match_to_the_clip_and_picks_the_best_fit`.
+
+R1: the case and its test deleted. R2: `#lt-preview-toggle, #lt-search-toggle { display: flex; }`, pinned by a test,
+not seen on a screen. R3: as finding 7.
 
 Noted, no action: the search's wall time (2.7-4.3 s on the page, against 1.0-1.3 s for the LRCLIB GET alone) is
 the per-record fitting decision 1 accepted; Ken's phone checks judge it.
