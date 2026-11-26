@@ -7,7 +7,8 @@ Branch `regen_lrclib_auto`, worktree `.claude/worktrees/regen_lrclib_auto`, off 
 **Status 2026-11-26:** Phase 1 built (`2a0afe1d`, Results row 1). Phase 2 dry run done (Results
 row 2, Tables D-F under "Dry run output"). `/code-review` ran; its fixes are in `d13e8484`
 (Results row 3). GATE D judged; Ken's answers are Results row 4. Phase 3a done (`before.tsv`,
-row 5). Next: Ken runs 3b.
+row 5). Ken ran 3b (2026-11-26). Phase 4 done (Results row 6, tables under "After-run output").
+Next: Ken's listen (Phase 5), then GATE L.
 
 ## Goal
 
@@ -249,7 +250,7 @@ Then Ken says go for Phase 3.
 - [x] 3a (session). Just before handing over the block, write `<out>/before.tsv`: the sha256
   of `alignment_debug/<stem>.json` and `karaoke/<stem>.ass` for every song in Table D. Use a
   short script in `<out>`, not committed.
-- [ ] 3b (Ken). The session gives this block with the branch hash. If the branch is checked
+- [x] 3b (Ken). The session gives this block with the branch hash. If the branch is checked
   out in a Windows worktree, `cd` into that worktree and run
   `git fetch vm; git merge --ff-only vm/regen_lrclib_auto` instead of the checkout line.
 
@@ -272,7 +273,7 @@ Then Ken says go for Phase 3.
 
 Read-only on the library.
 
-- [ ] 4a. Table R, for every song Table D marked as picked:
+- [x] 4a. Table R, for every song Table D marked as picked:
   - the bundle's `lyrics.origin` and `pipeline_decisions.method_used`;
   - the `.lrc` header's `lrclib_id` against the dry-run pick;
   - the `.ass` line count before (from the backup) and after.
@@ -283,10 +284,10 @@ Read-only on the library.
   The real run searches LRCLIB again, so a pick can change after GATE D with the count
   unchanged. Any song whose `lrclib_id` differs from its dry-run pick is named in the relay
   and heads the listen list; Ken then keeps it or has its files put back from the backup.
-- [ ] 4b. Table U, the songs not picked: bundle and `.ass` sha256 against `before.tsv`.
-- [ ] 4c. The listen list, by the rule below, at most 10 rows: song, YouTube id, record id,
+- [x] 4b. Table U, the songs not picked: bundle and `.ass` sha256 against `before.tsv`.
+- [x] 4c. The listen list, by the rule below, at most 10 rows: song, YouTube id, record id,
   and what Ken said about this record before, if anything.
-- [ ] 4d. **STOP.** Write the next Results row and relay the listen list to Ken.
+- [x] 4d. **STOP.** Write the next Results row and relay the listen list to Ken.
 
 **Listen list rule** (pre-registered). Fill in this order and stop at 10:
 
@@ -400,6 +401,7 @@ checked at its download: no pick).
 | 3 | 2026-11-24 | review | `/code-review high 57c9faf8..2a0afe1d` (three angles: correctness, simplicity, robustness): 10 findings, none critical. Fixed in `d13e8484`: a check that could not run is counted on a count line printed after the list (`could not check: N`) and the mode exits 1 (#4); the count is made once (#8); only an unreachable LRCLIB says "rerun later", a failed check says "see the log" (#3); the length is looked up once per song (#5); `confirm()` moved to `scripts/song_select.py`, used by `backfill_artifacts.py` too, closed input aborts (#1, #9); refusal docstring matches Decision 9 (#6). #2 (real run re-searches) handled in the plan: Phase 3 checks the could-not-check count, 4a names any changed record id. Dropped: #7 (Phase 3 already sets UTF-8 and runs without a pipe), #10 (`lrclib_fill` is hard-wired on). Pick logic untouched, so the Phase 2 dry run's picks stand; its report's count line and failure wording predate the fix. 5 new tests; full unit suite 4574 passed; pre-commit clean. | `d13e8484` |
 | 4 | 2026-11-26 | GATE D | GATE D judged by Opus. Ken's answers, verbatim: "Decision 2: keep as built (real run acts on its own search; no library regen before Phase 3)." "月亮代表我的心: keep the pick (it heads the listen list)." "Decision 12: Ken syncs the two libraries, so no Linux run; sync only after the run prints Done." "Decision 14: the dry run's saved report is the record of each pick's numbers; a pick whose id changed is named in 4a and goes first on the listen list." Decisions 12 and 14 reworded to match. Decision 13 is not among the answers recorded here and stays as written. | Decisions 12 and 14 above |
 | 5 | 2026-11-26 | 3a | `before.tsv` written for the 66 songs of Table D, read from the library at `/home/ken/shared-drives/D:/Shared/pikaraoke-songs`: columns `stem`, `bundle_sha256` (`alignment_debug/<stem>.json`), `ass_sha256` (`karaoke/<stem>.ass`). No file missing. `find <library> -newer <out>/started` listed nothing, so the library has not changed since the dry run. Script `before_hashes.py` in `<out>`, not committed. Phase 3b handed to Ken. | `~/.pikaraoke/tmp/regen_lrclib_auto/before.tsv`, `before_hashes.py` |
+| 6 | 2026-11-26 | 4 | Lane: LRCLIB-record timing on the cue route, for songs that were on joint from a Genius sheet. Ken ran 3b ("results are in"); the session got no `Done.` line, backup path or `FAILED` line, so it read the library directly (4a-4c, read-only). Backup read: newest folder `regen_backups/20261126T144615Z`, 32 songs. 4a: Table R, the 32 dry-run picks. Every `.lrc` id equals its dry-run pick, so no pick changed between the dry run and the run. All 32 have the auto sheet, origin `lrclib_auto_srt`, method `cue_align` and a changed bundle; none is in a put-back state. Two `.lrc` files are byte-identical to the backup (their old id was already the pick). 4b: Table U, the 34 songs not picked: bundle and `.ass` sha256 equal `before.tsv` for every one. Writes in the four output folders since the dry run: 192 files, all belonging to the 32 picked songs, none stray; first 14:46:49Z, last 16:46:16Z (the last song written is 月亮代表我的心), nothing newer when read at 16:49Z. 4c: listen list of 10 by the pre-registered rule, no record id changed so it starts with the two songs not heard before (CJK first), then the three Ken flagged, then five by closeness to the bar. Stopped at 4d: no verdicts. No code touched. | `~/.pikaraoke/tmp/regen_lrclib_auto/after_run.py`, `after_tables.md`; tables under "After-run output" |
 
 ## Dry run output
 
@@ -539,3 +541,123 @@ elsewhere says 16.
 |---|---|---|---|---|
 | Sara Bareilles - King of Anything (Official Video) | `eR7-AUmiNcA` | 9035250 | mistimed 0, unclaimed run 6, shift run 1, on 7 records | no |
 | 月亮代表我的心 | `IgvDMB5fR-8` | 31215515 | mistimed 1, unclaimed run 4, shift run 1, on 2 records | yes |
+
+## After-run output
+
+Phase 4, read 2026-11-26 from the VM, read-only, library `/home/ken/shared-drives/D:/Shared/pikaraoke-songs`.
+Backup read: `regen_backups/20261126T144615Z` (the newest folder; 32 songs' files in `alignment_debug`,
+`karaoke`, `lyrics`, `subtitles`). The session was not given the run's `Done.` line, the backup path
+or any `FAILED` line; the backup was found as the newest folder, and every picked song's disk state
+is in Table R. Artifacts in `~/.pikaraoke/tmp/regen_lrclib_auto/`: `after_run.py`, `after_tables.md`.
+
+- The two songs whose `.lrc` has the same bytes as the backup's (Price Tag, What Is This Feeling)
+  carried the record already: the backup's `[lrclib_id:...]` is 6900889 and 16623226, the same as
+  their dry-run picks.
+- `.ass` columns count `Dialogue:` lines in the file, before from the backup.
+- 4a put-back: no picked song shows a failed state on disk. All 32 have the auto sheet, origin
+  `lrclib_auto_srt`, method `cue_align`, and a bundle that differs from `before.tsv`.
+
+**Table R: every song the dry run picked**
+
+| # | Song | YouTube id | Dry-run pick | `.lrc` id now | origin | method | `.lrc` changed vs backup | auto sheet | `.ass` Dialogue before | after | bundle changed |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 4 | Britney Spears - I'm A Slave 4 U (Official 4K Video) | `Mzybwwf2HoQ` | 36592252 | 36592252 | lrclib_auto_srt | cue_align | yes | yes | 52 | 55 | yes |
+| 5 | Bruno Mars - Grenade (Official Music Video) | `SR6iYWJxHqs` | 38953751 | 38953751 | lrclib_auto_srt | cue_align | yes | yes | 48 | 49 | yes |
+| 6 | Bruno Mars - Just The Way You Are (Official Music Video) | `LjhCEhWiKXk` | 9888181 | 9888181 | lrclib_auto_srt | cue_align | yes | yes | 48 | 54 | yes |
+| 7 | Bruno Mars - Locked Out Of Heaven (Official Music Video) | `e-fA-gBCkj0` | 6936310 | 6936310 | lrclib_auto_srt | cue_align | yes | yes | 49 | 51 | yes |
+| 8 | Bruno Mars - The Lazy Song (Official Music Video) | `fLexgOxsZu0` | 6706711 | 6706711 | lrclib_auto_srt | cue_align | yes | yes | 48 | 48 | yes |
+| 9 | Bruno Mars - When I Was Your Man (Official Music Video) | `ekzHIouo8Q4` | 15816725 | 15816725 | lrclib_auto_srt | cue_align | yes | yes | 44 | 46 | yes |
+| 11 | Cast of Camp Rock 2 - It's On (From 'Camp Rock 2 - The Final Jam'_Sing-Along) | `fO4BmrVjqjM` | 7140272 | 7140272 | lrclib_auto_srt | cue_align | yes | yes | 78 | 75 | yes |
+| 13 | Demi Lovato, Joe Jonas - Wouldn't Change a Thing (From 'Camp Rock 2 - The Final Jam'_Sing-Along) | `62llzl7iKkE` | 33991259 | 33991259 | lrclib_auto_srt | cue_align | yes | yes | 43 | 49 | yes |
+| 17 | I Just Had Sex (feat. Akon) | `lQlIhraqL7o` | 11579404 | 11579404 | lrclib_auto_srt | cue_align | yes | yes | 58 | 60 | yes |
+| 18 | Idina Menzel, AURORA - Into the Unknown (From 'Frozen 2'_Sing-Along) | `mzhv_dg_UBA` | 36372778 | 36372778 | lrclib_auto_srt | cue_align | yes | yes | 35 | 54 | yes |
+| 20 | Ingrid Michaelson 'Be OK' (Official Video) | `vpMI8Qu5fsc` | 326004 | 326004 | lrclib_auto_srt | cue_align | yes | yes | 32 | 34 | yes |
+| 21 | Jack Sparrow (feat. Michael Bolton) | `GI6CfKcMhjY` | 22000139 | 22000139 | lrclib_auto_srt | cue_align | yes | yes | 64 | 84 | yes |
+| 22 | Jason Mraz - Lucky (feat. Colbie Caillat) [Official Video] [HD Remaster] | `acvIVA9-FMQ` | 20759539 | 20759539 | lrclib_auto_srt | cue_align | yes | yes | 37 | 39 | yes |
+| 25 | Jessie J - Flashlight (from Pitch Perfect 2) (Official Video) | `DzwkcbTQ7ZE` | 37730119 | 37730119 | lrclib_auto_srt | cue_align | yes | yes | 48 | 56 | yes |
+| 26 | Jessie J - Price Tag ft. B.o.B | `qMxX-QOV9tI` | 6900889 | 6900889 | lrclib_auto_srt | cue_align | no (same bytes) | yes | 75 | 75 | yes |
+| 29 | Kelly Clarkson - Behind These Hazel Eyes (Official Video) | `yipoOY56MbM` | 33411593 | 33411593 | lrclib_auto_srt | cue_align | yes | yes | 52 | 54 | yes |
+| 30 | Kristen Bell, Idina Menzel - For the First Time in Forever (From 'Frozen'_Sing-Along) | `ZrX1XKtShSI` | 14589928 | 14589928 | lrclib_auto_srt | cue_align | yes | yes | 52 | 59 | yes |
+| 31 | Maia Wilson, Cast of Frozen - Fixer Upper (From 'Frozen'_Sing-Along) | `IyO-vdsgq1s` | 2263859 | 2263859 | lrclib_auto_srt | cue_align | yes | yes | 58 | 49 | yes |
+| 33 | Michelle Branch - All You Wanted (Official Music Video) _ Warner Records | `Cbo2n2MzxxE` | 3617844 | 3617844 | lrclib_auto_srt | cue_align | yes | yes | 36 | 36 | yes |
+| 34 | Michelle Branch - Are You Happy Now (Official Music Video) _ Warner Vault | `Uxb6RFh3BCw` | 5593856 | 5593856 | lrclib_auto_srt | cue_align | yes | yes | 42 | 47 | yes |
+| 35 | Michelle Branch - Everywhere [Official Music Video] | `HLCasyAh7ic` | 19297649 | 19297649 | lrclib_auto_srt | cue_align | yes | yes | 45 | 45 | yes |
+| 36 | NSYNC - Here We Go (Official Video) | `zqVejtQ2qCk` | 19116608 | 19116608 | lrclib_auto_srt | cue_align | yes | yes | 104 | 59 | yes |
+| 37 | NSYNC - I Want You Back (US Version - Official Video) | `n-2C2wOFavc` | 6955667 | 6955667 | lrclib_auto_srt | cue_align | yes | yes | 44 | 43 | yes |
+| 41 | S Club - Natural | `A4Kba6v5fdg` | 12518942 | 12518942 | lrclib_auto_srt | cue_align | yes | yes | 36 | 39 | yes |
+| 42 | Sara Bareilles - Gravity (Official HD Video) | `rEXhAMtbaec` | 36844599 | 36844599 | lrclib_auto_srt | cue_align | yes | yes | 32 | 34 | yes |
+| 43 | Sara Bareilles - King of Anything (Official Video) | `eR7-AUmiNcA` | 9035250 | 9035250 | lrclib_auto_srt | cue_align | yes | yes | 50 | 59 | yes |
+| 46 | TENACIOUS D - Kickapoo | `hvvjiE4AdUI` | 34637521 | 34637521 | lrclib_auto_srt | cue_align | yes | yes | 41 | 54 | yes |
+| 48 | Tangled - Cast - I've Got a Dream (From 'Tangled'_Sing-Along) | `zi5Z6rNU9Hw` | 29290799 | 29290799 | lrclib_auto_srt | cue_align | yes | yes | 66 | 65 | yes |
+| 52 | Westlife - Flying Without Wings (Official Video) | `vKPGxGCFgTs` | 1512603 | 1512603 | lrclib_auto_srt | cue_align | yes | yes | 36 | 36 | yes |
+| 55 | Wicked _ What Is This Feeling | `amgPXKrFZVg` | 16623226 | 16623226 | lrclib_auto_srt | cue_align | no (same bytes) | yes | 19 | 66 | yes |
+| 56 | YOLO (feat. Adam Levine & Kendrick Lamar) | `z5Otla5157c` | 1019299 | 1019299 | lrclib_auto_srt | cue_align | yes | yes | 59 | 95 | yes |
+| 61 | 月亮代表我的心 | `IgvDMB5fR-8` | 31215515 | 31215515 | lrclib_auto_srt | cue_align | yes | yes | 21 | 18 | yes |
+
+**Table U: every song the dry run did not pick, against `before.tsv`**
+
+| # | Song | YouTube id | bundle sha256 | `.ass` sha256 |
+|---|---|---|---|---|
+| 1 | #OutofOz - 'Defying Gravity' WICKED Studio Sessions _ WICKED the Musical | `EFbuID1QG0Y` | same | same |
+| 2 | A-Lin - 幸福在歌唱 (Happiness Is Singing) | `jeRu6h4XbUU` | same | same |
+| 3 | Beyond - 海闊天空 (Boundless Oceans, Vast Skies) | `qu_FSptjRic` | same | same |
+| 10 | Bruno Mars, Anderson .Paak, Silk Sonic - After Last Night w_ Thundercat & Bootsy [Official Audio] | `-cy_tDQPXHk` | same | same |
+| 12 | Colbie Caillat - Fallin' For You | `GPCRbuL4Oh8` | same | same |
+| 14 | Donna Murphy - Mother Knows Best (From 'Tangled'_Sing-Along) | `-7jWt3JvJto` | same | same |
+| 15 | Eason Chan 陳奕迅 - 明年今日 (This Day Next Year) | `8NJVNkzhJM4` | same | same |
+| 16 | Encanto - Cast - We Don't Talk About Bruno (From 'Encanto'_Sing-Along) | `YRpvIiz9G8A` | same | same |
+| 19 | Idina Menzel, Evan Rachel Wood - Show Yourself (From 'Frozen 2'_ Sing-Along) | `nrZxwPwmgrw` | same | same |
+| 23 | Jay Chou 周杰倫 - 晴天 (Sunny Day) | `DYptgVvkVLQ` | same | same |
+| 24 | Jessica Darrow - Surface Pressure (From 'Encanto'_Sing-Along) | `X-NH1uUfr0U` | same | same |
+| 27 | Jonathan Groff - Lost in the Woods (From 'Frozen 2'_Sing-Along) | `_8jNbZIsBQU` | same | same |
+| 28 | KPop Demon Hunters (2025) - Soda Pop | `983bBbJx0Mk` | same | same |
+| 32 | Mandy Moore, Zachary Levi - I See the Light (From 'Tangled'_Sing-Along) | `ILRs2r6lcHY` | same | same |
+| 38 | Pocahontas 'Savages' 1080p HD | `1YiAzyCzZzw` | same | same |
+| 39 | Queen - Don't Stop Me Now (Official Video Remastered 4K) | `HgzGwKwLmgM` | same | same |
+| 40 | RENT 2005  - Over The Moon (Film-Cut) [HD] | `pXNd2V88d60` | same | same |
+| 44 | Some Things Never Change (From 'Frozen 2'_Sing-Along) | `nVW9QOIeqQg` | same | same |
+| 45 | Sun Yan-Zi 孫燕姿 - 遇見 (Encounter) | `m4nu_F_9dWU` | same | same |
+| 47 | Take Me Or Leave Me - Rent (2005) (Subtitled) | `DcbEr7Cd_Cc` | same | same |
+| 49 | The Lonely Island - Here I Go (feat. Charli xcx) | `kHwpS0LakeU` | same | same |
+| 50 | The Lonely Island - I'm On A Boat (Explicit Version) ft. T-Pain (Official Video) | `avaSdC0QOUM` | same | same |
+| 51 | Twins《下一站天后》[Official MV] | `cPKfUWDmNbo` | same | same |
+| 53 | Where You Are (From 'Moana'_Sing-Along) | `RTWhvp_OD6s` | same | same |
+| 54 | Wicked (2024) 4K - Dancing Through Life _ Movieclips | `jniq78mKKcM` | same | same |
+| 57 | 周杰倫 Jay Chou【千里之外 Far Away (feat.費玉清 Fei Yu-ching)】-Official Music Video | `ocDo3ySyHSI` | same | same |
+| 58 | 周杰倫 Jay Chou【雙截棍 Nunchucks】Official MV | `OR-0wptI_u0` | same | same |
+| 59 | 富士山下 | `7qeShSmmsNg` | same | same |
+| 60 | 愛情轉移 | `RIq7Tz9nYD8` | same | same |
+| 62 | 林子祥 George Lam  -《男兒當自強》Official MV (電影《黃飛鴻之二》主題曲) | `U_EgeFUTbW4` | same | same |
+| 63 | 楊千嬅 Miriam Yeung - 少女的祈禱 (Official Music Video) | `CvKvXNiXQZc` | same | same |
+| 64 | 王菲 - 容易受傷的女人 (粵語版) (Official Music Video) | `tDw_ULjZWA8` | same | same |
+| 65 | 陳奕迅 Eason Chan《十年(國) [OT  - 明年今日]》[Official MV] | `JM9rx_hN1Ko` | same | same |
+| 66 | 風繼續吹_ 電影《縱橫四海》主題曲 _ 張國榮 Leslie Cheung _ Official Music Video _ 曲：Uzaki Ryudo _ 詞：Aki Yoko | `UmTB6E5mU5w` | same | same |
+
+Files in alignment_debug, karaoke, lyrics, subtitles newer than the dry run: 192; first 2026-11-26 14:46:49Z, last 2026-11-26 16:46:16Z. Not belonging to a picked song: 0.
+
+
+**Listen list (rule of Phase 4)**
+
+| # | Song | YouTube id | Record | Why | What Ken said before |
+|---|---|---|---|---|---|
+| 1 | 月亮代表我的心 | `IgvDMB5fR-8` | 31215515 | not heard before (CJK) |  |
+| 2 | Sara Bareilles - King of Anything (Official Video) | `eR7-AUmiNcA` | 9035250 | not heard before |  |
+| 3 | Britney Spears - I'm A Slave 4 U (Official 4K Video) | `Mzybwwf2HoQ` | 36592252 | heard, Ken flagged it | Ken's words: see "Picks Ken has heard" |
+| 4 | Bruno Mars - Grenade (Official Music Video) | `SR6iYWJxHqs` | 38953751 | heard, Ken flagged it | Ken's words: see "Picks Ken has heard" |
+| 5 | Idina Menzel, AURORA - Into the Unknown (From 'Frozen 2'_Sing-Along) | `mzhv_dg_UBA` | 36372778 | heard, Ken flagged it | Ken's words: see "Picks Ken has heard" |
+| 6 | I Just Had Sex (feat. Akon) | `lQlIhraqL7o` | 11579404 | heard, closest to the bar |  |
+| 7 | Bruno Mars - The Lazy Song (Official Music Video) | `fLexgOxsZu0` | 6706711 | heard, closest to the bar |  |
+| 8 | Jessie J - Price Tag ft. B.o.B | `qMxX-QOV9tI` | 6900889 | heard, closest to the bar |  |
+| 9 | NSYNC - Here We Go (Official Video) | `zqVejtQ2qCk` | 19116608 | heard, closest to the bar |  |
+| 10 | Cast of Camp Rock 2 - It's On (From 'Camp Rock 2 - The Final Jam'_Sing-Along) | `fO4BmrVjqjM` | 7140272 | heard, closest to the bar |  |
+
+Tie-break columns for the 'closest to the bar' rows (mistimed, shift run, unclaimed run, Table D #):
+
+- lQlIhraqL7o: 0, 1, 12, #17
+- fLexgOxsZu0: 0, 1, 10, #8
+- qMxX-QOV9tI: 0, 1, 9, #26
+- zqVejtQ2qCk: 0, 1, 7, #36
+- fO4BmrVjqjM: 0, 1, 6, #11
+- GI6CfKcMhjY: 0, 1, 6, #21
+- DzwkcbTQ7ZE: 0, 1, 6, #25
+- yipoOY56MbM: 0, 1, 6, #29
