@@ -5,7 +5,8 @@ Model: Claude Sonnet 5.5 (executor, Phase 1). Author and judge: Claude Opus 5.5,
 Branch `repair_lrc_fit_list` off `dev` at `efb91f2d`, worktree
 `.claude/worktrees/repair_lrc_fit_list`.
 
-**Status: planned 2026-11-26, every decision ruled (1-8). Next: Phase 1, Sonnet. No code.**
+**Status: Phase 1 built and ui-checked 2026-11-26 (`535c817e`, `5a7e397e`, `503090f1`); raw readings in the
+Results log. Next: Opus judges (read-only), then Ken's `/code-review`.**
 
 ## The problem
 
@@ -244,3 +245,189 @@ verdicts. Then Opus judges (read-only), then Ken's `/code-review`.
 |---|---|---|---|
 | 2026-11-26 | plan | (this commit) | Planned (Opus) against `dev` `efb91f2d`: decisions 1-7 (Ken), O1 open. Measured table above from a scratch script over 12 songs with a `.lrc` on disk. No code. |
 | 2026-11-26 | plan | (this commit) | Ken ruled O1 as recommended; it is decision 8. No code. |
+| 2026-11-26 | 1, commit 1 | `535c817e` | Check fit follows the bar, not the length limit. `LrcTimingCheck` drops `viable`/`overridable`, gains `refusal`; `LRC_MAX_GAP_S`, `allow_gap` (lib, route, page), `_override_tip`, `#lt-override`, `.rp-override`, `lrcOverride` deleted; `_lrc_repair_plan` refuses unless `fits`; `_lrc_verdict` and `_bar_warning` added. Touched test files: 919 passed after. |
+| 2026-11-26 | 1, commit 2 | `5a7e397e` | Rows scored with Check fit's fit. `evaluate`/`pick` take streams; `lrc_auto_timing.check` passes `heard_streams({"transcribe_words": words}, None)`, the probe `{TRANSCRIBE: words}`; `LibraryTools.lrc_timing_candidates`, `_search_synced`, `_lrc_on_disk_id`, `_lrc_check` (the check built from a fit, shared with `_fit_lrc_timing`); `current_lines` and its tests deleted; `/song_info/lrc_search` rewritten with `verdict`; `matchOption` takes a `score` element. Touched test files (library tools, library routes, lrc auto pick, lrc auto timing, probe): 1056 passed after. |
+| 2026-11-26 | 1, commit 3 | `503090f1` | `#lt-preview-toggle` / `#lt-preview`, `_lrc_match(status, song)` carries the disk text, `showTimingPreview(which, picked)` and `toggleTimingPreview` shared by step 2 and LRCLIB timing. Full suite after commit 3: 4561 passed (86.8 s). |
+| 2026-11-26 | 1, ui-check | (artifacts, untracked) | Port 5743 on this worktree at `503090f1`, four songs, readings below. Artifacts: `.claude/ui-check/repair_lrc_fit_list/` (`results.json`, 25 screenshots, `check_repair_lrc.py`, `extra_readings.py`). Regenerate never pressed. |
+
+### Phase 1 executor notes (facts, no verdicts)
+
+- Commit 1's four cases of `_lrc_verdict` are built as specified. The third (bar passes, flagged runs, head "Fits,
+  but check these lines first.") needs at least two mistimed lines (`MIN_FLAGGED_RUN` 2) while the bar refuses more than
+  one (`MAX_MISTIMED` 1), so a fit read from a real check reaches the "read the warning first" head instead; only the one
+  hand-made-check test reaches the third head. In the ui-check, Rolling in the Deep rows 11-18 (16 mistimed lines, a run
+  of 21 lines) read "Fits, but read the warning first."
+- `_fit_lines` gained `show_speed`: a `speed` refusal always shows the "Speed adjusted by N%." line, also when the change
+  rounds to 0.0% (that line is then marked as the warning). The card marks the warning line `warn`; the length line is
+  second and never marked.
+- The card keeps "No line was heard far from its time." only when there is no warning line, no run, no unheard stretch
+  and no mistimed line (a `speed` refusal alone still shows it).
+- `pick` (no production caller, tests only) changed with `evaluate` to take streams. `_lrclib_results`, `lrclib_candidates`
+  and step 2's rows are untouched; the two `TestLrcTimingRepair` tests that remembered records through
+  `lrclib_candidates` now remember them through `lrc_timing_candidates`.
+- `/song_info/lrc_search` sends each row `verdict` {tone, text}, `fit` (length) and `fit_near` null; it no longer sends
+  `mapped`, `sheet_lines` or the check object. The disk row from `_lrc_match` sends `fit_near` null and `syncedLyrics`.
+- ui-check harness facts: the page checks the disk match on load for a `?source=lrclib` link (`PRESELECT`), so "card
+  after load" is that check. Row 0 is already picked, so pressing it fires no change; its `card_after_pick_shown` reading
+  is the earlier answer still showing. All four songs have a match on disk, so a pick always remains and "the preview
+  closes when the pick goes" was not exercised in the browser (tests only). `shifted` was not seen as a refusal in
+  these four songs' rows; `speed`, `mistimed` and `unclaimed` were (rows below).
+- An `rm` of the folder's earlier smoke-run files was blocked by the harness's safety check and not retried; the full run
+  wrote the same file names over them, so every screenshot in the folder is from the full run.
+- Belle: the match on disk is not in the search's list, so its row has no verdict and no best tag after a search; the
+  search's own row 1 carries "best fit". Love Me Now's disk row (35 s shorter than the clip) was a "use anyway" case
+  before this branch.
+
+### Phase 1 readings (Sonnet, 2026-11-26)
+
+Source: `.claude/ui-check/repair_lrc_fit_list/results.json` (untracked; every reading below is copied from it)
+with the screenshots (390 x 844 at 2x, `<song>_0_load`, `_1_list`, `_2_card_<kind>_row<n>`, `_4_preview_disk`,
+`_4_preview_other`) and the two scripts that made them (`check_repair_lrc.py`, `extra_readings.py`). App on port 5743,
+`PYTHONPATH` = this worktree at `503090f1`, `lib5743` holding only the four songs' files (copies), LRCLIB live.
+Regenerate (`#go`) was never pressed. Row columns: `n` is the row's place in the list; `row text` is the second
+span of the row's fit line and its class; `card` is Check fit's answer after picking the row and pressing Check fit
+(`Regen` = Regenerate disabled after that answer).
+
+#### #OutofOz - 'Defying Gravity' WICKED Studio Sessions _ WICKED the Musical---EFbuID1QG0Y
+
+- Page opened with `?source=lrclib`. Disk row text: `Defying Gravity` · tags ['on disk'] · `5:53 · 84 s longer` · score element: None.
+  Embedded row keys ['albumName', 'artistName', 'fit', 'fit_near', 'id', 'syncedLyrics', 'trackName']; `syncedLyrics` 3437 characters, the `.lrc` on disk 3437, first lines ['[ti:Defying Gravity]', '[ar:Kristin Chenoweth]', '[al:Wicked (Original Broadway Cast Recording)]'].
+- Card after load (the page checks the disk match on a `?source=lrclib` link): tone `bad`, head "Doesn't fit.", lines ["Found 43 of 76 lines, but they don't agree on one timing.", 'The match is 5:53; this video is 4:29 (84 s longer).'], runs [], unheard [], Regen True, override elements on the page 0, "Use this match anyway" on the page False.
+- Preview toggle on load: {'text': 'Preview selected timing', 'disabled': False, 'preview_hidden': True}; `#lt-matches`'s next sibling is `lt-preview-toggle`. Toggle boxes (closed): preview {'x': 25, 'y': 852, 'w': 148, 'h': 44}, search toggle {'x': 176, 'y': 852, 'w': 91, 'h': 44} (text "Search LRCLIB"); open: preview {'x': 25, 'y': 852, 'w': 83, 'h': 44}, box {'x': 25, 'y': 896, 'w': 340, 'h': 240}, search toggle {'x': 25, 'y': 1144, 'w': 91, 'h': 44}.
+- Preview, disk row, before any search: first three lines ['[ti:Defying Gravity]', '[ar:Kristin Chenoweth]', '[al:Wicked (Original Broadway Cast Recording)]'], toggle text "Hide preview".
+- Search: default query `Defying Gravity Kristin Chenoweth`, page wall time 3.018 s (click to rows drawn), `/song_info/lrc_search` direct 2.979 s, 19 rows, video label "video is 4:29". The LRCLIB GET alone (`urllib`, same query, two trials): [[1.009, 20], [0.985, 20]] (seconds, records). `_POLITE_SLEEP_S` in `lrclib._search` is 0.3 s.
+- Preview left open through the search: first three lines ['[ti:Defying Gravity]', '[ar:Kristin Chenoweth]', '[al:Wicked (Original Broadway Cast Recording)]'].
+- Another row picked while open (row 1, "Defying Gravity", doesn't fit · matches 43 of 76 lines): first three lines ["[00:00.11] Elphaba, why couldn't you have stayed calm for once?", '[00:03.78] Instead of flying off the handle!', "[00:05.85] I hope you're happy"], toggle "Hide preview".
+- A new search (the pick drops back to the disk row): first three lines ['[ti:Defying Gravity]', '[ar:Kristin Chenoweth]', '[al:Wicked (Original Broadway Cast Recording)]'], hidden False. Toggle pressed again: {'hidden': True, 'toggle_text': 'Preview selected timing'}.
+- Page errors (console, uncaught, failed requests), both sessions: [] / [].
+
+| n | label | tags | length | row text (class) | card tone · head | warning line | runs | unheard | Regen |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | Defying Gravity | on disk | 5:53 · 84 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 1 | Defying Gravity | - | 5:54 · 85 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 2 | Kristin Chenoweth & Idina Menzel | - | 5:57 · 87 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 3 | Defying Gravity | - | 5:53 · 84 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 4 | Defying Gravity | - | 5:57 · 88 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 5 | Defying Gravity | - | 5:58 · 89 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 6 | Defying Gravity | - | 5:57 · 88 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 7 | Defying Gravity | - | 5:57 · 88 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 8 | Defying Gravity | - | 5:53 · 84 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 9 | Defying Gravity | - | 5:57 · 88 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 10 | Defying Gravity | - | 5:57 · 88 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 11 | Defying Gravity | - | 5:54 · 85 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 12 | Defying Gravity | - | 5:57 · 88 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 13 | Defying Gravity | - | 5:57 · 88 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 14 | Defying Gravity | - | 5:57 · 88 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 15 | Defying Gravity | - | 5:59 · 90 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 16 | Defying Gravity | - | 5:54 · 85 s longer | doesn't fit · matches 43 of 76 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 17 | What Is This Feeling? | - | 3:32 · 57 s shorter | doesn't fit · matches 0 of 74 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 18 | Popular | - | 3:44 · 45 s shorter | doesn't fit · matches 0 of 64 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+
+Card screenshots: defying_gravity_2_card_bad_other_row0.png.
+
+#### Beauty and the Beast (1991) - Belle---otxTf5hZ0Yw
+
+- Page opened with `?source=lrclib`. Disk row text: `Belle` · tags ['on disk'] · `5:02 · 5 s longer` · score element: None.
+  Embedded row keys ['albumName', 'artistName', 'fit', 'fit_near', 'id', 'syncedLyrics', 'trackName']; `syncedLyrics` 3199 characters, the `.lrc` on disk 3199, first lines ['[ti:Belle]', "[ar:Paige O'Hara]", '[al:Walt Disney Records The Legacy Collection: Beauty and the Beast]'].
+- Card after load (the page checks the disk match on a `?source=lrclib` link): tone `bad`, head "Fits, but read the warning first.", lines ['matches 72 of 82 lines', 'The match is 5:02; this video is 4:57 (5 s longer).', 'Line times move 0:00:06 earlier.', 'The clip has 100 words in a row that no line of this match has. The video may have a section this match lacks. [warn]'], runs [], unheard ['4:10–4:15 · 5 lines'], Regen False, override elements on the page 0, "Use this match anyway" on the page False.
+- Preview toggle on load: {'text': 'Preview selected timing', 'disabled': False, 'preview_hidden': True}; `#lt-matches`'s next sibling is `lt-preview-toggle`. Toggle boxes (closed): preview {'x': 25, 'y': 828, 'w': 148, 'h': 44}, search toggle {'x': 176, 'y': 828, 'w': 91, 'h': 44} (text "Search LRCLIB"); open: preview {'x': 25, 'y': 828, 'w': 83, 'h': 44}, box {'x': 25, 'y': 872, 'w': 340, 'h': 240}, search toggle {'x': 25, 'y': 1120, 'w': 91, 'h': 44}.
+- Preview, disk row, before any search: first three lines ['[ti:Belle]', "[ar:Paige O'Hara]", '[al:Walt Disney Records The Legacy Collection: Beauty and the Beast]'], toggle text "Hide preview".
+- Search: default query `Beauty and the Beast - Belle`, page wall time 4.315 s (click to rows drawn), `/song_info/lrc_search` direct 4.372 s, 14 rows, video label "video is 4:57". The LRCLIB GET alone (`urllib`, same query, two trials): [[1.048, 20], [1.019, 20]] (seconds, records). `_POLITE_SLEEP_S` in `lrclib._search` is 0.3 s.
+- Preview left open through the search: first three lines ['[ti:Belle]', "[ar:Paige O'Hara]", '[al:Walt Disney Records The Legacy Collection: Beauty and the Beast]'].
+- Another row picked while open (row 1, "Belle", fits · matches 96 of 104 lines): first three lines ["[00:26.04] Little town it's a quiet village", '[00:30.86] Everyday like the one before', '[00:35.89] Little town full of little people, waking up to say'], toggle "Hide preview".
+- A new search (the pick drops back to the disk row): first three lines ['[ti:Belle]', "[ar:Paige O'Hara]", '[al:Walt Disney Records The Legacy Collection: Beauty and the Beast]'], hidden False. Toggle pressed again: {'hidden': True, 'toggle_text': 'Preview selected timing'}.
+- Page errors (console, uncaught, failed requests), both sessions: [] / [].
+
+| n | label | tags | length | row text (class) | card tone · head | warning line | runs | unheard | Regen |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | Belle | on disk | 5:02 · 5 s longer | none | bad · Fits, but read the warning first. | The clip has 100 words in a row that no line of this match has. The video may have a section this match lacks. | - | 4:10–4:15 · 5 lines | False |
+| 1 | Belle | best fit | 5:09 · 12 s longer | fits · matches 96 of 104 lines (rp-good) | good · Fits. This match can time this song. | - | - | 4:09–4:14 · 3 lines | False |
+| 2 | Belle | - | 4:45 · 13 s shorter | fits · matches 96 of 104 lines (rp-good) | good · Fits. This match can time this song. | - | - | 4:09–4:14 · 3 lines | False |
+| 3 | Belle | - | 5:26 · 29 s longer | fits · matches 96 of 104 lines (rp-good) | good · Fits. This match can time this song. | - | - | 4:09–4:14 · 3 lines | False |
+| 4 | Belle | - | 5:09 · 12 s longer | fits · matches 96 of 104 lines (rp-good) | good · Fits. This match can time this song. | - | - | 4:09–4:14 · 3 lines | False |
+| 5 | Belle (From "Beauty and the Beast"/Soundtrack Version) | - | 5:33 · 36 s longer | doesn't fit · matches 71 of 106 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 6 | Belle (From "Beauty and the Beast"/Soundtrack Version) | - | 5:09 · 12 s longer | fits, check first · matches 107 of 121 lines (rp-bad) | bad · Fits, but read the warning first. | Speed adjusted by 0.3%. | - | 4:09–4:14 · 5 lines | False |
+| 7 | Belle (From "Beauty and the Beast"/Audio Only) | - | 5:35 · 38 s longer | doesn't fit · matches 71 of 106 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 8 | Belle | - | 5:33 · 36 s longer | doesn't fit · matches 70 of 99 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 9 | Belle (From "Beauty and the Beast"/Soundtrack Version) | - | 5:07 · 10 s longer | fits, check first · matches 107 of 121 lines (rp-bad) | bad · Fits, but read the warning first. | Speed adjusted by 0.3%. | - | 4:09–4:14 · 5 lines | False |
+| 10 | belle | - | 5:34 · 37 s longer | doesn't fit · matches 71 of 106 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 11 | Belle | - | 5:09 · 12 s longer | fits, check first · matches 107 of 121 lines (rp-bad) | bad · Fits, but read the warning first. | Speed adjusted by 0.3%. | - | 4:09–4:14 · 5 lines | False |
+| 12 | Belle | - | 5:33 · 36 s longer | doesn't fit · matches 71 of 106 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+| 13 | Belle | - | 5:35 · 38 s longer | doesn't fit · matches 71 of 106 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+
+Card screenshots: belle_2_card_bad_fits_row0.png, belle_2_card_good_row1.png, belle_2_card_bad_other_row5.png.
+
+#### John Legend - Love Me Now (Official Video)---NmCFY1oYDeM
+
+- Page opened with `?source=lrclib`. Disk row text: `Love Me Now` · tags ['on disk'] · `3:40 · 35 s shorter` · score element: None.
+  Embedded row keys ['albumName', 'artistName', 'fit', 'fit_near', 'id', 'syncedLyrics', 'trackName']; `syncedLyrics` 2559 characters, the `.lrc` on disk 2559, first lines ['[ti:Love Me Now]', '[ar:John Legend]', '[al:Love Me Now]'].
+- Card after load (the page checks the disk match on a `?source=lrclib` link): tone `good`, head "Fits. This match can time this song.", lines ['matches 44 of 45 lines', 'The match is 3:40; this video is 4:15 (35 s shorter).', 'Line times move 0:00:12 later.', 'No line was heard far from its time.'], runs [], unheard [], Regen False, override elements on the page 0, "Use this match anyway" on the page False.
+- Preview toggle on load: {'text': 'Preview selected timing', 'disabled': False, 'preview_hidden': True}; `#lt-matches`'s next sibling is `lt-preview-toggle`. Toggle boxes (closed): preview {'x': 25, 'y': 809, 'w': 148, 'h': 44}, search toggle {'x': 176, 'y': 809, 'w': 91, 'h': 44} (text "Search LRCLIB"); open: preview {'x': 25, 'y': 809, 'w': 83, 'h': 44}, box {'x': 25, 'y': 853, 'w': 340, 'h': 240}, search toggle {'x': 25, 'y': 1101, 'w': 91, 'h': 44}.
+- Preview, disk row, before any search: first three lines ['[ti:Love Me Now]', '[ar:John Legend]', '[al:Love Me Now]'], toggle text "Hide preview".
+- Search: default query `Love Me Now John Legend`, page wall time 2.734 s (click to rows drawn), `/song_info/lrc_search` direct 2.781 s, 20 rows, video label "video is 4:15". The LRCLIB GET alone (`urllib`, same query, two trials): [[1.023, 20], [1.015, 20]] (seconds, records). `_POLITE_SLEEP_S` in `lrclib._search` is 0.3 s.
+- Preview left open through the search: first three lines ['[ti:Love Me Now]', '[ar:John Legend]', '[al:Love Me Now]'].
+- Another row picked while open (row 1, "Love Me Now", fits · matches 44 of 45 lines): first three lines ['[00:16.08] Pulling me further', "[00:19.06] Further than I've been before", '[00:24.09] Making me stronger'], toggle "Hide preview".
+- A new search (the pick drops back to the disk row): first three lines ['[ti:Love Me Now]', '[ar:John Legend]', '[al:Love Me Now]'], hidden False. Toggle pressed again: {'hidden': True, 'toggle_text': 'Preview selected timing'}.
+- Page errors (console, uncaught, failed requests), both sessions: [] / [].
+
+| n | label | tags | length | row text (class) | card tone · head | warning line | runs | unheard | Regen |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | Love Me Now | best fit, on disk | 3:40 · 35 s shorter | fits · matches 44 of 45 lines (rp-good) | good · Fits. This match can time this song. | - | - | - | False |
+| 1 | Love Me Now | - | 3:39 · 36 s shorter | fits · matches 44 of 45 lines (rp-good) | good · Fits. This match can time this song. | - | - | - | False |
+| 2 | Love Me Now | - | 4:15 · within a few s | fits · matches 44 of 45 lines (rp-good) | good · Fits. This match can time this song. | - | - | - | False |
+| 3 | Love Me Now | - | 3:30 · 45 s shorter | fits · matches 44 of 45 lines (rp-good) | good · Fits. This match can time this song. | - | - | - | False |
+| 4 | Love Me Now | - | 3:39 · 36 s shorter | fits · matches 44 of 45 lines (rp-good) | good · Fits. This match can time this song. | - | - | - | False |
+| 5 | Love Me Now | - | 3:40 · 35 s shorter | fits · matches 44 of 45 lines (rp-good) | good · Fits. This match can time this song. | - | - | - | False |
+| 6 | Love Me Now | - | 18:33 · 858 s longer | fits · matches 44 of 45 lines (rp-good) | good · Fits. This match can time this song. | - | - | - | False |
+| 7 | Love Me Now | - | 1:29 · 166 s shorter | fits · matches 44 of 45 lines (rp-good) | good · Fits. This match can time this song. | - | - | - | False |
+| 8 | Love Me Now | - | 3:30 · 45 s shorter | fits · matches 44 of 45 lines (rp-good) | good · Fits. This match can time this song. | - | - | - | False |
+| 9 | Love me now | - | 3:30 · 45 s shorter | fits · matches 44 of 45 lines (rp-good) | good · Fits. This match can time this song. | - | - | - | False |
+| 10 | Love Me Now [FazMusic.Net] | - | 3:30 · 45 s shorter | fits · matches 44 of 45 lines (rp-good) | good · Fits. This match can time this song. | - | - | - | False |
+| 11 | Love Me Now | - | 3:30 · 45 s shorter | fits · matches 44 of 45 lines (rp-good) | good · Fits. This match can time this song. | - | - | - | False |
+| 12 | 037-john legend - love me now | - | 3:31 · 44 s shorter | fits · matches 44 of 45 lines (rp-good) | good · Fits. This match can time this song. | - | - | - | False |
+| 13 | John Legend - Love Me Now (Official Video) | - | 4:15 · within a few s | fits, check first · matches 44 of 45 lines (rp-bad) | bad · Fits, but read the warning first. | Speed adjusted by 0.7%. | - | - | False |
+| 14 | John Legend - Love Me Now (Official Video) | - | 4:15 · within a few s | fits, check first · matches 44 of 45 lines (rp-bad) | bad · Fits, but read the warning first. | Speed adjusted by 0.7%. | - | - | False |
+| 15 | Love Me Now | - | 4:14 · within a few s | fits, check first · matches 44 of 45 lines (rp-bad) | bad · Fits, but read the warning first. | Speed adjusted by 0.7%. | - | - | False |
+| 16 | Love Me Now (Official Video) | - | 4:15 · within a few s | fits, check first · matches 44 of 45 lines (rp-bad) | bad · Fits, but read the warning first. | Speed adjusted by 0.7%. | - | - | False |
+| 17 | Love Me Now (Official Video) | - | 4:15 · within a few s | fits, check first · matches 44 of 45 lines (rp-bad) | bad · Fits, but read the warning first. | Speed adjusted by 0.7%. | - | - | False |
+| 18 | Love Me Now (Dave Audé Remix Radio Edit) | - | 3:39 · 36 s shorter | fits, check first · matches 50 of 54 lines (rp-bad) | bad · Fits, but read the warning first. | 12 lines are heard far from their time. | 3:08–3:42 · 12 lines | - | False |
+| 19 | Love Me Now (Armand Van Helden remix radio edit) | - | 3:40 · 35 s shorter | doesn't fit · matches 52 of 55 lines (rp-bad) | bad · Doesn't fit. | - | - | - | True |
+
+Card screenshots: love_me_now_2_card_good_row0.png, love_me_now_2_card_bad_fits_row13.png, love_me_now_2_card_bad_other_row19.png.
+
+#### Adele - Rolling in the Deep (Official Music Video)---rYEDA3JcQqw
+
+- Page opened with `?source=lrclib`. Disk row text: `Adele - Rolling in the Deep` · tags ['on disk'] · `3:54 · within a few s` · score element: None.
+  Embedded row keys ['albumName', 'artistName', 'fit', 'fit_near', 'id', 'syncedLyrics', 'trackName']; `syncedLyrics` 3582 characters, the `.lrc` on disk 3582, first lines ['[ti:Adele - Rolling in the Deep]', '[ar:Adele]', '[al:Adele]'].
+- Card after load (the page checks the disk match on a `?source=lrclib` link): tone `good`, head "Fits. This match can time this song.", lines ['matches 50 of 58 lines', 'The match is 3:54; this video is 3:54.', 'Line times move 0:00:01 earlier.'], runs [], unheard ['3:29–3:36 · 3 lines'], Regen False, override elements on the page 0, "Use this match anyway" on the page False.
+- Preview toggle on load: {'text': 'Preview selected timing', 'disabled': False, 'preview_hidden': True}; `#lt-matches`'s next sibling is `lt-preview-toggle`. Toggle boxes (closed): preview {'x': 25, 'y': 809, 'w': 148, 'h': 44}, search toggle {'x': 176, 'y': 809, 'w': 91, 'h': 44} (text "Search LRCLIB"); open: preview {'x': 25, 'y': 809, 'w': 83, 'h': 44}, box {'x': 25, 'y': 853, 'w': 340, 'h': 240}, search toggle {'x': 25, 'y': 1101, 'w': 91, 'h': 44}.
+- Preview, disk row, before any search: first three lines ['[ti:Adele - Rolling in the Deep]', '[ar:Adele]', '[al:Adele]'], toggle text "Hide preview".
+- Search: default query `Rolling in the Deep Adele`, page wall time 3.347 s (click to rows drawn), `/song_info/lrc_search` direct 3.432 s, 19 rows, video label "video is 3:54". The LRCLIB GET alone (`urllib`, same query, two trials): [[1.305, 20], [1.001, 20]] (seconds, records). `_POLITE_SLEEP_S` in `lrclib._search` is 0.3 s.
+- Preview left open through the search: first three lines ['[ti:Adele - Rolling in the Deep]', '[ar:Adele]', '[al:Adele]'].
+- Another row picked while open (row 1, "Adele - Rolling in the Deep", fits · matches 50 of 58 lines): first three lines ["[00:05.19] There's a fire starting in my heart", "[00:09.76] Reaching a fever pitch, it's bringing me out the dark", '[00:14.26] Finally I can see you crystal clear'], toggle "Hide preview".
+- A new search (the pick drops back to the disk row): first three lines ['[ti:Adele - Rolling in the Deep]', '[ar:Adele]', '[al:Adele]'], hidden False. Toggle pressed again: {'hidden': True, 'toggle_text': 'Preview selected timing'}.
+- Page errors (console, uncaught, failed requests), both sessions: [] / [].
+
+| n | label | tags | length | row text (class) | card tone · head | warning line | runs | unheard | Regen |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | Adele - Rolling in the Deep | best fit, on disk | 3:54 · within a few s | fits · matches 50 of 58 lines (rp-good) | good · Fits. This match can time this song. | - | - | 3:29–3:36 · 3 lines | False |
+| 1 | Adele - Rolling in the Deep | - | 3:54 · within a few s | fits · matches 50 of 58 lines (rp-good) | good · Fits. This match can time this song. | - | - | 3:29–3:36 · 3 lines | False |
+| 2 | Adele - Rolling in the Deep (Official Music Video) | - | 3:48 · 6 s shorter | fits · matches 50 of 58 lines (rp-good) | good · Fits. This match can time this song. | - | - | 3:29–3:37 · 3 lines | False |
+| 3 | Adele - Rolling in the Deep (Official Music Video) | - | 3:54 · within a few s | fits · matches 50 of 58 lines (rp-good) | good · Fits. This match can time this song. | - | - | 3:29–3:37 · 3 lines | False |
+| 4 | Rolling in the Deep | - | 3:48 · 6 s shorter | fits · matches 50 of 58 lines (rp-good) | good · Fits. This match can time this song. | - | - | 3:29–3:36 · 3 lines | False |
+| 5 | Rolling in the Deep | - | 3:48 · 6 s shorter | fits · matches 50 of 58 lines (rp-good) | good · Fits. This match can time this song. | - | - | 3:29–3:36 · 3 lines | False |
+| 6 | Adele - Rolling In The Deep | - | 3:48 · 6 s shorter | fits · matches 50 of 58 lines (rp-good) | good · Fits. This match can time this song. | - | - | 3:29–3:36 · 3 lines | False |
+| 7 | Adele - Rolling in the Deep | - | 3:48 · 6 s shorter | fits · matches 50 of 59 lines (rp-good) | good · Fits. This match can time this song. | - | - | 3:29–3:36 · 3 lines | False |
+| 8 | Adele - Rolling in the Deep | - | 3:49 · 5 s shorter | fits · matches 50 of 58 lines (rp-good) | good · Fits. This match can time this song. | - | - | 3:29–3:36 · 3 lines | False |
+| 9 | Rolling In The Deep - Adele  🎵 | - | 4:07 · 13 s longer | fits · matches 50 of 58 lines (rp-good) | good · Fits. This match can time this song. | - | - | 3:29–3:36 · 3 lines | False |
+| 10 | Adele - Rolling in the Deep (Official Music Video) | - | 3:54 · within a few s | fits · matches 50 of 58 lines (rp-good) | good · Fits. This match can time this song. | - | - | 3:30–3:36 · 3 lines | False |
+| 11 | Rolling in the Deep (Adele Cover) | - | 3:25 · 29 s shorter | fits, check first · matches 50 of 58 lines (rp-bad) | bad · Fits, but read the warning first. | 16 lines are heard far from their time. | 2:15–3:26 · 21 lines | 3:12–3:19 · 3 lines | False |
+| 12 | Rolling In The Deep (Adele Cover) | - | 3:38 · 16 s shorter | fits, check first · matches 50 of 58 lines (rp-bad) | bad · Fits, but read the warning first. | 16 lines are heard far from their time. | 2:15–3:26 · 21 lines | 3:12–3:19 · 3 lines | False |
+| 13 | Rolling in the Deep | - | 0:03 · 231 s shorter | fits, check first · matches 50 of 58 lines (rp-bad) | bad · Fits, but read the warning first. | 16 lines are heard far from their time. | 2:15–3:26 · 21 lines | 3:12–3:19 · 3 lines | False |
+| 14 | Rolling in the Deep | - | 2:50 · 64 s shorter | fits, check first · matches 50 of 58 lines (rp-bad) | bad · Fits, but read the warning first. | 16 lines are heard far from their time. | 2:15–3:26 · 21 lines | 3:12–3:19 · 3 lines | False |
+| 15 | Rolling in the Deep | - | 3:35 · 19 s shorter | fits, check first · matches 50 of 58 lines (rp-bad) | bad · Fits, but read the warning first. | 16 lines are heard far from their time. | 2:15–3:26 · 21 lines | 3:12–3:19 · 3 lines | False |
+| 16 | Rolling in the Deep | - | 4:04 · 10 s longer | fits, check first · matches 50 of 58 lines (rp-bad) | bad · Fits, but read the warning first. | 16 lines are heard far from their time. | 2:15–3:26 · 21 lines | 3:12–3:19 · 3 lines | False |
+| 17 | Rolling in the Deep | - | 1:20 · 154 s shorter | fits, check first · matches 50 of 58 lines (rp-bad) | bad · Fits, but read the warning first. | 16 lines are heard far from their time. | 2:15–3:26 · 21 lines | 3:12–3:19 · 3 lines | False |
+| 18 | Rolling in the Deep | - | 5:11 · 77 s longer | fits, check first · matches 50 of 58 lines (rp-bad) | bad · Fits, but read the warning first. | 16 lines are heard far from their time. | 2:15–3:26 · 21 lines | 3:12–3:19 · 3 lines | False |
+
+Card screenshots: rolling_in_the_deep_2_card_good_row0.png, rolling_in_the_deep_2_card_bad_fits_row11.png.
