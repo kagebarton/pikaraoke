@@ -635,7 +635,7 @@ def probe_song(status: SongStatus, run: Run) -> SongResult:
         result.reason = LRCLIB_UNAVAILABLE
         return result
 
-    entries = lrc_auto_pick.evaluate(records, words, result.length)
+    entries = lrc_auto_pick.evaluate(records, {TRANSCRIBE: words}, result.length)
     result.recs, result.disk = make_recs(entries, disk_record(song), words, result.length)
     asr_words = read_asr(song, result.length)
     result.has_asr = bool(asr_words)

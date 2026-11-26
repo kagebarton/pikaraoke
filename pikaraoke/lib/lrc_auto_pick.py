@@ -1,12 +1,12 @@
 """Which LRCLIB record, if any, times a song: the bar and the pick of plans/lrclib-fit-pick.md,
 with the shifted-section check of plans/lrclib-shift-check.md.
 
-Every synced record a search returns is fitted to the words the transcriber heard
+Every synced record a search returns is fitted to the words heard in the clip
 (:func:`srt_slice_fit.fit_slice`). A record passes the bar when it fits, at the
 clip's own speed, with at most one mistimed line, no long stretch of heard words
 that no line claims and no long stretch of lines heard a few seconds off the same
 way. The pick is made among the passing records, so the order here is part of the bar.
-Pure: the records, the heard words and the clip length come in as arguments, so the
+Pure: the records, the heard streams and the clip length come in as arguments, so the
 probe that measured the bar and the pipeline that will use it run this one code.
 """
 
@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from pikaraoke.lib.srt_slice_fit import (
     FITS,
     SHIFT_OFFSET_S,
-    TRANSCRIBE,
     SliceFit,
     fit_slice,
     longest_shift_run,
@@ -96,9 +95,11 @@ def timing_key(synced: str) -> str:
     return "\n".join(line for raw in synced.splitlines() if (line := raw.strip()))
 
 
-def evaluate(records: list[dict], words: list[dict], clip_length: float) -> list[Entry]:
-    """Every record with synced text, fitted to ``words`` (:func:`srt_slice_fit.heard_streams`'
-    transcribe stream) on a clip ``clip_length`` seconds long.
+def evaluate(
+    records: list[dict], streams: dict[str, list[dict]], clip_length: float
+) -> list[Entry]:
+    """Every record with synced text, fitted to the heard ``streams``
+    (:func:`srt_slice_fit.heard_streams`) on a clip ``clip_length`` seconds long.
 
     The records that pass come first, in pick order; the rest follow in the search's order.
     """
@@ -107,15 +108,15 @@ def evaluate(records: list[dict], words: list[dict], clip_length: float) -> list
     sizes = Counter(keys)
     entries = []
     for record, key in zip(synced, keys):
-        fit = fit_slice(lrc_to_srt(record["syncedLyrics"]), {TRANSCRIBE: words}, clip_length)
+        fit = fit_slice(lrc_to_srt(record["syncedLyrics"]), streams, clip_length)
         entries.append(Entry(record, fit, refusal(fit), sizes[key]))
     passing = sorted((e for e in entries if e.passes), key=_pick_order)
     return passing + [e for e in entries if not e.passes]
 
 
-def pick(records: list[dict], words: list[dict], clip_length: float) -> Entry | None:
+def pick(records: list[dict], streams: dict[str, list[dict]], clip_length: float) -> Entry | None:
     """The record that times the song, or None when no record passes the bar."""
-    entries = evaluate(records, words, clip_length)
+    entries = evaluate(records, streams, clip_length)
     return entries[0] if entries and entries[0].passes else None
 
 
