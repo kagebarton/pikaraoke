@@ -499,3 +499,32 @@ not seen on a screen. R3: as finding 7.
 
 Noted, no action: the search's wall time (2.7-4.3 s on the page, against 1.0-1.3 s for the LRCLIB GET alone) is
 the per-record fitting decision 1 accepted; Ken's phone checks judge it.
+
+### Second review fixes (`144cf70d`)
+
+`/code-review aada52b1..1d88edea`, three angles (correctness of `current` and `lrcRows`; simplicity of
+`CardLine`/`_card_line` and `_refusal_head`; robustness of `without_id_tags` and a disk `.lrc` with no id). Nine
+findings; seven fixed with finding 5 as Ken ruled, one dropped.
+
+1. (important) `current` compared the disk text with ID tags stripped against the record's raw text, so a record
+   with tag-shaped lines (`[offset:+200]`, `[by:..]`, `[ti:..]`, a malformed stamp such as `[00:5.20]`) missed its
+   own `.lrc`. `_lrc_timing_key` strips both sides. Test: each such line, written and searched, is current.
+2. (important) `_format_tag` flattened only `\n`; `\r`, ` `, `\x85` split the tag on read. Now
+   `" ".join(splitlines())`. Test: five line breaks in a track name.
+3. (important) `lrcRows` merged any `current` row into the disk row, though the disk row is the page as loaded and
+   `current` the disk at search time. The merge now also needs `candidate.id === LRC_MATCH.id`; the page test that
+   pinned the id check's absence pins its presence.
+4. (nit) The verdict relied on `MIN_FLAGGED_RUN > MAX_MISTIMED` silently. Test: a flagged run's length is refused
+   (`MISTIMED`).
+5. (nit, Ken: fix) Step 2's list matched `current` on id only. Both lists now use `_lrc_identity` (id and timing key)
+   against `_lrc_on_disk` (replaces `_lrc_on_disk_id`). Test: step 2 with a hand-edited `.lrc` is not current; three
+   route tests now write the searched record itself to disk.
+6. (nit) The docstring said Check fit on both "says the same"; now "gives the same verdict", the length line can
+   differ by a second (the header keeps whole seconds).
+7. (nit) `read_lrc` reads `utf-8-sig`. Test: a byte-order mark keeps the first tag.
+8. (nit) `_card_line` always writes `warn`. The 2-or-3 tuple stays: one shape would add `False` to about fifteen
+   lines for two warning lines.
+9. (nit) Dropped: `_picked` in `test_lrc_auto_pick.py` reads only `evaluate`'s order and `passes`, its contract;
+   `lrc_auto_timing`'s own tests cover taking the first entry that passes.
+
+Suite: 4575 passed.
