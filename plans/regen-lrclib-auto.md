@@ -4,9 +4,10 @@ Model: Claude Sonnet 5.5 (executor). Plan and gates: Claude Opus 5.5.
 
 Branch `regen_lrclib_auto`, worktree `.claude/worktrees/regen_lrclib_auto`, off `dev` `d2ed9a3b`.
 
-**Status 2026-11-24:** Phase 1 built (`2a0afe1d`, Results row 1). Phase 2 dry run done (Results
-row 2, Tables D-F under "Dry run output"), stopped at 2e. `/code-review` ran; its fixes are in
-`d13e8484` (Results row 3). Next: GATE D (Opus judges), then Ken says go for Phase 3.
+**Status 2026-11-26:** Phase 1 built (`2a0afe1d`, Results row 1). Phase 2 dry run done (Results
+row 2, Tables D-F under "Dry run output"). `/code-review` ran; its fixes are in `d13e8484`
+(Results row 3). GATE D judged; Ken's answers are Results row 4. Phase 3a done (`before.tsv`,
+row 5). Next: Ken runs 3b.
 
 ## Goal
 
@@ -51,19 +52,21 @@ Stated by Opus with the questions, 2026-11-24, not contested:
 11. The usual backup, of the switched songs' files only. The picked record replaces the
     song's old `.lrc`. Repair to Genius puts a song back on joint.
 
-Opus's calls in this plan, not ruled by Ken (GATE D puts them to him):
+Opus's calls in this plan (12 and 14 as Ken ruled them at GATE D, Results row 4; 13 is still
+Opus's):
 
 12. The library is the Windows one, `D:\shared\pikaraoke-songs`: the probe's tables come
-    from it, and the VM reads it. The production Linux box's library is out of scope; the
-    same command can run there later under conda.
+    from it, and the VM reads it. There is no run on the production Linux box. Ken syncs the
+    two libraries himself, and only after the Phase 3 run prints `Done.`.
 13. A song Ken sends back to joint with Repair will be offered again by a later
     `--lrclib-auto` run, because nothing records the refusal. To keep it on joint for good,
     Repair it with "no LRCLIB match", which also turns off its LRCLIB fill. Nothing is built
     for this.
 14. A switched song's bundle has no `pipeline_decisions.lrclib_auto` record, the same as a
     second regen of a download-picked song. The picked record's id stays in the `.lrc` header
-    (`[lrclib_id:...]`), and the pick's numbers stay in the run's report (saved in Phases 2
-    and 3).
+    (`[lrclib_id:...]`). The dry run's saved report (`dry_run.txt`, Phase 2) is the record of
+    each pick's numbers; Phase 3's console report is not saved. A pick whose id changed in
+    the real run is named in 4a and goes first on the listen list.
 
 ## What is already there (code read, `dev` `d2ed9a3b`)
 
@@ -209,21 +212,21 @@ Read-only on the library. The RDP session must be connected, because the library
 `/home/ken/shared-drives/D:/Shared/pikaraoke-songs`. `<out>` is
 `~/.pikaraoke/tmp/regen_lrclib_auto`.
 
-- [ ] 2a. Make `<out>` and `touch <out>/started`. From the worktree:
+- [x] 2a. Make `<out>` and `touch <out>/started`. From the worktree:
   `/home/ken/miniconda3/envs/pik/bin/python scripts/regen_alignment_bundles.py "/home/ken/shared-drives/D:/Shared/pikaraoke-songs" --lrclib-auto --dry-run > <out>/dry_run.txt 2> <out>/dry_run.log`.
   Record the exit code.
-- [ ] 2b. Read-only check: `find <library> -newer <out>/started` lists nothing the run wrote.
+- [x] 2b. Read-only check: `find <library> -newer <out>/started` lists nothing the run wrote.
   Ken may be using the library; report anything listed, and undo nothing.
-- [ ] 2c. Paste these raw tables under "Dry run output" below, with no tallies and no verdicts:
+- [x] 2c. Paste these raw tables under "Dry run output" below, with no tallies and no verdicts:
   - Table D: every checked song, with its name, YouTube id and label as printed.
   - Table E: for each row of "Picks Ken has heard" below, the dry run's record id for that
     song, or its skip label.
   - Table F: picks not in "Picks Ken has heard" (song, record id, the pick's numbers). Mark
     the songs whose stored sheet has CJK characters.
   - The counts as the report prints them: checked, picked, couldn't run.
-- [ ] 2d. If any song's check couldn't run (LRCLIB down), rerun 2a once later the same day and
+- [x] 2d. If any song's check couldn't run (LRCLIB down), rerun 2a once later the same day and
   record both runs.
-- [ ] 2e. **STOP.** Write Results row 2. Hand to the judge: the Sonnet session asks Ken to
+- [x] 2e. **STOP.** Write Results row 2. Hand to the judge: the Sonnet session asks Ken to
   `/model` to Opus.
 
 ## GATE D (Opus, then Ken)
@@ -243,7 +246,7 @@ Then Ken says go for Phase 3.
 
 ## Phase 3: the run (Ken, Windows)
 
-- [ ] 3a (session). Just before handing over the block, write `<out>/before.tsv`: the sha256
+- [x] 3a (session). Just before handing over the block, write `<out>/before.tsv`: the sha256
   of `alignment_debug/<stem>.json` and `karaoke/<stem>.ass` for every song in Table D. Use a
   short script in `<out>`, not committed.
 - [ ] 3b (Ken). The session gives this block with the branch hash. If the branch is checked
@@ -300,12 +303,13 @@ off, or sung lead lines never shown (Decision 29 of `plans/lrclib-shift-check.md
 
 ## Phase 5: Ken's listen
 
-Ken reports in chat. The session records his words verbatim as Results row 4, without
+Ken reports in chat. The session records his words verbatim as the next Results row, without
 classifying them.
 
 ## GATE L (Opus, then Ken)
 
-The judge reads row 4 against Decision 29's line between gross and tolerated and, for Ken:
+The judge reads Ken's listen row against Decision 29's line between gross and tolerated and,
+for Ken:
 
 - Each gross song: send it back with Repair to Genius in the web UI (Decision 13 says how to
   keep it there), and add an entry to `plans/open-issues.md` under "LRCLIB timing picked at
@@ -394,6 +398,8 @@ checked at its download: no pick).
 | 1 | 2026-11-24 | 1 | `--lrclib-auto` built as planned, plus these differences. `confirm()` and `back_up()` lifted out of `main()` (shared by both modes; `main()` was past 50 lines). Progress `[i/N]` goes to stderr, so stdout is the report only. Pick label has no record duration (`record_meta`'s `duration` is not formatted anywhere public). `add_songs.py` has its own `print_report`; it never calls this one, so the new keyword argument is for the tests' existing calls only. Tests reuse `tests/unit/movie_slices.py` (`heard_words`, `lrc_slice`, `CLIP_S`) instead of copying `test_lrc_auto_timing.py`'s helpers. The `LRC_ORIGINS` comment in `library_regen.py` also updated. 24 new tests; seven injected bugs (no skip-marker refusal, backup of all stems, hand-over of picks only, no `--reset` refusal, dry run proceeding, wrong sheet kind, no record on the plan) each failed one of them. Full suite 4570 passed. pre-commit clean (black reformatted two files, rerun clean). `--help` shows the flag. Smoke run of `--lrclib-auto --dry-run` and `--lrclib-auto --reset` (exit 2) on a one-song tmp library. | code `2a0afe1d` (off plan commit `57c9faf8`); review range `57c9faf8..2a0afe1d` |
 | 2 | 2026-11-24 | 2 | Dry run of `--lrclib-auto --dry-run` on the Windows library via the VM, as written in 2a-2d: exit 0, report and `[i/N]` log split as planned (`dry_run.txt` report only, `dry_run.log` 66 progress lines). 2b listed nothing written. 2d: no check failed to run, no rerun. Tables D-F and the printed counts are under "Dry run output". The report prints no couldn't-run count; the plan's third count is the number of labels that say so, counted from the file. `plan.seed["genius"]` holds no sheet text, so the CJK mark reads `bundle["lyrics"]["lines"]`. No code touched. Stopped at 2e: no judging, GATE D not started. | `~/.pikaraoke/tmp/regen_lrclib_auto/` (`dry_run.txt`, `dry_run.log`, `dry_run.exit`, `tables.md`, `cjk_flags.py`, `cjk_flags.tsv`, `build_tables.py`) |
 | 3 | 2026-11-24 | review | `/code-review high 57c9faf8..2a0afe1d` (three angles: correctness, simplicity, robustness): 10 findings, none critical. Fixed in `d13e8484`: a check that could not run is counted on a count line printed after the list (`could not check: N`) and the mode exits 1 (#4); the count is made once (#8); only an unreachable LRCLIB says "rerun later", a failed check says "see the log" (#3); the length is looked up once per song (#5); `confirm()` moved to `scripts/song_select.py`, used by `backfill_artifacts.py` too, closed input aborts (#1, #9); refusal docstring matches Decision 9 (#6). #2 (real run re-searches) handled in the plan: Phase 3 checks the could-not-check count, 4a names any changed record id. Dropped: #7 (Phase 3 already sets UTF-8 and runs without a pipe), #10 (`lrclib_fill` is hard-wired on). Pick logic untouched, so the Phase 2 dry run's picks stand; its report's count line and failure wording predate the fix. 5 new tests; full unit suite 4574 passed; pre-commit clean. | `d13e8484` |
+| 4 | 2026-11-26 | GATE D | GATE D judged by Opus. Ken's answers, verbatim: "Decision 2: keep as built (real run acts on its own search; no library regen before Phase 3)." "月亮代表我的心: keep the pick (it heads the listen list)." "Decision 12: Ken syncs the two libraries, so no Linux run; sync only after the run prints Done." "Decision 14: the dry run's saved report is the record of each pick's numbers; a pick whose id changed is named in 4a and goes first on the listen list." Decisions 12 and 14 reworded to match. Decision 13 is not among the answers recorded here and stays as written. | Decisions 12 and 14 above |
+| 5 | 2026-11-26 | 3a | `before.tsv` written for the 66 songs of Table D, read from the library at `/home/ken/shared-drives/D:/Shared/pikaraoke-songs`: columns `stem`, `bundle_sha256` (`alignment_debug/<stem>.json`), `ass_sha256` (`karaoke/<stem>.ass`). No file missing. `find <library> -newer <out>/started` listed nothing, so the library has not changed since the dry run. Script `before_hashes.py` in `<out>`, not committed. Phase 3b handed to Ken. | `~/.pikaraoke/tmp/regen_lrclib_auto/before.tsv`, `before_hashes.py` |
 
 ## Dry run output
 
