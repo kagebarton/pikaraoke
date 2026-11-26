@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Logo 1: Chip mic</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1abc9c}a:hover{color:#1dd2af}
+</style>
+</helmet>
+<div style="width: 960px; height: 540px; box-sizing: border-box; padding: 48px; background: {{bg}}; color: #ffffff; font-family: Lato, system-ui, sans-serif; display: flex; flex-direction: column">
+<div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 32px">
+<svg width="200" height="200" viewBox="0 0 200 200" role="img" aria-label="GPUKaraoke mark: a microphone whose head is a GPU chip">
+<g stroke="#8c9b9d" stroke-width="8" stroke-linecap="round">
+<path d="M26 42h14M26 66h14M26 90h14M160 42h14M160 66h14M160 90h14"></path>
+</g>
+<rect x="46" y="24" width="108" height="84" rx="16" fill="#1abc9c"></rect>
+<rect x="78" y="44" width="44" height="44" rx="8" fill="#000000"></rect>
+<rect x="90" y="56" width="20" height="20" rx="4" fill="#f1b70e"></rect>
+<path d="M34 112a66 66 0 0 0 132 0" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round"></path>
+<path d="M100 178v12M72 192h56" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round"></path>
+</svg>
+<span style="font-size: 92px; font-weight: 900; letter-spacing: -2px; line-height: 1"><span style="color: #1abc9c">gpu</span>karaoke</span>
+</div>
+<div style="display: flex; align-items: center; gap: 40px; padding-top: 20px; border-top: 1px solid #282f2f">
+<span style="font-size: 13px; color: #8c9b9d">Small sizes</span>
+<svg width="48" height="48" viewBox="0 0 200 200" aria-hidden="true">
+<g stroke="#8c9b9d" stroke-width="10" stroke-linecap="round">
+<path d="M26 42h14M26 66h14M26 90h14M160 42h14M160 66h14M160 90h14"></path>
+</g>
+<rect x="46" y="24" width="108" height="84" rx="16" fill="#1abc9c"></rect>
+<rect x="78" y="44" width="44" height="44" rx="8" fill="#000000"></rect>
+<rect x="90" y="56" width="20" height="20" rx="4" fill="#f1b70e"></rect>
+<path d="M34 112a66 66 0 0 0 132 0" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round"></path>
+<path d="M100 178v12M72 192h56" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round"></path>
+</svg>
+<span style="display: flex; align-items: center; gap: 10px">
+<svg width="28" height="28" viewBox="0 0 200 200" aria-hidden="true">
+<rect x="46" y="24" width="108" height="84" rx="16" fill="#1abc9c"></rect>
+<rect x="84" y="50" width="32" height="32" rx="6" fill="#000000"></rect>
+<path d="M34 112a66 66 0 0 0 132 0" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round"></path>
+<path d="M100 178v12" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round"></path>
+</svg>
+<span style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px"><span style="color: #1abc9c">gpu</span>karaoke</span>
+</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"bg":{"editor":"color","default":"#000000","options":["#000000","#14161a","#1f2424"],"section":"Look"},"$preview":{"width":960,"height":540}}'>
+class Component extends DCLogic {
+renderVals() {
+return { bg: this.props.bg ?? '#000000' };
+}
+}
+</script>
+</body>
+</html>

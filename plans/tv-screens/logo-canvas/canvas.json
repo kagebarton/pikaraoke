@@ -1,0 +1,27 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-11-23T12:00:00Z"},
+  "title": "GPUKaraoke logo ideas",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 960, "h": 540, "title": "1. Chip mic (original)"},
+    "MicHouse.dc.html": {"x": 1040, "y": 0, "w": 960, "h": 540, "title": "2. Mic house in the ring (from the background)"},
+    "ThreeMics.dc.html": {"x": 2080, "y": 0, "w": 960, "h": 540, "title": "3. Three mics in the ring (from the background)"},
+    "StemBars.dc.html": {"x": 0, "y": 660, "w": 960, "h": 540, "title": "4. Stem bars (original)"},
+    "SplitNote.dc.html": {"x": 1040, "y": 660, "w": 960, "h": 540, "title": "5. Split note (original)"},
+    "LyricWipe.dc.html": {"x": 2080, "y": 660, "w": 960, "h": 540, "title": "6. Lyric wipe wordmark (original)"}
+  },
+  "order": [
+    "Main.dc.html",
+    "MicHouse.dc.html",
+    "ThreeMics.dc.html",
+    "StemBars.dc.html",
+    "SplitNote.dc.html",
+    "LyricWipe.dc.html"
+  ],
+  "notes": {
+    "title": {"x": 0, "y": -300, "text": "GPUKaraoke logo ideas, on the inter-song screen's black", "kind": "title1", "maxW": 3040}
+  },
+  "designSystems": []
+}

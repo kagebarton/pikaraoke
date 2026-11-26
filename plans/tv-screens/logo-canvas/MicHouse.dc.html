@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Logo 2: Mic house in the ring</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1abc9c}a:hover{color:#1dd2af}
+</style>
+</helmet>
+<div style="width: 960px; height: 540px; box-sizing: border-box; padding: 48px; background: {{bg}}; color: #ffffff; font-family: Lato, system-ui, sans-serif; display: flex; flex-direction: column">
+<div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 32px">
+<svg width="220" height="220" viewBox="0 0 200 200" role="img" aria-label="GPUKaraoke mark: a house with three microphone chimneys inside a split ring">
+<g fill="none" stroke-width="10" stroke-linecap="round">
+<path d="M27.9 49.5A88 88 0 0 1 172.1 49.5" stroke="#f1b70e"></path>
+<path d="M182.7 69.9A88 88 0 0 1 182.7 130.1" stroke="#1abc9c"></path>
+<path d="M17.3 130.1A88 88 0 0 1 17.3 69.9" stroke="#1abc9c"></path>
+<path d="M172.1 150.5A88 88 0 0 1 27.9 150.5" stroke="#3298dc"></path>
+</g>
+<rect x="69" y="72" width="6" height="22" fill="#8c9b9d"></rect>
+<circle cx="72" cy="66" r="9" fill="#1abc9c"></circle>
+<rect x="125" y="72" width="6" height="22" fill="#8c9b9d"></rect>
+<circle cx="128" cy="66" r="9" fill="#f1b70e"></circle>
+<rect x="97" y="52" width="6" height="22" fill="#8c9b9d"></rect>
+<circle cx="100" cy="42" r="12" fill="#ffffff"></circle>
+<rect x="60" y="104" width="80" height="52" fill="#375a7f"></rect>
+<polygon points="48,110 100,72 152,110" fill="#1abc9c"></polygon>
+<rect x="68" y="118" width="14" height="14" rx="2" fill="#f1b70e"></rect>
+<rect x="118" y="118" width="14" height="14" rx="2" fill="#f1b70e"></rect>
+<rect x="92" y="126" width="16" height="30" rx="2" fill="#000000"></rect>
+</svg>
+<span style="font-size: 88px; font-weight: 900; letter-spacing: -2px; line-height: 1"><span style="color: #f1b70e">gpu</span>karaoke</span>
+</div>
+<div style="display: flex; align-items: center; gap: 40px; padding-top: 20px; border-top: 1px solid #282f2f">
+<span style="font-size: 13px; color: #8c9b9d">Small sizes</span>
+<svg width="48" height="48" viewBox="0 0 200 200" aria-hidden="true">
+<g fill="none" stroke-width="14" stroke-linecap="round">
+<path d="M27.9 49.5A88 88 0 0 1 172.1 49.5" stroke="#f1b70e"></path>
+<path d="M182.7 69.9A88 88 0 0 1 182.7 130.1" stroke="#1abc9c"></path>
+<path d="M17.3 130.1A88 88 0 0 1 17.3 69.9" stroke="#1abc9c"></path>
+<path d="M172.1 150.5A88 88 0 0 1 27.9 150.5" stroke="#3298dc"></path>
+</g>
+<rect x="68" y="72" width="8" height="22" fill="#8c9b9d"></rect>
+<circle cx="72" cy="64" r="11" fill="#1abc9c"></circle>
+<rect x="124" y="72" width="8" height="22" fill="#8c9b9d"></rect>
+<circle cx="128" cy="64" r="11" fill="#f1b70e"></circle>
+<rect x="96" y="52" width="8" height="22" fill="#8c9b9d"></rect>
+<circle cx="100" cy="40" r="14" fill="#ffffff"></circle>
+<rect x="60" y="104" width="80" height="52" fill="#375a7f"></rect>
+<polygon points="48,110 100,72 152,110" fill="#1abc9c"></polygon>
+<rect x="92" y="122" width="16" height="34" rx="2" fill="#f1b70e"></rect>
+</svg>
+<span style="display: flex; align-items: center; gap: 10px">
+<svg width="28" height="28" viewBox="0 0 200 200" aria-hidden="true">
+<g fill="none" stroke-width="20" stroke-linecap="round">
+<path d="M27.9 49.5A88 88 0 0 1 172.1 49.5" stroke="#f1b70e"></path>
+<path d="M182.7 69.9A88 88 0 0 1 182.7 130.1" stroke="#1abc9c"></path>
+<path d="M17.3 130.1A88 88 0 0 1 17.3 69.9" stroke="#1abc9c"></path>
+<path d="M172.1 150.5A88 88 0 0 1 27.9 150.5" stroke="#3298dc"></path>
+</g>
+<circle cx="100" cy="48" r="18" fill="#ffffff"></circle>
+<rect x="58" y="108" width="84" height="48" fill="#375a7f"></rect>
+<polygon points="44,116 100,74 156,116" fill="#1abc9c"></polygon>
+</svg>
+<span style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px"><span style="color: #f1b70e">gpu</span>karaoke</span>
+</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"bg":{"editor":"color","default":"#000000","options":["#000000","#14161a","#1f2424"],"section":"Look"},"$preview":{"width":960,"height":540}}'>
+class Component extends DCLogic {
+renderVals() {
+return { bg: this.props.bg ?? '#000000' };
+}
+}
+</script>
+</body>
+</html>

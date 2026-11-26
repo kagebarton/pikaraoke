@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Logo 6: Lyric wipe wordmark</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1abc9c}a:hover{color:#1dd2af}
+</style>
+</helmet>
+<div style="width: 960px; height: 540px; box-sizing: border-box; padding: 48px; background: {{bg}}; color: #ffffff; font-family: Lato, system-ui, sans-serif; display: flex; flex-direction: column">
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px">
+<span role="img" aria-label="gpukaraoke, with the first half lit like a karaoke lyric" style="display: inline-flex; flex-direction: column; gap: 14px">
+<span style="position: relative; display: block; font-size: 120px; font-weight: 900; letter-spacing: -3px; line-height: 1; white-space: nowrap">
+<span aria-hidden="true">gpukaraoke</span>
+<span aria-hidden="true" style="position: absolute; left: 0; top: 0; width: {{wipe}}; overflow: hidden; color: {{lit}}">gpukaraoke</span>
+</span>
+<span aria-hidden="true" style="position: relative; display: block; height: 10px; border-radius: 5px; background: #282f2f">
+<span style="position: absolute; left: 0; top: 0; height: 10px; width: {{wipe}}; border-radius: 5px; background: {{lit}}"></span>
+</span>
+</span>
+</div>
+<div style="display: flex; align-items: center; gap: 40px; padding-top: 20px; border-top: 1px solid #282f2f">
+<span style="font-size: 13px; color: #8c9b9d">Small sizes</span>
+<span aria-hidden="true" style="width: 48px; height: 48px; box-sizing: border-box; border-radius: 12px; background: #1f2424; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px">
+<span style="position: relative; display: block; font-size: 26px; font-weight: 900; letter-spacing: -1px; line-height: 1; white-space: nowrap">
+<span>gk</span>
+<span style="position: absolute; left: 0; top: 0; width: 50%; overflow: hidden; color: {{lit}}">gk</span>
+</span>
+<span style="position: relative; display: block; width: 28px; height: 4px; border-radius: 2px; background: #434d4e">
+<span style="position: absolute; left: 0; top: 0; width: 14px; height: 4px; border-radius: 2px; background: {{lit}}"></span>
+</span>
+</span>
+<span aria-hidden="true" style="position: relative; display: block; font-size: 28px; font-weight: 900; letter-spacing: -0.5px; line-height: 1; white-space: nowrap">
+<span>gpukaraoke</span>
+<span style="position: absolute; left: 0; top: 0; width: {{wipe}}; overflow: hidden; color: {{lit}}">gpukaraoke</span>
+</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"bg":{"editor":"color","default":"#000000","options":["#000000","#14161a","#1f2424"],"section":"Look"},"lit":{"editor":"color","default":"#f1b70e","options":["#f1b70e","#1abc9c","#2ecc71","#3298dc"],"section":"Look"},"wipe":{"editor":"range","default":58,"min":10,"max":100,"step":1,"unit":"%","section":"Look"},"$preview":{"width":960,"height":540}}'>
+class Component extends DCLogic {
+renderVals() {
+return {
+bg: this.props.bg ?? '#000000',
+lit: this.props.lit ?? '#f1b70e',
+wipe: (this.props.wipe ?? 58) + '%',
+};
+}
+}
+</script>
+</body>
+</html>

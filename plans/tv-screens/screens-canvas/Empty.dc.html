@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inter-song screen, empty queue</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1abc9c}a:hover{color:#1dd2af}
+</style>
+</helmet>
+<div style="position: relative; width: 1920px; height: 1080px; background: #000000; color: #ffffff; font-family: Lato, system-ui, sans-serif; overflow: hidden">
+
+<div style="position: absolute; left: 0; right: 0; top: 200px; bottom: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px; text-align: center">
+<svg width="240" height="240" viewBox="0 0 200 200" role="img" aria-label="GPUKaraoke logo">
+<g fill="#f1b70e"><rect x="16" y="60" width="24" height="24" rx="12"></rect><rect x="52" y="30" width="24" height="50" rx="12"></rect><rect x="88" y="10" width="24" height="76" rx="12"></rect><rect x="124" y="40" width="24" height="36" rx="12"></rect><rect x="160" y="65" width="24" height="16" rx="8"></rect></g>
+<g fill="#1abc9c"><rect x="16" y="90" width="24" height="50" rx="12"></rect><rect x="52" y="86" width="24" height="84" rx="12"></rect><rect x="88" y="92" width="24" height="98" rx="12"></rect><rect x="124" y="82" width="24" height="78" rx="12"></rect><rect x="160" y="87" width="24" height="48" rx="12"></rect></g>
+</svg>
+<span style="font-size: 120px; font-weight: 900; letter-spacing: -3px; line-height: 1"><span style="color: #f1b70e">gpu</span>karaoke</span>
+<span style="font-size: 48px; color: #dbdee0">{{message}}</span>
+</div>
+
+<sc-if value="{{ showUrl }}" hint-placeholder-val="{{ true }}">
+<svg width="180" height="180" viewBox="0 0 120 120" role="img" aria-label="QR code placeholder" style="position: absolute; left: 16px; top: 16px">
+<rect width="120" height="120" rx="8" fill="#ffffff"></rect>
+<g fill="none" stroke="#000000" stroke-width="7"><rect x="14" y="14" width="28" height="28"></rect><rect x="78" y="14" width="28" height="28"></rect><rect x="14" y="78" width="28" height="28"></rect></g>
+<g fill="#000000"><rect x="24" y="24" width="8" height="8"></rect><rect x="88" y="24" width="8" height="8"></rect><rect x="24" y="88" width="8" height="8"></rect><rect x="54" y="54" width="12" height="12"></rect><rect x="80" y="80" width="10" height="10"></rect><rect x="96" y="92" width="10" height="14"></rect><rect x="54" y="20" width="10" height="10"></rect><rect x="20" y="54" width="14" height="10"></rect></g>
+</svg>
+<span style="position: absolute; right: 16px; bottom: 16px; padding: 2px 12px; border-radius: 10px; background: rgba(0, 0, 0, 0.4); display: flex; align-items: baseline; gap: 14px; font-size: 34px; line-height: 1.2"><span style="font-weight: 700">Add a song</span><span style="color: #1abc9c">http://[server]:5555</span></span>
+</sc-if>
+<span style="position: absolute; left: 16px; bottom: 16px; padding: 0 12px; border-radius: 10px; background: rgba(0, 0, 0, 0.4); font-size: 52px; font-weight: 700; line-height: 1.15">9:42 PM</span>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hideUrl":{"editor":"boolean","default":false,"section":"Display"},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+renderVals() {
+const hideUrl = this.props.hideUrl === true || this.props.hideUrl === 'true';
+return {
+showUrl: !hideUrl,
+message: hideUrl ? 'The queue is empty. Add a song from your phone.' : 'The queue is empty. Scan the code to add a song.',
+};
+}
+}
+</script>
+</body>
+</html>

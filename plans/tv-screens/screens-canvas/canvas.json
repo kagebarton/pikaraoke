@@ -1,0 +1,35 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-11-23T12:30:00Z"},
+  "title": "TV screens revamp: inter-song and during-song",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 1920, "h": 1080, "title": "Inter-song: up next, ready and waiting songs in the list"},
+    "InterShort.dc.html": {"x": 2000, "y": 0, "w": 1920, "h": 1080, "title": "Inter-song: one song after the next"},
+    "InterLong.dc.html": {"x": 4000, "y": 0, "w": 1920, "h": 1080, "title": "Inter-song: long names, title wraps, full list and more"},
+    "InterPreparing.dc.html": {"x": 0, "y": 1200, "w": 1920, "h": 1080, "title": "Inter-song: songs queued, none ready yet"},
+    "InterAllPaused.dc.html": {"x": 2000, "y": 1200, "w": 1920, "h": 1080, "title": "Inter-song: every song paused"},
+    "Empty.dc.html": {"x": 4000, "y": 1200, "w": 1920, "h": 1080, "title": "Inter-song: empty queue"},
+    "EmptyNoUrl.dc.html": {"x": 6000, "y": 1200, "w": 1920, "h": 1080, "title": "Inter-song: empty queue, hide_url on"},
+    "DuringCards.dc.html": {"x": 0, "y": 2700, "w": 1920, "h": 1080, "title": "During song, first 15-20 s: full card"},
+    "DuringCardsMid.dc.html": {"x": 2000, "y": 2700, "w": 1920, "h": 1080, "title": "During song, middle: compact card, small next line (4:3)"},
+    "DuringCardsEnd.dc.html": {"x": 4000, "y": 2700, "w": 1920, "h": 1080, "title": "During song, last 30 s: next singer called (cinematic)"},
+    "DuringHidden.dc.html": {"x": 6000, "y": 2700, "w": 1920, "h": 1080, "title": "During song: hide_now_playing_overlay on"},
+    "DuringPaused.dc.html": {"x": 0, "y": 3900, "w": 1920, "h": 1080, "title": "During song: paused mid-song"},
+    "DuringPausedEnd.dc.html": {"x": 2000, "y": 3900, "w": 1920, "h": 1080, "title": "During song: paused in the last 30 s"},
+    "DuringSettingKey.dc.html": {"x": 4000, "y": 3900, "w": 1920, "h": 1080, "title": "During song: key changed mid-song, compact card grows a settings row for 4 s"},
+    "DuringSettingVocals.dc.html": {"x": 6000, "y": 3900, "w": 1920, "h": 1080, "title": "During song: vocals changed in the last 30 s, settings row"},
+    "DuringQueueEmpty.dc.html": {"x": 0, "y": 5100, "w": 1920, "h": 1080, "title": "During song: nothing queued after it"},
+    "DuringLongTitle.dc.html": {"x": 2000, "y": 5100, "w": 1920, "h": 1080, "title": "During song: long title and singer, full card"},
+    "DuringLongTitleMid.dc.html": {"x": 4000, "y": 5100, "w": 1920, "h": 1080, "title": "During song: long title and singer, compact card"}
+  },
+  "order": ["Main.dc.html", "InterShort.dc.html", "InterLong.dc.html", "InterPreparing.dc.html", "InterAllPaused.dc.html", "Empty.dc.html", "EmptyNoUrl.dc.html", "DuringCards.dc.html", "DuringCardsMid.dc.html", "DuringCardsEnd.dc.html", "DuringHidden.dc.html", "DuringPaused.dc.html", "DuringPausedEnd.dc.html", "DuringSettingKey.dc.html", "DuringSettingVocals.dc.html", "DuringQueueEmpty.dc.html", "DuringLongTitle.dc.html", "DuringLongTitleMid.dc.html"],
+  "notes": {
+    "title": {"x": 0, "y": -300, "text": "Inter-song screen, 1920 x 1080, app palette", "kind": "title1", "maxW": 7920},
+    "duringTitle": {"x": 0, "y": 2420, "text": "During song: QR, clock and address sit exactly where the inter-song screen has them", "kind": "title1", "maxW": 7920},
+    "interRules": {"x": 8000, "y": 0, "w": 1600, "size": "l", "fill": "blue", "text": "Inter-song rules (plans/tv-screens.md)\n\n- Up next is the song that plays next. AFTER THAT is the rest in queue order, as on the phone Queue page, numbered from 2.\n- Downloading, processing, lyrics-pick and paused songs keep their number: dashed slot with the word, row faded. Failed songs are hidden and not counted in + N more.\n- Countdown has its own setting (default 8 s, replaces splash_delay). It restarts when the Up next song changes; the list updates live. No start-now button.\n- At zero: these pieces fade out (400 ms), the video fades in from black (1 s).\n- Nothing ready: \"Getting the first song ready.\" Every song paused: \"Every song in the queue is paused.\" No countdown either way.\n- Long Up next titles wrap to two lines, then cut off.\n- overlay_scale leaves this layout alone. Plain black (a black 1344 x 768 placeholder). English only for now.\n- Corners 16 px in; clock and address on 40% black pills."},
+    "duringRules": {"x": 8000, "y": 2700, "w": 1600, "size": "l", "fill": "teal", "text": "During-song rules (plans/tv-screens.md)\n\n- Full card for the first 15-20 s of playing time (pauses not counted), compact card in the middle, up-next card for the last 30 s of time left (seeking back takes it away). Too short for both: split evenly, no compact stage.\n- Stage changes crossfade, 400 ms in 8 steps. Song end: black fades in over 1 s under the corners (music fades too on a skip); song start mirrors it.\n- Pause: full card with Paused, NEXT line back; an up-next card stays. Resume crossfades to the stage before.\n- Key or vocals changed after the full card: the compact card grows a settings row (both tags, the changed one in amber) and shrinks back after 4 s; each change restarts the 4 s. Nothing under the card moves out of order; it shifts down with the card.\n- Nothing queued after: compact card alone. A queue change under the up-next card crossfades it.\n- hide_now_playing_overlay hides the cards only. QR, clock and address stay all song. 4:3 and cinematic: no special placement.\n- Cards 70% black, up-next card 75%. Lyrics Lato Bold 66, outline and shadow as today."}
+  },
+  "designSystems": []
+}
