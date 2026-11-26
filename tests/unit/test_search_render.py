@@ -357,6 +357,71 @@ def _cards(body: str) -> list[str]:
     return re.findall(r"<li data-ytID=.*?</li>", body, re.S)
 
 
+class _Node:
+    def __init__(self, tag: str, attrs: dict, parent: "_Node | None") -> None:
+        self.tag, self.attrs, self.parent, self.children = tag, attrs, parent, []
+
+    @property
+    def classes(self) -> list[str]:
+        return (self.attrs.get("class") or "").split()
+
+    @property
+    def text(self) -> str:
+        return " ".join(
+            " ".join(c if isinstance(c, str) else c.text for c in self.children).split()
+        )
+
+    def find_all(self, tag: str | None = None, cls: str | None = None) -> list["_Node"]:
+        found = []
+        for child in self.children:
+            if isinstance(child, str):
+                continue
+            if (tag is None or child.tag == tag) and (cls is None or cls in child.classes):
+                found.append(child)
+            found.extend(child.find_all(tag, cls))
+        return found
+
+
+class _Fragment(HTMLParser):
+    """A card's markup as a tree, so a test reads what is inside what, not the text around it."""
+
+    _VOID = {"img", "input", "br", "hr", "meta", "link"}
+
+    def __init__(self, html: str) -> None:
+        super().__init__()
+        self.root = _Node("root", {}, None)
+        self._open = self.root
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        node = _Node(tag, dict(attrs), self._open)
+        self._open.children.append(node)
+        if tag not in self._VOID:
+            self._open = node
+
+    def handle_endtag(self, tag):
+        node = self._open
+        while node is not self.root and node.tag != tag:
+            node = node.parent
+        if node is not self.root:
+            self._open = node.parent
+
+    def handle_data(self, data):
+        self._open.children.append(data)
+
+    def find_all(self, tag: str | None = None, cls: str | None = None) -> list[_Node]:
+        return self.root.find_all(tag, cls)
+
+
+def _badges(card: str) -> list[str]:
+    """The text of each badge inside the card's thumbnail frame, left to right."""
+    [frame] = _Fragment(card).find_all(cls="img-frame")
+    return [badge.text for badge in frame.find_all(cls="card-badge")]
+
+
+_NOTE = '<div class="library-copy">'  # the page's own style block names the class, so count markup
+
+
 def _card_ids(body: str) -> list[str]:
     return [re.search(r'data-ytID="(\w+)"', card).group(1) for card in _cards(body)]
 
@@ -443,23 +508,29 @@ def test_a_library_copy_is_noted_inside_the_card_it_matched(mock_get, client):
     body = _search_body(client, mock_get, results, k)
 
     shape, wnw = _cards(body)
-    assert "In library:" not in shape
-    assert "In library: <strong>Mena Massoud, Naomi Scott - A Whole New World" in wnw
-    assert f'library-copy-enqueue" data-file-path="{_MENA_WNW}">Queue</button>' in wnw
+    assert _NOTE not in shape
+    mena, zayn = _Fragment(wnw).find_all(cls="library-copy")
+    assert [label.text for label in mena.find_all(cls="sr-sub")] == ["In library"]
+    [name] = mena.find_all("strong")
+    assert name.text.startswith("Mena Massoud, Naomi Scott - A Whole New World")
+    [queue] = mena.find_all(cls="library-copy-enqueue")
+    assert queue.attrs["data-file-path"] == _MENA_WNW and queue.text == "Queue"
     assert f'library-copy-enqueue" data-file-path="{_ZAYN_WNW}"' in wnw
+    assert "In library:" not in body  # the old one-line note, with its name inside the sentence
     assert "Mirrors" not in body
     assert "Already in the library" not in body
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
-def test_the_noted_file_name_is_escaped_inside_the_translated_line(mock_get, client):
+def test_the_noted_file_name_is_escaped_in_its_row(mock_get, client):
     path = "/songs/Mena Massoud & Naomi <Scott> - A Whole New World---mmmmmmmmmmm.mp4"
 
     body = _search_body(
         client, mock_get, [_result(_WNW_LYRICS, "aaaaaaaaaaa")], _karaoke_with_library([path])
     )
 
-    assert "In library: <strong>Mena Massoud &amp; Naomi &lt;Scott&gt; - A Whole New World" in body
+    assert "<strong>Mena Massoud &amp; Naomi &lt;Scott&gt; - A Whole New World" in body
+    assert "<Scott>" not in body
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
@@ -473,7 +544,7 @@ def test_a_copy_matching_several_cards_is_noted_on_the_first_only(mock_get, clie
 
     first, second = _cards(body)
     assert f'library-copy-enqueue" data-file-path="{_MENA_WNW}"' in first
-    assert "In library:" not in second
+    assert _NOTE not in second
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
@@ -488,7 +559,7 @@ def test_a_card_in_the_library_is_skipped_and_the_copy_goes_to_the_next_match(mo
 
     own_card, matched = _cards(body)
     assert f'data-file-path="{own}"' in own_card
-    assert "In library:" not in own_card
+    assert _NOTE not in own_card
     assert f'library-copy-enqueue" data-file-path="{_MENA_WNW}"' in matched
     assert body.count('library-copy-enqueue" data-file-path=') == 1
 
@@ -498,7 +569,7 @@ def test_no_note_when_nothing_in_the_library_looks_like_a_result(mock_get, clien
     results = [_result("Ed Sheeran - Shape of You", "aaaaaaaaaaa")]
     k = _karaoke_with_library([_MENA_WNW, _MIRRORS])
 
-    assert "In library:" not in _search_body(client, mock_get, results, k)
+    assert _NOTE not in _search_body(client, mock_get, results, k)
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
@@ -512,7 +583,7 @@ def test_no_note_for_a_song_a_result_already_matches_by_id(mock_get, client):
 
     body = _search_body(client, mock_get, results, k)
 
-    assert "In library:" not in body
+    assert _NOTE not in body
     assert f'data-file-path="{_MIRRORS}"' in _cards(body)[0]  # the row's own button
 
 
@@ -531,7 +602,7 @@ def test_the_row_not_the_note_offers_a_file_find_by_id_misses(mock_get, client, 
 
     body = _search_body(client, mock_get, results, _karaoke_with_library([path]))
 
-    assert "In library:" not in body
+    assert _NOTE not in body
     assert f'data-file-path="{path}"' in body  # the row's own button
 
 
@@ -543,7 +614,7 @@ def test_at_most_three_library_copies_are_noted_on_a_page(mock_get, client):
 
     body = _search_body(client, mock_get, results, _karaoke_with_library(library))
 
-    assert body.count('library-copy-enqueue" data-file-path=') == 3
+    assert body.count(_NOTE) == body.count('library-copy-enqueue" data-file-path=') == 3
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
@@ -553,8 +624,7 @@ def test_more_notes_no_library_copy(mock_get, client):
     with patch("pikaraoke.routes.search.get_search_results", return_value=results):
         body = client.get("/search/more?search_string=whole+new+world").get_data(as_text=True)
 
-    assert "In library:" not in body
-    assert "library-copy" not in body
+    assert "library-copy" not in body  # a /search/more answer has no page shell, so no style block
 
 
 # ---------------------------------------------------------------------------
@@ -581,7 +651,7 @@ def test_card_offers_queue_only_for_a_library_copy_and_queue_dots_for_the_dialog
     assert re.search(r'is-success search_result_items_select">Queue…</button>', other_card)
     assert "search_result_items_enqueue" not in other_card
     assert "duration-badge" not in other_card  # no duration, no badge
-    assert "has-text-grey" not in other_card  # no channel, no channel line
+    assert "sr-sub" not in other_card  # no channel, no channel line
     assert "data-index" not in body
 
 
@@ -651,6 +721,132 @@ def test_every_card_has_one_play_button_in_its_frame_and_no_thumbnail_link(mock_
         assert len(buttons) == 1
         assert card.count('class="card-play"') == 1  # none outside the frame
         assert "data-url" not in card
+
+
+_RICK = "Rick Astley - Never Gonna Give You Up"
+
+
+def _page_cards(client, mock_get, page, results, library=()):
+    """The cards of /search, or of /search/more with `results` on the second page."""
+    mock_get.return_value = _karaoke_with_library(list(library))
+    if page == "search":
+        fetched, url = results, f"/search?search_string={quote(_NEVER)}"
+    else:
+        # The first page names the act (as the ranking's vote needs); `results` are page two.
+        voters = [
+            _result(f"{_RICK} (Lyrics)", i, channel="Lyrics Co", channel_verified=True)
+            for i in _ids(3, 200)
+        ]
+        fetched = voters + _filler(27, 300) + results
+        url = f"/search/more?search_string={quote(_NEVER)}"
+    with patch("pikaraoke.routes.search.get_search_results", return_value=fetched):
+        with patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke"):
+            return _cards(client.get(url).get_data(as_text=True))
+
+
+def _card_by_id(cards: list[str], video_id: str) -> str:
+    return next(card for card in cards if f'data-ytID="{video_id}"' in card)
+
+
+@pytest.mark.parametrize("page", ["search", "more"])
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_a_card_in_the_library_has_one_in_library_badge_in_its_frame_and_no_other_does(
+    mock_get, client, page
+):
+    results = [_result("Justin Timberlake - Mirrors", "uuZE_IRwLNI"), *_filler(2, 100)]
+
+    cards = _page_cards(client, mock_get, page, results, [_MIRRORS])
+
+    assert len(cards) == 3
+    assert _badges(_card_by_id(cards, "uuZE_IRwLNI")) == ["In library"]
+    assert all(_badges(card) == [] for card in cards if "uuZE_IRwLNI" not in card)
+
+
+@pytest.mark.parametrize("page", ["search", "more"])
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_an_official_card_has_its_badge_in_the_frame_and_no_tag_in_the_channel_line(
+    mock_get, client, page
+):
+    """Official moved from beside the channel onto the thumbnail; with In library, that one
+    comes first. Audio from a label's topic channel reads Official audio."""
+    results = [_rick_lyrics(), _rick_audio(), _rick_video()]
+    library = _rick_library("videoaaaaaa")
+
+    owned = _page_cards(client, mock_get, page, results, library)
+    video = _card_by_id(owned, "videoaaaaaa")
+    audio = _card_by_id(owned, "audioaaaaaa")
+    plain = _card_by_id(owned, "lyricsaaaaa")
+    assert _badges(video) == ["In library", "Official video"]  # both, in that order
+    assert _badges(audio) == ["Official audio"]
+    assert _badges(plain) == []
+    for card in (video, audio, plain):
+        assert "tag" not in card.split("card-badges")[-1]
+    assert [n.text for n in _Fragment(video).find_all(cls="sr-sub")] == ["Rick Astley"]
+
+    alone = _page_cards(client, mock_get, page, results)
+    assert _badges(_card_by_id(alone, "videoaaaaaa")) == ["Official video"]
+
+
+@pytest.mark.parametrize("page", ["search", "more"])
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_no_card_links_to_youtube(mock_get, client, page):
+    """The thumbnail's play button previews the video in the card; a link would leave the app."""
+    cards = _page_cards(client, mock_get, page, [_rick_lyrics(), _rick_video()])
+
+    assert len(cards) == 2
+    for card in cards:
+        assert not _Fragment(card).find_all("a")
+        assert "YouTube ↗" not in card
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_a_card_with_a_library_copy_offers_a_grey_download_and_the_rest_a_green_queue(
+    mock_get, client
+):
+    """Download… steers a guest to the copy the library has; the dialog still opens from it."""
+    results = [
+        _result(_WNW_LYRICS, "aaaaaaaaaaa"),
+        _result("Ed Sheeran - Shape of You", "shapeaaaaaa"),
+        _result("Justin Timberlake - Mirrors", "uuZE_IRwLNI"),
+    ]
+
+    cards = _page_cards(client, mock_get, "search", results, [_MENA_WNW, _MIRRORS])
+
+    def button(video_id):
+        [found] = _Fragment(_card_by_id(cards, video_id)).find_all(
+            "button", cls="search_result_items_select"
+        ) or _Fragment(_card_by_id(cards, video_id)).find_all(
+            "button", cls="search_result_items_enqueue"
+        )
+        return found
+
+    noted = button("aaaaaaaaaaa")
+    assert noted.text == "Download…" and "is-success" not in noted.classes
+    assert "search_result_items_select" in noted.classes
+    plain = button("shapeaaaaaa")
+    assert plain.text == "Queue…" and "is-success" in plain.classes
+    assert "search_result_items_select" in plain.classes
+    owned = button("uuZE_IRwLNI")
+    assert owned.text == "Queue" and "is-success" in owned.classes
+    assert "search_result_items_enqueue" in owned.classes
+
+
+@pytest.mark.parametrize("page", ["search", "more"])
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_a_cards_title_and_channel_use_the_shared_row_text_classes(mock_get, client, page):
+    results = [
+        _result("Africa", "FTQbiNvZqaY", channel="Toto"),
+        _result("No Channel", "bbbbbbbbbbb", channel=""),
+    ]
+
+    cards = _page_cards(client, mock_get, page, results)
+
+    africa = _Fragment(_card_by_id(cards, "FTQbiNvZqaY"))
+    assert [n.text for n in africa.find_all(cls="sr-title")] == ["Africa"]
+    assert [n.text for n in africa.find_all(cls="sr-sub")] == ["Toto"]
+    unnamed = _Fragment(_card_by_id(cards, "bbbbbbbbbbb"))
+    assert [n.text for n in unnamed.find_all(cls="sr-title")] == ["No Channel"]
+    assert unnamed.find_all(cls="sr-sub") == []
 
 
 class _Ancestors(HTMLParser):
