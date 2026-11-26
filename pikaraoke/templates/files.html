@@ -10,11 +10,6 @@
   .bp-toggle { display: flex; gap: 4px; padding: 4px; margin: 0 20px 12px; border-radius: 10px; background: var(--dark-bg-secondary); }
   .bp-toggle a { flex: 1; display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 7px; font-size: 15px; color: var(--dark-text-light); }
   .bp-toggle a[aria-current="true"] { background: var(--dark-primary); color: var(--dark-text-primary); font-weight: 700; }
-  /* The toggle and the letter strip stay together near the top of the screen while the list
-     scrolls under them. The block bleeds to the card's edges and is the card's colour, so rows
-     pass behind it; its 12px top padding is the gap above the toggle, and the matching negative
-     margin keeps the unpinned layout where it was. Below Bulma's modals (z 40). */
-  .bp-pin { position: sticky; top: 0; z-index: 10; margin: -12px -20px 0; padding: 12px 0 16px; background: var(--dark-bg-tertiary); }
   .bp-strip-row { position: relative; display: flex; gap: 6px; padding: 0 20px; overflow-x: auto; scrollbar-width: none; }
   .bp-strip-row::-webkit-scrollbar { display: none; }
   /* A fade at each edge that has letters past it; a mask, so it needs no colour to match. */
@@ -99,7 +94,7 @@
 {% endif %}
 
 <div id="browse-page">
-  <div class="bp-pin">
+  <div class="pin-top">
     <div class="bp-toggle" role="group">
       <a href="{{ url_for('files.browse', by='artist', letter=letter_param) }}"{% if by == 'artist' %} aria-current="true"{% endif %}>{# MSG: Browse sort toggle: list by the artist's name. #}{% trans %}By artist{% endtrans %}</a>
       <a href="{{ url_for('files.browse', by='song', letter=letter_param) }}"{% if by == 'song' %} aria-current="true"{% endif %}>{# MSG: Browse sort toggle: list by the song's title. #}{% trans %}By song{% endtrans %}</a>

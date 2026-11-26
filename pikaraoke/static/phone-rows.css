@@ -1,4 +1,5 @@
-/* The two-line rows of the phone pages (Queue and Browse; Processing takes them next).
+/* The two-line rows of the phone pages (Queue and Browse; Processing takes them next), and the
+   block a page pins above them.
 
    One rule for the whole look: SOLID MEANS A TAP, DASHED MEANS A STATE. A solid slot or button
    does something when tapped; a dashed slot only says where a song stands (paused, processing,
@@ -204,4 +205,18 @@
 	color: var(--dark-text-muted);
 	cursor: grab;
 	touch-action: none;
+}
+
+/* The block a page pins to the top while its list scrolls under it: Browse's toggle and letter
+   strip, Search's search row. It bleeds to the card's edges and is the card's colour, so rows pass
+   behind it; its 12px top padding is the gap above the content, and the matching negative margin
+   keeps the unpinned layout where it was. The content sets its own side inset. Below Bulma's
+   modals (z 40). When the nav bar pins, `top` moves below it, here and nowhere else. */
+.pin-top {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	margin: -12px -20px 0;
+	padding: 12px 0 16px;
+	background: var(--dark-bg-tertiary);
 }
