@@ -6,6 +6,7 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 import flask_babel
 from flask import abort, flash, jsonify, redirect, render_template, request, url_for
@@ -36,7 +37,7 @@ from pikaraoke.lib.library_tools import (
     is_whole_number,
     pick_text,
 )
-from pikaraoke.lib.lrclib import LrclibUnavailable
+from pikaraoke.lib.lrclib import LrclibUnavailable, read_song_lrc
 from pikaraoke.lib.source_names import origin_names, qualified_name
 from pikaraoke.lib.srt_slice_fit import (
     DISAGREE,
@@ -556,16 +557,18 @@ def _current_label(status: SongStatus) -> str:
     return qualified_name(_("current"), origin=origin, edited=is_edited_kind(kind))
 
 
-def _lrc_match(status: SongStatus) -> dict | None:
-    """The song's LRCLIB match on disk as one row of the page's match list, or None."""
+def _lrc_match(status: SongStatus, song: str) -> dict | None:
+    """The song's LRCLIB match on disk as one row of the page's match list, with its text for
+    the preview, or None."""
     meta = status.lrc_match
     if meta is None:
         return None
     row = {**meta, "duration_diff_s": length_gap_s(meta.get("duration"), status.media_duration_s)}
     row["fit"] = _candidate_fit(row)[0]  # no ``fit_near`` (so None): the length colours nothing
+    row["syncedLyrics"] = read_song_lrc(Path(song)).text
     return {
         key: row.get(key)
-        for key in ("id", "trackName", "artistName", "albumName", "fit", "fit_near")
+        for key in ("id", "trackName", "artistName", "albumName", "fit", "fit_near", "syncedLyrics")
     }
 
 
@@ -604,7 +607,7 @@ def repair_page():
         custom_query=start["query"],
         genius_start=start["genius"],
         movie_prefill=start["movie"],
-        lrc_match=_lrc_match(status),
+        lrc_match=_lrc_match(status, song),
     )
 
 

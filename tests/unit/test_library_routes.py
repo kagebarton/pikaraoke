@@ -2069,7 +2069,9 @@ class TestRepairPage:
             "albumName": "Invented Album",
             "fit": "3:20 · within a few s",
             "fit_near": None,  # the length colours nothing here
+            "syncedLyrics": lrclib.read_song_lrc(Path(song)).text,  # for the preview
         }
+        assert row["syncedLyrics"].count("\n") >= SLICE_LINES  # the .lrc's lines, not a stub
 
     @pytest.mark.parametrize("state", ["none", "skipped"])
     def test_a_song_with_no_usable_lrc_hands_the_list_no_row(self, env, state):
@@ -2195,6 +2197,53 @@ class TestRepairPage:
         assert "$.extend(rows[0], { verdict: candidate.verdict, best: candidate.best });" in code
         lrc_rows = code[code.index("function lrcRows") : code.index("function renderLrcMatches")]
         assert "mapped" not in lrc_rows and "sheet_lines" not in lrc_rows
+
+    def test_the_preview_toggle_sits_under_the_match_list_and_starts_off(self, env):
+        html = text(self.page(env, LrcTimingEnv.song(env)))
+        section = html[html.index('id="lrclib-section"') : html.index('id="movie-section"')]
+
+        assert (
+            '<button type="button" id="lt-preview-toggle" class="rp-link" disabled>'
+            "Preview selected timing</button>" in section
+        )
+        assert '<div id="lt-preview" class="rp-preview is-hidden"></div>' in section
+        order = [section.index(f'id="{name}"') for name in ("lt-matches", "lt-preview-toggle")]
+        order += [section.index('id="lt-preview"'), section.index('id="lt-search-toggle"')]
+        assert order == sorted(order)
+
+    def test_one_function_serves_step_2s_preview_and_the_timing_lists(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+
+        assert code.count("function showTimingPreview(") == 1
+        assert code.count("function toggleTimingPreview(") == 1
+        for call in (
+            "showTimingPreview('lrclib', pickedCandidate())",
+            "showTimingPreview('lt', pickedLrcRow())",
+            "toggleTimingPreview('lrclib', pickedCandidate())",
+            "toggleTimingPreview('lt', pickedLrcRow())",
+        ):
+            assert call in code
+        # Open, it shows the pick's own lines and goes when there is no pick.
+        shared = code[
+            code.index("function showTimingPreview(") : code.index("function refreshStep2")
+        ]
+        assert "box.text(picked.syncedLyrics); else closePreview(which);" in shared
+
+    def test_the_timing_preview_follows_the_pick_on_every_render_and_is_off_with_no_pick(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        render = code[code.index("function renderLrcMatches") : code.index("function lrcIdleText")]
+
+        assert "showTimingPreview('lt', pickedLrcRow());" in render
+        assert "$('#lt-preview-toggle').prop('disabled', !pickedLrcRow());" in render
+        assert "return row.key === state.lrcPick;" in code
+
+    def test_the_genius_preview_keeps_its_fetch(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+        click = code.index("$('#genius-preview-toggle').on('click'")
+        genius = code[click : code.index("$('#go').on('click'")]
+
+        assert "$.getJSON(URLS.geniusLyrics, { id: pick.id })" in genius
+        assert "TimingPreview" not in genius
 
     def test_a_movie_subtitles_song_is_current_on_the_movie_card_alone(self, env):
         song = env.add_song("A---aaaaaaaaaaa.mp4", movie_bundle())
