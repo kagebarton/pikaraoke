@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 import pytest
 import srt
 
-from pikaraoke.lib import library_status, lrc_auto_timing, lrclib
+from pikaraoke.lib import library_status, lrc_auto_pick, lrc_auto_timing, lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import (
@@ -42,7 +42,6 @@ from pikaraoke.lib.library_regen import (
 )
 from pikaraoke.lib.library_tools import (
     CUSTOM_SHEET_MAX_CHARS,
-    LRC_MAX_GAP_S,
     MOVIE_SUBTITLES_MAX_CHARS,
     PLAYLIST_NOT_A_LINK,
     PLAYLIST_ONE_VIDEO,
@@ -1009,11 +1008,6 @@ class TestRepair:
         assert regen.reset is True
         assert regen.song.plan.kind == "transcribe"
 
-    def test_the_other_sources_ignore_allow_gap(self, tmp_path, song):
-        regen = self.repaired(tmp_path, song, "transcribe", allow_gap=True)
-
-        assert regen.song.plan.kind == "transcribe"
-
     def test_backs_up_only_that_song(self, tmp_path, song):
         other = make_video(tmp_path, "B---bbbbbbbbbbb")
         genius_bundle(tmp_path, other.stem)
@@ -1360,8 +1354,8 @@ LRC_RECORD = {
 
 
 class TestLrcTimingRepair:
-    """Repair with an LRCLIB match's own line times: the fit runs again here, and only a viable
-    one is queued."""
+    """Repair with an LRCLIB match's own line times: the fit runs again here, and only a fit is
+    queued, whatever the match's length."""
 
     @pytest.fixture
     def song(self, tmp_path):
@@ -1401,8 +1395,7 @@ class TestLrcTimingRepair:
 
         check = tools.check_lrc_timing(str(song), None)
 
-        assert (check.fit.status, check.gap_s, check.viable) == (FITS, 0, True)
-        assert check.overridable is False
+        assert (check.fit.status, check.gap_s, check.refusal) == (FITS, 0, None)
         assert check.clip_s == CLIP_S
         assert (check.record["id"], check.record["trackName"]) == (11, "Invented Song")
         assert check.regenerate_helps is True
@@ -1435,41 +1428,21 @@ class TestLrcTimingRepair:
 
         assert tools.check_lrc_timing(str(song), 13).record["id"] == 13
 
-    @pytest.mark.parametrize(
-        ("gap", "viable"),
-        [
-            (0, True),
-            (LRC_MAX_GAP_S, True),
-            (-LRC_MAX_GAP_S, True),
-            (LRC_MAX_GAP_S + 1, False),
-            (-LRC_MAX_GAP_S - 1, False),
-        ],
-    )
-    def test_the_match_may_be_a_little_longer_or_shorter_than_the_clip(
-        self, tmp_path, song, gap, viable
-    ):
-        self.write_match(song, {**LRC_RECORD, "duration": CLIP_S + gap})
-        tools, _ = make_tools(tmp_path, [str(song)])
+    @pytest.mark.parametrize("gap", [0, 14, -14, 35, -35, None])
+    def test_a_fit_may_time_the_song_whatever_the_matchs_length(self, tmp_path, song, gap):
+        self.write_match(song, {**LRC_RECORD, "duration": None if gap is None else CLIP_S + gap})
+        tools, processing = make_tools(tmp_path, [str(song)])
 
         check = tools.check_lrc_timing(str(song), None)
+        tools.repair(str(song), "lrclib")
 
-        assert check.fit.status == FITS  # the lines fit either way: only the length is judged
-        assert (check.gap_s, check.viable) == (gap, viable)
-        assert check.overridable is not viable
+        assert (check.fit.status, check.gap_s, check.refusal) == (FITS, gap, None)
+        plan = processing.enqueue_regen.call_args.args[0].song.plan
+        assert plan.seed == {"lyrics_origin": "lrclib_srt"}
+        assert plan.custom_text == check.fit.srt
 
-    def test_a_match_with_no_length_is_not_viable(self, tmp_path, song):
-        self.write_match(song, {**LRC_RECORD, "duration": None})
-        tools, _ = make_tools(tmp_path, [str(song)])
-
-        check = tools.check_lrc_timing(str(song), None)
-
-        assert (check.fit.status, check.gap_s, check.viable) == (FITS, None, False)
-        assert check.overridable is True
-
-    @pytest.mark.parametrize("gap", [0, LRC_MAX_GAP_S + 38])
-    def test_a_fit_that_is_refused_is_not_viable_or_overridable_whatever_the_length(
-        self, tmp_path, song, gap
-    ):
+    @pytest.mark.parametrize("gap", [0, 38])
+    def test_a_fit_that_is_refused_says_so_whatever_the_length(self, tmp_path, song, gap):
         self.write_match(
             song,
             {
@@ -1483,7 +1456,7 @@ class TestLrcTimingRepair:
         check = tools.check_lrc_timing(str(song), None)
 
         assert (check.fit.status, check.fit.reason, check.gap_s) == (REFUSED, TOO_FEW, gap)
-        assert (check.viable, check.overridable) == (False, False)
+        assert check.refusal == lrc_auto_pick.NO_FIT
 
     def test_a_match_with_no_timed_lines_is_refused_as_not_srt(self, tmp_path, song):
         self.write_match(song, {**LRC_RECORD, "syncedLyrics": "no stamps here\n"})
@@ -1499,17 +1472,16 @@ class TestLrcTimingRepair:
 
         check = tools.check_lrc_timing(str(video), None)
 
-        assert (check.fit.status, check.viable, check.overridable, check.regenerate_helps) == (
+        assert (check.fit.status, check.refusal, check.regenerate_helps) == (
             NO_REFERENCE,
-            False,
-            False,
+            lrc_auto_pick.NO_FIT,
             True,
         )
 
-    def test_lines_heard_far_from_their_time_are_flagged_and_do_not_stop_a_viable_fit(
+    def test_lines_heard_far_from_their_time_are_flagged_and_do_not_stop_a_fit(
         self, tmp_path, song
     ):
-        """Decision 4: the admin reads the flagged lines, then confirms."""
+        """The admin reads the flagged lines, then confirms: the bar's refusal is a warning here."""
         self.write_match(
             song,
             {**LRC_RECORD, "syncedLyrics": lrc_slice(offset=lambda k: 20.0 if k >= 8 else 0.0)},
@@ -1518,8 +1490,9 @@ class TestLrcTimingRepair:
 
         check = tools.check_lrc_timing(str(song), None)
 
-        assert check.viable is True
+        assert (check.fit.status, check.refusal) == (FITS, lrc_auto_pick.MISTIMED)
         assert check.fit.mistimed == (8, 9, 10, 11)
+        assert self.repaired(tmp_path, song).song.plan.custom_text == check.fit.srt
 
     @pytest.mark.parametrize("remove", ["missing", "skipped"])
     def test_a_song_with_no_usable_lrc_and_no_id_says_to_search(self, tmp_path, song, remove):
@@ -1575,7 +1548,7 @@ class TestLrcTimingRepair:
         with pytest.raises(RegenError, match="video songs only"):
             tools.check_lrc_timing(str(mp3), None)
 
-    def test_a_viable_match_queues_the_fitted_lines_as_the_songs_sheet(self, tmp_path, song):
+    def test_a_fit_queues_the_fitted_lines_as_the_songs_sheet(self, tmp_path, song):
         self.write_match(song, {**LRC_RECORD, "syncedLyrics": lrc_slice(offset=lambda k: 3.0)})
 
         regen = self.repaired(tmp_path, song)
@@ -1631,36 +1604,8 @@ class TestLrcTimingRepair:
         assert sheet.read_text(encoding="utf-8") == "the old words\n"
         return refused.value
 
-    @pytest.mark.parametrize("kwargs", [{}, {"allow_gap": False}], ids=["default", "false"])
-    def test_a_match_too_far_off_in_length_changes_nothing(self, tmp_path, song, kwargs):
-        self.write_match(song, {**LRC_RECORD, "duration": CLIP_S + 38})
-
-        check = self.refused(tmp_path, song, **kwargs).check
-
-        assert (check.fit.status, check.gap_s, check.viable) == (FITS, 38, False)
-
-    @pytest.mark.parametrize("gap", [38, None])
-    def test_a_fit_that_passes_is_queued_past_the_length_limit_when_the_gap_is_allowed(
-        self, tmp_path, song, gap
-    ):
-        self.write_match(song, {**LRC_RECORD, "duration": None if gap is None else CLIP_S + gap})
-        tools, processing = make_tools(tmp_path, [str(song)])
-        check = tools.check_lrc_timing(str(song), None)
-
-        tools.repair(str(song), "lrclib", allow_gap=True)
-
-        assert (check.viable, check.overridable) == (False, True)
-        regen = processing.enqueue_regen.call_args.args[0]
-        assert regen.song.plan.seed == {"lyrics_origin": "lrclib_srt"}
-        assert regen.song.plan.custom_text == check.fit.srt
-
-    def test_allowing_the_gap_changes_nothing_for_a_match_within_the_limit(self, tmp_path, song):
-        regen = self.repaired(tmp_path, song, allow_gap=True)
-
-        assert regen.song.plan.seed == {"lyrics_origin": "lrclib_srt"}
-
     @pytest.mark.parametrize("gap", [0, 38])
-    def test_a_fit_that_is_refused_stays_refused_when_the_gap_is_allowed(self, tmp_path, song, gap):
+    def test_a_fit_that_is_refused_changes_nothing_whatever_the_length(self, tmp_path, song, gap):
         self.write_match(
             song,
             {
@@ -1669,35 +1614,6 @@ class TestLrcTimingRepair:
                 "syncedLyrics": lrc_slice(lines=range(40, 52)),
             },
         )
-
-        check = self.refused(tmp_path, song, allow_gap=True).check
-
-        assert (check.fit.status, check.overridable) == (REFUSED, False)
-
-    def test_allowing_the_gap_passes_only_what_the_repairs_own_fit_allows(
-        self, tmp_path, song, monkeypatch
-    ):
-        """The first fit (the preview's) is overridable; the repair's own second fit is refused."""
-        self.write_match(song, {**LRC_RECORD, "duration": CLIP_S + 38})
-        real = fit_slice
-        calls = []
-
-        def second_fit_differs(srt_text, streams, length):
-            calls.append(1)
-            return real(srt_text if len(calls) == 1 else "", streams, length)
-
-        monkeypatch.setattr("pikaraoke.lib.library_tools.fit_slice", second_fit_differs)
-        tools, processing = make_tools(tmp_path, [str(song)])
-
-        assert tools.check_lrc_timing(str(song), None).overridable is True
-        with pytest.raises(LrcTimingRefused) as refused:
-            tools.repair(str(song), "lrclib", allow_gap=True)
-
-        assert (refused.value.check.fit.status, refused.value.check.overridable) == (NOT_SRT, False)
-        processing.enqueue_regen.assert_not_called()
-
-    def test_a_fit_that_is_refused_changes_nothing(self, tmp_path, song):
-        self.write_match(song, {**LRC_RECORD, "syncedLyrics": lrc_slice(lines=range(40, 52))})
 
         check = self.refused(tmp_path, song).check
 
@@ -1715,7 +1631,7 @@ class TestLrcTimingRepair:
         monkeypatch.setattr("pikaraoke.lib.library_tools.fit_slice", second_fit_differs)
         tools, processing = make_tools(tmp_path, [str(song)])
 
-        assert tools.check_lrc_timing(str(song), None).viable is True
+        assert tools.check_lrc_timing(str(song), None).fit.status == FITS
         with pytest.raises(LrcTimingRefused) as refused:
             tools.repair(str(song), "lrclib")
 
