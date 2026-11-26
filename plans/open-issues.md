@@ -701,6 +701,9 @@ Stage 4, after `queue_phone` lands, side by side:
 
 Independent of the phone order:
 
+- `repair_lrc_fit_list`: Repair's LRCLIB timing list scored by Check fit's fit, length limit
+  dropped, lyrics preview. Landed on `dev` 2026-11-26 (`6c82af7f`..`1b6fefe3`, as copies, suite
+  4575 passed); plan stays on the branch until retired.
 - `defer_timing` (`9e7f6da`): plan only, parked behind `lrclib_fit_pick` (Ken, 2026-11-10),
   which has now landed.
 - `chinese_karaoke` (`9900277`): probe scripts under `scripts/zh_probe/` only; research, not a
@@ -1301,10 +1304,6 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   are edited. Keeping them needs the page to show the bundle's kept groups and
   an edited sheet that keeps them as typed: a step of its own (plan, Design
   choice 3).
-- **Repair's LRCLIB search scores against the backing lines too.**
-  `library_tools.current_lines` returns the bundle's `lyrics.lines`, which now
-  hold the added lines with their parentheses, so "mapped N of M" counts them in
-  M and a record with no echo cues maps fewer of them.
 - **Song Info counts an added line like any other.** `library_status._cue_fields`
   counts it among the re-aligned or paced lines, and a paced one toward the 15%
   guessed-lines share (`POOR_GUESSED_SHARE`), so a song can read as poor from
@@ -1525,15 +1524,18 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   A1 and B); Quit Playing Games 0:52 and 2:32 and Reflection 3:11 are not. The
   flag itself is still unbuilt. Not ruled; ask the CLAUDE.md design questions
   before any plan.
-- **Repair's LRCLIB list in the bar's order.** The list marks its `best` by the old
-  text rule (`lrclib.select_candidate`, used in `LibraryTools.lrclib_candidates`), which
-  Ken says lands on compilation records. `lrc_auto_pick.evaluate` already gives the
-  order the download uses and each record's refusal, so the list could show the same
-  first pick. Also: Repair's own check still uses the length gap the bar dropped
-  (`LRC_MAX_GAP_S`), so a record the download picked can show there as needing an
-  override. Not in the build (Decision 33). Raised 2026-11-12. Record:
-  `plans/lrclib-fit-pick.md` on tag `archive/lrclib_fit_pick`, "How the open points were
-  settled".
+- **Repair's LRCLIB list in the bar's order (step 2 only).** Step 2's list still marks its
+  `best` by the old text rule (`lrclib.select_candidate`, used in
+  `LibraryTools.lrclib_candidates`), which Ken says lands on compilation records;
+  `lrc_auto_pick.evaluate` gives the order the download uses. Step 1's list, the length
+  gap and the backing-line count were fixed on `repair_lrc_fit_list` (landed on `dev`
+  2026-11-26). Raised 2026-11-12. Record: `plans/lrclib-fit-pick.md` on tag
+  `archive/lrclib_fit_pick`, "How the open points were settled".
+- **Repair's LRCLIB timing: the match on disk gets no verdict when the search doesn't list
+  it.** Belle's disk match is refused (`unclaimed`) and sits first with no label above
+  row 1's `best fit`; only the card the page loads for a `?source=lrclib` link says so.
+  Fitting it with the rest raises whether the disk record joins the pick order and can take
+  `best`. Not a regression. Raised 2026-11-26 (R4, `plans/repair-lrc-fit-list.md` on the branch).
 - **Prefer the record with fewer shifted lines in the pick order.** Raised by
   I'm A Slave 4 U at GATE Q of `plans/lrclib-shift-check.md`. Sized 2026-11-12 on the
   saved tables of both shift-check runs: it swaps 23 of 133 picks, and judged by the
