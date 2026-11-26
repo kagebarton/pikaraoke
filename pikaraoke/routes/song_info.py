@@ -772,7 +772,7 @@ def _card(
 
 
 def _card_line(text: str, tip: str | None, warn: bool = False) -> dict:
-    return {"text": text, "tip": tip, **({"warn": True} if warn else {})}
+    return {"text": text, "tip": tip, "warn": warn}
 
 
 def _timing_changes(fit: SliceFit) -> tuple[bool, bool]:

@@ -274,6 +274,18 @@ def _lrc_check(job: SongJob, record: dict, length: float, fit: SliceFit) -> LrcT
     )
 
 
+def _lrc_timing_key(synced: str) -> str:
+    """:func:`lrc_auto_pick.timing_key` without ID tags, so a record and the ``.lrc`` written
+    from it (:func:`lrclib.write_lrc`, header added) key alike."""
+    return lrc_auto_pick.timing_key(lrclib.without_id_tags(synced))
+
+
+def _lrc_identity(record: dict) -> tuple[object, str]:
+    """A record's id and timing: a search result is the song's ``.lrc`` on disk (``current``)
+    when both match, so a hand-edited file that keeps its id is not taken for the record."""
+    return record.get("id"), _lrc_timing_key(record["syncedLyrics"])
+
+
 class LrcTimingRefused(RegenError):
     """An LRCLIB match that can't time the song; ``check`` says why.
 
@@ -677,14 +689,15 @@ class LibraryTools:
         or the admin's own (:func:`custom_sheet_lines`). Each candidate says how many
         of them it maps to, how far its length is from the video's, whether the
         selection rule would pick it (``best``) and whether it is the match on
-        disk (``current``). The listed records are remembered for :meth:`repair`.
+        disk (``current``, by :func:`_lrc_identity`). The listed records are remembered
+        for :meth:`repair`.
 
         Raises :class:`~pikaraoke.lib.lrclib.LrclibUnavailable` when LRCLIB can't be reached.
         """
         video_s = media_duration(self._song_job(song_path))
         records = self._search_synced(query)
         best = lrclib.select_candidate(records, sheet, video_s)
-        current_id = self._lrc_on_disk_id(song_path)
+        on_disk = self._lrc_on_disk(song_path)
         candidates = []
         for record in records:
             cue_texts, _ = lrclib.parse_lrc_lines(record["syncedLyrics"])
@@ -695,7 +708,7 @@ class LibraryTools:
                     "mapped": len(lrclib.map_lines_to_cues(sheet, cue_texts)),
                     "sheet_lines": len(sheet),
                     "best": record is best,
-                    "current": current_id is not None and record.get("id") == current_id,
+                    "current": _lrc_identity(record) == on_disk,
                     "syncedLyrics": record["syncedLyrics"],
                 }
             )
@@ -708,8 +721,9 @@ class LibraryTools:
         records that pass the bar first, then the rest in LRCLIB's order, and ``best`` marks
         the first when it passes. Each carries its :class:`LrcTimingCheck` as ``check``, so a
         row says what Check fit would say. ``current`` marks a record that is the song's ``.lrc``
-        on disk, same id and same timing, so Check fit on either says the same. The listed
-        records are remembered for :meth:`repair`.
+        on disk, same id and same timing, so Check fit on either gives the same verdict (the
+        length line can differ by a second: the file keeps whole seconds). The listed records
+        are remembered for :meth:`repair`.
 
         Raises :class:`RegenError`, with a message for the admin, for a song that is not a
         video or a clip whose length can't be read, and
@@ -721,12 +735,7 @@ class LibraryTools:
         length = _clip_length(job)
         streams = heard_streams(job.bundle, self._asr_on_disk(job.song_path))
         entries = lrc_auto_pick.evaluate(self._search_synced(query), streams, length)
-        disk = lrclib.read_song_lrc(Path(song_path))
-        on_disk = (
-            (disk.meta.get("id"), lrc_auto_pick.timing_key(lrclib.without_id_tags(disk.text)))
-            if disk.state == "match" and disk.meta.get("id") is not None
-            else None
-        )
+        on_disk = self._lrc_on_disk(song_path)
         candidates = []
         for rank, entry in enumerate(entries):
             record = entry.record
@@ -736,8 +745,7 @@ class LibraryTools:
                     **check.record,
                     "duration_diff_s": check.gap_s,
                     "best": rank == 0 and entry.passes,
-                    "current": on_disk
-                    == (record.get("id"), lrc_auto_pick.timing_key(record["syncedLyrics"])),
+                    "current": _lrc_identity(record) == on_disk,
                     "syncedLyrics": record["syncedLyrics"],
                     "check": check,
                 }
@@ -755,10 +763,13 @@ class LibraryTools:
         return records
 
     @staticmethod
-    def _lrc_on_disk_id(song_path: str) -> int | None:
-        """The id of the LRCLIB match on the song's disk, None when it has none."""
+    def _lrc_on_disk(song_path: str) -> tuple[object, str] | None:
+        """The song's LRCLIB match on disk as :func:`_lrc_identity` gives it, None when it has
+        none or the file names no record."""
         lrc = lrclib.read_song_lrc(Path(song_path))
-        return lrc.meta.get("id") if lrc.state == "match" else None
+        if lrc.state != "match" or lrc.meta.get("id") is None:
+            return None
+        return lrc.meta["id"], _lrc_timing_key(lrc.text)
 
     def repair(
         self,

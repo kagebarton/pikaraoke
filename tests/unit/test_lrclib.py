@@ -320,6 +320,25 @@ class TestWriteReadLrc:
 
         assert lrclib.without_id_tags(lrclib.read_lrc(path)[0]) == synced
 
+    @pytest.mark.parametrize("brk", ["\n", "\r", "\r\n", " ", "\x85"])
+    def test_a_line_break_in_a_name_stays_inside_its_tag(self, tmp_path, brk):
+        synced = "[00:01.00]Hello\n"
+        record = {"id": 42, "trackName": f"Song{brk}Live", "syncedLyrics": synced}
+        path = tmp_path / "Song.lrc"
+        lrclib.write_lrc(path, record)
+
+        text, meta = lrclib.read_lrc(path)
+        assert meta["trackName"] == "Song Live"
+        assert lrclib.without_id_tags(text) == synced
+
+    def test_a_byte_order_mark_does_not_hide_the_first_tag(self, tmp_path):
+        path = tmp_path / "Song.lrc"
+        path.write_bytes("﻿[ti:Song]\n[lrclib_id:7]\n[00:01.00]Hello\n".encode("utf-8"))
+
+        text, meta = lrclib.read_lrc(path)
+        assert (meta["trackName"], meta["id"]) == ("Song", 7)
+        assert lrclib.without_id_tags(text) == "[00:01.00]Hello\n"
+
 
 class TestEnsureLrc:
     _RECORD = {

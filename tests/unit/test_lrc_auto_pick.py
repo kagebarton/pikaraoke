@@ -20,7 +20,13 @@ from pikaraoke.lib.lrc_auto_pick import (
     refusal,
     timing_key,
 )
-from pikaraoke.lib.srt_slice_fit import FITS, REFUSED, TRANSCRIBE, SliceFit
+from pikaraoke.lib.srt_slice_fit import (
+    FITS,
+    MIN_FLAGGED_RUN,
+    REFUSED,
+    TRANSCRIBE,
+    SliceFit,
+)
 
 CLEAN = SliceFit(FITS)
 
@@ -71,6 +77,11 @@ class TestRefusal:
     def test_more_than_the_allowed_mistimed_lines_is_refused(self):
         assert refusal(_fit(mistimed=MAX_MISTIMED)) is None
         assert refusal(_fit(mistimed=MAX_MISTIMED + 1)) == MISTIMED
+
+    def test_a_run_of_lines_the_card_flags_always_fails_the_bar(self):
+        # Repair's card says "Fits." only when the bar passes, and lists flagged runs of this
+        # length: raising the bar's limit to the run's length would show both on one card.
+        assert refusal(_fit(mistimed=MIN_FLAGGED_RUN)) == MISTIMED
 
     def test_a_longer_unclaimed_run_than_allowed_is_refused(self):
         assert refusal(_fit(unclaimed_run=MAX_UNCLAIMED_RUN)) is None

@@ -421,7 +421,8 @@ def read_lrc(path: Path) -> tuple[str, dict]:
     ``synced_text`` is the full file (its header tags are harmless to the cue
     parser); ``record_meta`` reconstructs provenance from the ID-tag header.
     """
-    text = path.read_text(encoding="utf-8")
+    # utf-8-sig: a hand-placed file saved with a byte-order mark keeps its first tag.
+    text = path.read_text(encoding="utf-8-sig")
     meta: dict = {}
     for line in text.splitlines():
         m = _ID_TAG_RE.match(line.strip())
@@ -453,7 +454,8 @@ def without_id_tags(text: str) -> str:
 
 def _format_tag(tag: str, value: object) -> str:
     """An LRC ID tag with the value sanitised so it can't break the brackets."""
-    safe = str(value).replace("\n", " ").replace("]", ")")
+    # Every line break the reader splits on, not just "\n", or the tag reads back as two lines.
+    safe = " ".join(str(value).splitlines()).replace("]", ")")
     return f"[{tag}:{safe}]"
 
 
