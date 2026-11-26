@@ -1773,6 +1773,14 @@ class TestLrcTimingCandidates:
 
         assert {c["id"]: c["current"] for c in found["candidates"]} == {11: True, 12: False}
 
+    def test_the_lrc_on_disk_with_other_times_is_not_current(self, tmp_path, song, monkeypatch):
+        """A hand-edited .lrc keeps its record's id, but its Check fit fits other times."""
+        TestLrcTimingRepair.write_match(song, {**LRC_RECORD, "syncedLyrics": self.LATE})
+
+        found, _ = self.search(tmp_path, song, [self.record(11)], monkeypatch)
+
+        assert [c["current"] for c in found["candidates"]] == [False]
+
     @pytest.mark.parametrize("on_disk", ["marker", "not-utf8"])
     def test_no_candidate_is_current_without_a_readable_match_on_disk(
         self, tmp_path, song, monkeypatch, on_disk

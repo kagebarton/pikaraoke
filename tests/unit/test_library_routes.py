@@ -36,6 +36,7 @@ from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.srt_cues import cue_spans_from_srt, cues_to_srt
 from pikaraoke.lib.srt_slice_fit import (
     DISAGREE,
+    MAX_CUES,
     NO_REFERENCE,
     NOT_SRT,
     REFUSED,
@@ -2068,8 +2069,8 @@ class TestRepairPage:
             "artistName": "Invented Artist",
             "albumName": "Invented Album",
             "fit": "3:20 · within a few s",
-            "fit_near": None,  # the length colours nothing here
-            "syncedLyrics": lrclib.read_song_lrc(Path(song)).text,  # for the preview
+            # for the preview: the timed lines as the record's own, the ID-tag header left out
+            "syncedLyrics": LrcTimingEnv.RECORD["syncedLyrics"],
         }
         assert row["syncedLyrics"].count("\n") >= SLICE_LINES  # the .lrc's lines, not a stub
 
@@ -2157,7 +2158,7 @@ class TestRepairPage:
         # A song that is merely current on LRCLIB timing is not checked until asked.
         assert code.count("checkLrc();") == 1
 
-    def test_a_search_scores_against_the_songs_lyrics_and_picks_the_best_fit(self, env):
+    def test_a_search_fits_each_match_to_the_clip_and_picks_the_best_fit(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
         search = code[code.index("function searchLrc") : code.index("$('#lt-search-go')")]
 
@@ -2193,10 +2194,16 @@ class TestRepairPage:
         assert "fill(T.matches, { n: candidate.mapped, m: candidate.sheet_lines })" in code
         assert "state.lrcSearchOpen && row.verdict ? verdictScore(row.verdict) : null" in code
         assert "{ good: 'rp-good', bad: 'rp-bad', info: 'rp-muted' }[verdict.tone]" in code
-        # The match on disk takes its verdict and best tag from its search row, nothing of the text count.
+        # The match on disk takes its verdict and best tag from its search row, nothing of the text count,
+        # and only from a row the server calls the same record with the same timing.
         assert "$.extend(rows[0], { verdict: candidate.verdict, best: candidate.best });" in code
         lrc_rows = code[code.index("function lrcRows") : code.index("function renderLrcMatches")]
-        assert "mapped" not in lrc_rows and "sheet_lines" not in lrc_rows
+        assert "if (candidate.current && rows.length) {" in lrc_rows
+        assert (
+            "mapped" not in lrc_rows
+            and "sheet_lines" not in lrc_rows
+            and "LRC_MATCH.id" not in lrc_rows
+        )
 
     def test_the_preview_toggle_sits_under_the_match_list_and_starts_off(self, env):
         html = text(self.page(env, LrcTimingEnv.song(env)))
@@ -2210,6 +2217,8 @@ class TestRepairPage:
         order = [section.index(f'id="{name}"') for name in ("lt-matches", "lt-preview-toggle")]
         order += [section.index('id="lt-preview"'), section.index('id="lt-search-toggle"')]
         assert order == sorted(order)
+        # Each link on its own line, or the two read as one.
+        assert "#lt-preview-toggle, #lt-search-toggle { display: flex; }" in html
 
     def test_one_function_serves_step_2s_preview_and_the_timing_lists(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
@@ -2883,15 +2892,6 @@ class TestLrcCard:
         else:
             assert self.texts(card)[1].startswith("The match is ")
 
-    def test_flagged_runs_the_bar_passes_still_say_to_check_those_lines(self):
-        """The bar's one-mistimed-line limit is under a run's two lines, so a real fit with a
-        run is always refused; a check made by hand shows the verdict's own rule."""
-        card = self.check(mistimed=(2, 3), refusal=None)
-
-        assert (card["tone"], card["head"]) == ("bad", "Fits, but check these lines first.")
-        assert len(card["runs"]) == 1
-        assert all("warn" not in line for line in card["lines"])
-
     @pytest.mark.parametrize(
         ("fit", "refusal", "warning"),
         [
@@ -3238,7 +3238,7 @@ class TestLrcSearchRoute:
         assert candidate["id"] == 11 and candidate["current"] is True  # the match on disk
         assert candidate["best"] is True
         assert candidate["fit"] == "3:20 · within a few s"
-        assert candidate["fit_near"] is None  # the length colours nothing here
+        assert "fit_near" not in candidate  # the length colours nothing here
         assert candidate["verdict"] == {"tone": "good", "text": "fits · matches 12 of 12 lines"}
         assert {"check", "mapped", "sheet_lines"}.isdisjoint(candidate)
 
@@ -3248,7 +3248,8 @@ class TestLrcSearchRoute:
 
         [candidate] = self.search(env, song).get_json()["candidates"]
 
-        assert (candidate["fit"], candidate["fit_near"]) == ("3:58 · 38 s longer", None)
+        assert candidate["fit"] == "3:58 · 38 s longer"
+        assert "fit_near" not in candidate
         assert candidate["verdict"]["tone"] == "good"
 
     def test_rows_are_in_the_bars_order_with_each_verdict_worded_for_its_fit(
@@ -3266,6 +3267,15 @@ class TestLrcSearchRoute:
             (1, False, {"tone": "bad", "text": "fits, check first · matches 12 of 12 lines"}),
             (2, False, {"tone": "bad", "text": "doesn't fit · matches 0 of 12 lines"}),
         ]
+
+    def test_a_match_past_the_cue_limit_gives_no_count_its_card_lacks(self, env, monkeypatch):
+        song = LrcTimingEnv.song(env)
+        too_long = "".join(f"[{k // 60:02d}:{k % 60:02d}.00] la\n" for k in range(MAX_CUES + 1))
+        self.listing(monkeypatch, self.record(1, too_long))
+
+        [row] = self.search(env, song).get_json()["candidates"]
+
+        assert row["verdict"] == {"tone": "bad", "text": "doesn't fit"}
 
     def test_with_no_passing_record_none_is_best(self, env, monkeypatch):
         song = LrcTimingEnv.song(env)

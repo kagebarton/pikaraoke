@@ -37,7 +37,12 @@ from pikaraoke.lib.library_tools import (
     is_whole_number,
     pick_text,
 )
-from pikaraoke.lib.lrclib import LrclibUnavailable, read_song_lrc
+from pikaraoke.lib.lrclib import (
+    LrclibUnavailable,
+    read_song_lrc,
+    record_meta,
+    without_id_tags,
+)
 from pikaraoke.lib.source_names import origin_names, qualified_name
 from pikaraoke.lib.srt_slice_fit import (
     DISAGREE,
@@ -47,6 +52,7 @@ from pikaraoke.lib.srt_slice_fit import (
     MIN_UNHEARD_RUN,
     NO_REFERENCE,
     NOT_SRT,
+    REFUSED,
     TOO_LONG,
     SliceFit,
     flagged_runs,
@@ -558,17 +564,20 @@ def _current_label(status: SongStatus) -> str:
 
 
 def _lrc_match(status: SongStatus, song: str) -> dict | None:
-    """The song's LRCLIB match on disk as one row of the page's match list, with its text for
-    the preview, or None."""
-    meta = status.lrc_match
-    if meta is None:
+    """The song's LRCLIB match on disk as one row of the page's match list, or None.
+
+    One read of the file gives the row and its preview, so the two agree; the preview is the
+    timed lines, as the same record's search row shows them. The length colours nothing.
+    """
+    lrc = read_song_lrc(Path(song))
+    if lrc.state != "match":
         return None
-    row = {**meta, "duration_diff_s": length_gap_s(meta.get("duration"), status.media_duration_s)}
-    row["fit"] = _candidate_fit(row)[0]  # no ``fit_near`` (so None): the length colours nothing
-    row["syncedLyrics"] = read_song_lrc(Path(song)).text
+    meta = record_meta(lrc.meta)
+    gap = length_gap_s(meta.get("duration"), status.media_duration_s)
     return {
-        key: row.get(key)
-        for key in ("id", "trackName", "artistName", "albumName", "fit", "fit_near", "syncedLyrics")
+        **{key: meta.get(key) for key in ("id", "trackName", "artistName", "albumName")},
+        "fit": _candidate_fit({**meta, "duration_diff_s": gap})[0],
+        "syncedLyrics": without_id_tags(lrc.text),
     }
 
 
@@ -735,28 +744,35 @@ def _hms(seconds: float) -> str:
     return f"{whole // 3600}:{whole % 3600 // 60:02d}:{whole % 60:02d}"
 
 
+# A card's detail line: ``(text, tip)``, or ``(text, tip, True)`` for the line to read first.
+CardLine = tuple[str, str | None] | tuple[str, str | None, bool]
+
+
 def _card(
     fit: SliceFit,
     tone: str,
     head: str,
-    lines: Sequence[tuple[str, str | None]] = (),
+    lines: Sequence[CardLine] = (),
     tip: str | None = None,
     song_info_link: bool = False,
 ) -> dict:
     """One Check fit card: the headline (with its tip behind an (i)), then the detail lines.
 
-    ``tone``: ``good`` (fits), ``bad`` (doesn't fit) or ``info`` (can't be checked yet). A
-    line is ``(text, tip)``. Read in the order head, lines, tip, it is the sentence the
-    Repair refuses with (:func:`_card_text`).
+    ``tone``: ``good`` (fits), ``bad`` (doesn't fit) or ``info`` (can't be checked yet). Read
+    in the order head, lines, tip, it is the sentence the Repair refuses with (:func:`_card_text`).
     """
     return {
         "status": fit.status,
         "tone": tone,
         "head": head,
         "tip": tip,
-        "lines": [{"text": text, "tip": line_tip} for text, line_tip in lines],
+        "lines": [_card_line(*line) for line in lines],
         "song_info_link": song_info_link,
     }
+
+
+def _card_line(text: str, tip: str | None, warn: bool = False) -> dict:
+    return {"text": text, "tip": tip, **({"warn": True} if warn else {})}
 
 
 def _timing_changes(fit: SliceFit) -> tuple[bool, bool]:
@@ -765,23 +781,23 @@ def _timing_changes(fit: SliceFit) -> tuple[bool, bool]:
 
 
 def _fit_lines(
-    fit: SliceFit, earlier: str, later: str, speed_tip: str, show_speed: bool = False
-) -> list[tuple[str, str | None]]:
+    fit: SliceFit, earlier: str, later: str, speed_tip: str, speed_warn: bool = False
+) -> list[CardLine]:
     """The lines under a fit's headline: how many matched, how the times move, the speed, the
     lines dropped. ``earlier`` and ``later`` are the move sentence, ``speed_tip`` the speed's note.
-    ``show_speed`` keeps the speed line when the change is too small to show on its own.
+    ``speed_warn`` makes the speed line the warning, kept even when the change rounds to nothing.
     """
-    lines = [(_("matches %(n)s of %(m)s lines") % {"n": fit.matched, "m": fit.total}, None)]
+    lines: list[CardLine] = [
+        (_("matches %(n)s of %(m)s lines") % {"n": fit.matched, "m": fit.total}, None)
+    ]
     moves, speeds = _timing_changes(fit)
-    speeds = speeds or show_speed
     if moves:
         move = later if fit.move_s > 0 else earlier
         lines.append((move % {"time": _hms(fit.move_s)}, None))
-    if speeds:
+    if speeds or speed_warn:
         speed_change = abs(fit.speed - 1) * 100
-        lines.append(
-            (_("Speed adjusted by %(pct)s%%.") % {"pct": f"{speed_change:.1f}"}, speed_tip)
-        )
+        speed = _("Speed adjusted by %(pct)s%%.") % {"pct": f"{speed_change:.1f}"}
+        lines.append((speed, speed_tip, speed_warn))
     if fit.dropped:
         lines.append(
             (
@@ -862,7 +878,7 @@ def _refusal_card(
     no_lines: str,
     disagree_tip: str,
     too_few_tip: str,
-    extra: Sequence[tuple[str, str | None]] = (),
+    extra: Sequence[CardLine] = (),
 ) -> dict:
     """The card for a check with no heard words to go on, or whose lines don't fit.
 
@@ -870,13 +886,13 @@ def _refusal_card(
     name what was checked. ``extra`` lines follow a doesn't-fit card's count.
     """
     fit = check.fit
+    head = _refusal_head(check)
     if fit.status == NO_REFERENCE and not check.regenerate_helps:
-        return _card(fit, "info", _("Can't check."), [(no_words_ever, None)])
+        return _card(fit, *head, [(no_words_ever, None)])
     if fit.status == NO_REFERENCE:
         return _card(
             fit,
-            "info",
-            _("Can't check yet."),
+            *head,
             [
                 (no_words_yet, None),
                 (_("Regenerate the song from Song info first, then come back and check."), None),
@@ -895,7 +911,14 @@ def _refusal_card(
     else:
         lines = [(_("Only %(n)d of %(m)d lines were found in the clip.") % counts, None)]
         tip = too_few_tip
-    return _card(fit, "bad", _("Doesn't fit."), [*lines, *extra], tip=tip)
+    return _card(fit, *head, [*lines, *extra], tip=tip)
+
+
+def _refusal_head(check: MovieSliceCheck | LrcTimingCheck) -> tuple[str, str]:
+    """The tone and head of :func:`_refusal_card`."""
+    if check.fit.status != NO_REFERENCE:
+        return "bad", _("Doesn't fit.")
+    return "info", _("Can't check yet.") if check.regenerate_helps else _("Can't check.")
 
 
 def _card_text(card: dict) -> str:
@@ -949,18 +972,16 @@ def _bar_warning(check: LrcTimingCheck) -> str | None:
 def _lrc_verdict(check: LrcTimingCheck) -> tuple[str, str]:
     """The tone and head of a match's card, the one answer the card and the search list's rows give.
 
-    A fit that fits may always time the song; the download's bar (``check.refusal``) and the
-    flagged lines only say what to read first.
+    A fit that fits may always time the song; the download's bar (``check.refusal``) only says
+    what to read first. A fit with flagged lines always fails the bar, on its mistimed lines.
     """
-    fit = check.fit
-    if fit.status != FITS:
-        card = _lrc_refusal_card(check, None)
-        return card["tone"], card["head"]
-    if check.refusal is not None:
-        return "bad", _("Fits, but read the warning first.")
-    if flagged_runs(fit.mistimed, fit.unheard, MIN_FLAGGED_RUN):
-        return "bad", _("Fits, but check these lines first.")
-    return "good", _("Fits. This match can time this song.")
+    if check.fit.status == FITS:
+        if check.refusal is not None:
+            return "bad", _("Fits, but read the warning first.")
+        return "good", _("Fits. This match can time this song.")
+    if check.fit.status == TOO_LONG:
+        return "bad", _("This match has more than %(n)s lines.") % {"n": f"{MAX_CUES:,}"}
+    return _refusal_head(check)
 
 
 def _lrc_row_verdict(check: LrcTimingCheck) -> dict:
@@ -975,7 +996,7 @@ def _lrc_row_verdict(check: LrcTimingCheck) -> dict:
     else:
         label = _("doesn't fit")
     parts = [label]
-    if check.fit.total:
+    if check.fit.status in (FITS, REFUSED) and check.fit.total:  # the statuses whose card counts
         parts.append(
             _("matches %(n)s of %(m)s lines") % {"n": check.fit.matched, "m": check.fit.total}
         )
@@ -1001,20 +1022,16 @@ def _lrc_fit_card(check: LrcTimingCheck, length: str | None) -> dict:
         earlier=_("Line times move %(time)s earlier."),
         later=_("Line times move %(time)s later."),
         speed_tip=speed_tip,
-        show_speed=check.refusal == lrc_auto_pick.SPEED,
+        speed_warn=check.refusal == lrc_auto_pick.SPEED,
     )
     if length is not None:
         lines.insert(1, (length, None))
     warning = _bar_warning(check)
     if warning is not None:
-        lines.append((warning, None))
+        lines.append((warning, None, True))
     elif not (runs or unheard or fit.mistimed):
         lines.append((_("No line was heard far from its time."), None))
     card = _card(fit, *_lrc_verdict(check), lines)
-    if warning is not None:
-        card["lines"][-1]["warn"] = True
-    elif check.refusal == lrc_auto_pick.SPEED:
-        next(line for line in card["lines"] if line["tip"] == speed_tip)["warn"] = True
     card.update(runs=runs, unheard=unheard)
     return card
 
@@ -1023,11 +1040,9 @@ def _lrc_refusal_card(check: LrcTimingCheck, length: str | None) -> dict:
     """The card for a match that can't be checked or whose lines don't fit."""
     fit = check.fit
     if fit.status == NOT_SRT:
-        return _card(fit, "bad", _("Doesn't fit."), [(_("This match has no timed lines."), None)])
+        return _card(fit, *_lrc_verdict(check), [(_("This match has no timed lines."), None)])
     if fit.status == TOO_LONG:
-        return _card(
-            fit, "bad", _("This match has more than %(n)s lines.") % {"n": f"{MAX_CUES:,}"}
-        )
+        return _card(fit, *_lrc_verdict(check))
     return _refusal_card(
         check,
         no_words_ever=_(
@@ -1144,7 +1159,6 @@ def lrc_search():
     for candidate in found["candidates"]:
         candidate["verdict"] = _lrc_row_verdict(candidate.pop("check"))
         candidate["fit"] = _candidate_fit(candidate)[0]
-        candidate["fit_near"] = None  # as the disk row's: the length colours nothing
     found["video_length"] = _("video is %(length)s") % {"length": _mmss(found["video_duration_s"])}
     return jsonify(found)
 

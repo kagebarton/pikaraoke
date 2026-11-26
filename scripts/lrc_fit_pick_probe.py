@@ -641,7 +641,7 @@ def probe_song(status: SongStatus, run: Run) -> SongResult:
     result.has_asr = bool(asr_words)
     if asr_words:
         add_asr_fits(song_recs(result), asr_words, result.length)
-    # ``evaluate`` puts the passing records first in pick order, so this is ``lrc_auto_pick.pick``.
+    # ``evaluate`` puts the passing records first in pick order, so this is the download's pick.
     result.pick = next((rec for rec in result.recs if rec.passes), None)
     caption_lines: tuple = ()
     if group == CAPTIONED:
