@@ -1419,7 +1419,7 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   was line 78. Why these blocks were re-paced instead of placed from the singing is not shown;
   same family as "A re-paced line can start before the previous line's end". Not ruled beyond
   shipping. Record: `plans/lrclib-fit-pick.md` on tag `archive/lrclib_fit_pick`, Results rows 21-24.
-- **A line the record stamps late stays late (Who You Are, 1:49).** Ken (2026-11-18): "1:48
+- **A line the record stamps late stays late (Who You Are 1:49, Here We Go 0:03).** Ken (2026-11-18): "1:48
   late line, otherwise good". Line 21 ("'Cause everything inside me screams") is shown at
   109.6 s, the record's own stamp (01:49.54); the transcriber hears its first word at 106.1 s
   and its last at 109.7 s. The pick passes: the fit calls a line mistimed only past 5 s, and
@@ -1427,6 +1427,13 @@ listening sheets are in its `plans/backing-vocal-lines/probes/`).
   heard words (`heard_aimed_line_ids` holds 21) and did not keep the move
   (`heard_aimed_kept_line_ids` is empty); why is not read. One of the song's two re-paced
   lines (21 and 38). Not ruled. Record: Results row 24.
+  Second case, NSYNC - Here We Go (`zqVejtQ2qCk`, record 19116608), moved onto the pick by
+  `--lrclib-auto` on 2026-11-26. Ken: "opening line is late, otherwise good". The record stamps
+  the opening line at 3.2 s (clip time, after the fit's shift), after the transcriber hears its
+  three words (1.6-2.9 s), and the karaoke shows it later still, at 5.4 s, on top of the second
+  line, so both are lit at once. No rescue step touched it (it is in none of the bundle's repace
+  id lists). Record: `plans/regen-lrclib-auto.md` on branch `regen_lrclib_auto`, Results rows
+  7 and 9.
 - **Echo lines beside the lead overlap it on screen (Rolling in the Deep).** Ken
   (2026-11-18): the echoes overlap the main lines and are "more or less correct"; he asks
   whether the aligner handles overlapping lines badly. Its bundle: 45 backing groups, 32 kept,
