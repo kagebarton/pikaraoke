@@ -174,31 +174,6 @@ def test_bare_search_renders(mock_get, _site, client):
     assert resp.status_code == 200
 
 
-class _FormAncestors(HTMLParser):
-    """Collects the class of every element open around base.html's guest form."""
-
-    _VOID = {"meta", "link", "input", "br", "hr", "img"}
-
-    def __init__(self, html: str):
-        super().__init__()
-        self._open: list[tuple[str, str]] = []
-        self.ancestors: list[str] | None = None
-        self.feed(html)
-
-    def handle_starttag(self, tag, attrs):
-        if tag in self._VOID:
-            return
-        attributes = dict(attrs)
-        if attributes.get("id") == "singer-modal":
-            self.ancestors = [classes for _, classes in self._open]
-        self._open.append((tag, attributes.get("class") or ""))
-
-    def handle_endtag(self, tag):
-        names = [name for name, _ in self._open]
-        if tag in names:
-            del self._open[len(names) - 1 - names[::-1].index(tag) :]
-
-
 @pytest.mark.parametrize("query", ["", "?search_string=karaoke"], ids=["bare", "with-results"])
 @patch("pikaraoke.routes.search.get_search_results", return_value=_RESULTS)
 @patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
@@ -211,10 +186,12 @@ def test_the_guest_form_is_not_inside_the_page_container(mock_get, _site, _resul
     """
     mock_get.return_value = _mock_karaoke()
 
-    page = _FormAncestors(client.get(f"/search{query}").get_data(as_text=True))
+    classes = _ancestor_classes(
+        client.get(f"/search{query}").get_data(as_text=True), "singer-modal"
+    )
 
-    assert page.ancestors is not None
-    assert not any("container" in classes.split() for classes in page.ancestors)
+    assert classes is not None
+    assert "container" not in classes
 
 
 # ---------------------------------------------------------------------------
@@ -419,6 +396,28 @@ class _Fragment(HTMLParser):
         self, tag: str | None = None, cls: str | None = None, id: str | None = None
     ) -> list[_Node]:
         return self.root.find_all(tag, cls, id)
+
+
+def _ancestors(body: str, element_id: str) -> list[_Node] | None:
+    """The elements the element with this id sits inside, outermost first; None if it is absent."""
+    found = _Fragment(body).find_all(id=element_id)
+    if not found:
+        return None
+    chain, node = [], found[0].parent
+    while node.parent is not None:  # stop below the fragment's root
+        chain.append(node)
+        node = node.parent
+    return chain[::-1]
+
+
+def _ancestor_ids(body: str, element_id: str) -> list[str] | None:
+    chain = _ancestors(body, element_id)
+    return None if chain is None else [n.attrs["id"] for n in chain if n.attrs.get("id")]
+
+
+def _ancestor_classes(body: str, element_id: str) -> list[str] | None:
+    chain = _ancestors(body, element_id)
+    return None if chain is None else [name for n in chain for name in n.classes]
 
 
 def _badges(card: str) -> list[str]:
@@ -788,8 +787,11 @@ def test_an_official_card_has_its_badge_in_the_frame_and_no_tag_in_the_channel_l
     assert _badges(audio) == ["Official audio"]
     assert _badges(plain) == []
     for card in (video, audio, plain):
-        assert "tag" not in card.split("card-badges")[-1]
-    assert [n.text for n in _Fragment(video).find_all(cls="sr-sub")] == ["Rick Astley"]
+        [meta] = _Fragment(card).find_all(cls="search_result_items_meta")
+        assert not meta.find_all(cls="tag")
+    [channel] = _Fragment(video).find_all(cls="sr-sub")
+    assert channel.text == "Rick Astley"
+    assert not [c for c in channel.children if not isinstance(c, str)]  # no element beside the name
 
     alone = _page_cards(client, mock_get, page, results)
     assert _badges(_card_by_id(alone, "videoaaaaaa")) == ["Official video"]
@@ -855,44 +857,6 @@ def test_a_cards_title_and_channel_use_the_shared_row_text_classes(mock_get, cli
     unnamed = _Fragment(_card_by_id(cards, "bbbbbbbbbbb"))
     assert [n.text for n in unnamed.find_all(cls="sr-title")] == ["No Channel"]
     assert unnamed.find_all(cls="sr-sub") == []
-
-
-class _Ancestors(HTMLParser):
-    """The ids and the classes of the elements an element with the given id sits inside."""
-
-    VOID = {"img", "input", "br", "hr", "meta", "link"}
-
-    def __init__(self, target_id: str):
-        super().__init__()
-        self.target_id = target_id
-        self.stack: list[tuple[str | None, str]] = []
-        self.ancestors: list[str] | None = None
-        self.ancestor_classes: list[str] | None = None
-
-    def handle_starttag(self, tag, attrs):
-        attributes = dict(attrs)
-        element_id = attributes.get("id")
-        if element_id == self.target_id:
-            self.ancestors = [i for i, _ in self.stack if i]
-            self.ancestor_classes = [name for _, classes in self.stack for name in classes.split()]
-        if tag not in self.VOID:
-            self.stack.append((element_id, attributes.get("class") or ""))
-
-    def handle_endtag(self, tag):
-        if tag not in self.VOID and self.stack:
-            self.stack.pop()
-
-
-def _ancestor_ids(body: str, element_id: str) -> list[str] | None:
-    parser = _Ancestors(element_id)
-    parser.feed(body)
-    return parser.ancestors
-
-
-def _ancestor_classes(body: str, element_id: str) -> list[str] | None:
-    parser = _Ancestors(element_id)
-    parser.feed(body)
-    return parser.ancestor_classes
 
 
 @patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")
