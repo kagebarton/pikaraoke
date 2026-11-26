@@ -488,11 +488,12 @@
 
     // The .lrc on disk first (key 'disk'), then the search's other results (keyed by id) in the server's
     // order. The disk row takes the verdict of a result that is the same record with the same timing
-    // (``current``), so its Check fit says the same; one whose timing differs stays a row of its own.
+    // (``current``), so its Check fit gives the same verdict; one whose timing differs stays a row of its
+    // own. The id check too: ``current`` is the disk at search time, the disk row the page as loaded.
     function lrcRows() {
       var rows = LRC_MATCH ? [$.extend({ key: 'disk', current: true }, LRC_MATCH)] : [];
       $.each(state.lrcCandidates, function (i, candidate) {
-        if (candidate.current && rows.length) {
+        if (candidate.current && rows.length && candidate.id === LRC_MATCH.id) {
           $.extend(rows[0], { verdict: candidate.verdict, best: candidate.best });
         } else {
           rows.push($.extend({ key: candidate.id }, candidate));

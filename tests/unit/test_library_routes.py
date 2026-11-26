@@ -2195,15 +2195,14 @@ class TestRepairPage:
         assert "state.lrcSearchOpen && row.verdict ? verdictScore(row.verdict) : null" in code
         assert "{ good: 'rp-good', bad: 'rp-bad', info: 'rp-muted' }[verdict.tone]" in code
         # The match on disk takes its verdict and best tag from its search row, nothing of the text count,
-        # and only from a row the server calls the same record with the same timing.
+        # and only from a row the server calls the same record with the same timing, whose id is the
+        # disk row's as the page loaded it (the disk may have changed since).
         assert "$.extend(rows[0], { verdict: candidate.verdict, best: candidate.best });" in code
         lrc_rows = code[code.index("function lrcRows") : code.index("function renderLrcMatches")]
-        assert "if (candidate.current && rows.length) {" in lrc_rows
         assert (
-            "mapped" not in lrc_rows
-            and "sheet_lines" not in lrc_rows
-            and "LRC_MATCH.id" not in lrc_rows
+            "if (candidate.current && rows.length && candidate.id === LRC_MATCH.id) {" in lrc_rows
         )
+        assert "mapped" not in lrc_rows and "sheet_lines" not in lrc_rows
 
     def test_the_preview_toggle_sits_under_the_match_list_and_starts_off(self, env):
         html = text(self.page(env, LrcTimingEnv.song(env)))
@@ -2881,7 +2880,7 @@ class TestLrcCard:
         card = self.check(gap=gap)
 
         assert (card["tone"], card["head"]) == ("good", "Fits. This match can time this song.")
-        assert all("warn" not in line for line in card["lines"])
+        assert not any(line["warn"] for line in card["lines"])
         assert all(line["tip"] is None for line in card["lines"])
         assert "viable" not in card and "overridable" not in card and "override_tip" not in card
         if gap is None:
@@ -2922,9 +2921,9 @@ class TestLrcCard:
             "bad",
             "Fits, but read the warning first.",
         )
-        assert [line["text"] for line in card["lines"] if line.get("warn")] == [warning]
-        assert card["lines"][0].get("warn") is None  # the count is not a warning
-        assert card["lines"][1].get("warn") is None  # nor is the length
+        assert [line["text"] for line in card["lines"] if line["warn"]] == [warning]
+        assert card["lines"][0]["warn"] is False  # the count is not a warning
+        assert card["lines"][1]["warn"] is False  # nor is the length
 
     def test_the_mistimed_warning_counts_the_lines(self):
         card = self.check(mistimed=(0, 2, 3))
@@ -2936,7 +2935,7 @@ class TestLrcCard:
         card = self.check(REFUSED, reason=TOO_FEW, matched=3, total=53)
 
         assert (card["tone"], card["head"]) == ("bad", "Doesn't fit.")
-        assert all("warn" not in line for line in card["lines"])
+        assert not any(line["warn"] for line in card["lines"])
 
     def test_too_few_lines_say_how_few_and_what_to_check(self):
         card = self.check(REFUSED, reason=TOO_FEW, matched=3, total=53, gap=5)
@@ -3127,6 +3126,7 @@ class TestLrcFitRoute:
         assert body["lines"][1] == {
             "text": "The match is 3:58; this video is 3:20 (38 s longer).",
             "tip": None,
+            "warn": False,
         }
         assert not {"viable", "overridable", "override_tip"} & body.keys()
 
@@ -3169,7 +3169,7 @@ class TestLrcFitRoute:
         body = self.check(env, song).get_json()
 
         assert (body["head"], body["tone"]) == ("Fits, but read the warning first.", "bad")
-        assert [line["text"] for line in body["lines"] if line.get("warn")] == [
+        assert [line["text"] for line in body["lines"] if line["warn"]] == [
             "2 lines are heard far from their time."
         ]
         assert [r["title"] for r in body["runs"]] == ["1:15–1:20 · 2 lines"]
@@ -3580,11 +3580,11 @@ class TestLrclibSearchRoute:
         assert self.searches == []
 
     def test_searches_for_the_typed_terms_and_marks_best_and_current(self, env, song):
-        lrclib.write_lrc(lrclib.lrc_path(Path(song)), lrclib_record(5, "Line one here"))
         self.records = [
             lrclib_record(5, "Line one here", "Line two here", duration=354.0),
             lrclib_record(6, "Line one here", "Line two here", "Line three here", "Line four here"),
         ]
+        lrclib.write_lrc(lrclib.lrc_path(Path(song)), self.records[0])
 
         body = self.search(env, song, q=" defying gravity ").get_json()
 
@@ -3713,11 +3713,11 @@ class TestLrclibSearchCustomRoute:
         assert self.searches == ["x" * 200]
 
     def test_the_candidates_are_scored_against_the_posted_sheet(self, env, song):
-        lrclib.write_lrc(lrclib.lrc_path(Path(song)), lrclib_record(5, "Line one here"))
         self.records = [
             lrclib_record(5, "Line one here", "Words from nowhere", duration=354.0),
             lrclib_record(6, "Line one here", "Line two here", "Line three here", "Line four here"),
         ]
+        lrclib.write_lrc(lrclib.lrc_path(Path(song)), self.records[0])
 
         body = self.search(env, song, q=" defying gravity ").get_json()
 

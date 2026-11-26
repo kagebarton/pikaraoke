@@ -1781,6 +1781,18 @@ class TestLrcTimingCandidates:
 
         assert [c["current"] for c in found["candidates"]] == [False]
 
+    @pytest.mark.parametrize("extra", ["[offset:+200]", "[by:uploader]", "[ti:Song]", "[00:5.20]"])
+    def test_a_record_with_tag_shaped_lines_is_current_once_written(
+        self, tmp_path, song, monkeypatch, extra
+    ):
+        """Lines the disk side reads as ID tags are dropped from the record's side too."""
+        record = self.record(11, f"{extra}\n{lrc_slice()}")
+        TestLrcTimingRepair.write_match(song, record)
+
+        found, _ = self.search(tmp_path, song, [record], monkeypatch)
+
+        assert [c["current"] for c in found["candidates"]] == [True]
+
     @pytest.mark.parametrize("on_disk", ["marker", "not-utf8"])
     def test_no_candidate_is_current_without_a_readable_match_on_disk(
         self, tmp_path, song, monkeypatch, on_disk
@@ -2137,13 +2149,22 @@ class TestLrclibCandidates:
         assert [(c["id"], c["best"]) for c in found["candidates"]] == [(2, False), (1, True)]
 
     def test_current_is_the_match_the_lrc_on_disk_records(self, tmp_path, song, monkeypatch):
-        lrclib.write_lrc(lrclib.lrc_path(song), {**RECORD, "id": 2})
+        lrclib.write_lrc(lrclib.lrc_path(song), self.full(id=2))
         records = [self.full(id=1), self.full(id=2)]
         tools, _ = self.tools(tmp_path, song, records, monkeypatch)
 
         found = tools.lrclib_candidates(str(song), SHEET, "t a")
 
         assert [(c["id"], c["current"]) for c in found["candidates"]] == [(1, False), (2, True)]
+
+    def test_the_lrc_on_disk_with_other_times_is_not_current(self, tmp_path, song, monkeypatch):
+        """The same rule as LRCLIB timing's list: a hand-edited .lrc keeps its record's id."""
+        lrclib.write_lrc(lrclib.lrc_path(song), {**RECORD, "id": 2})
+        tools, _ = self.tools(tmp_path, song, [self.full(id=2)], monkeypatch)
+
+        found = tools.lrclib_candidates(str(song), SHEET, "t a")
+
+        assert [c["current"] for c in found["candidates"]] == [False]
 
     @pytest.mark.parametrize("on_disk", ["marker", "not-utf8", "none"])
     def test_no_candidate_is_current_without_a_readable_match_on_disk(
