@@ -1,9 +1,10 @@
 {# One search result card. The page's click handlers are delegated, so a card needs no
    per-card binding. The play button starts the card's preview (search.html's script); the rest
-   of the thumbnail does nothing. #}
+   of the thumbnail does nothing. The badges on the thumbnail say where to look first: a video
+   the library already has, then an official one. #}
 {% macro result_card(row) -%}
 {% set result = row.result -%}
-<li data-ytID="{{result.id}}" data-ytTitle="{{result.title}}" data-ytChannel="{{result.channel}}" data-ytDuration="{{result.duration}}" value="{{result.url}}"{% if row.existing_path %} data-file-path="{{row.existing_path}}"{% endif %}>
+<li data-ytID="{{result.id}}" data-ytTitle="{{result.title}}" data-ytChannel="{{result.channel}}" data-ytDuration="{{result.duration}}" value="{{result.url}}"{% if row.existing_path %} data-file-path="{{row.existing_path}}"{% endif %} class="sr-row">
 	<div class="img-wrapper">
 		<div class="img-frame">
 			<img loading="lazy" src="https://img.youtube.com/vi/{{result.id}}/mqdefault.jpg" />
@@ -11,27 +12,52 @@
 				<svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true"><path d="M22 17l17 11-17 11z" fill="#fff"></path></svg>
 				<span class="card-play-notice">{% trans %}Preview unavailable{% endtrans %}</span>
 			</button>
+			{% if row.existing_path or row.official %}
+			<div class="card-badges">
+				{% if row.existing_path %}
+				{# MSG: Badge on a search result's thumbnail: the library already has this exact video. #}
+				<span class="card-badge card-badge-library"><i class="icon icon-folder-open-empty" aria-hidden="true"></i>{% trans %}In library{% endtrans %}</span>
+				{% endif %}
+				{% if row.official %}
+				<span class="card-badge card-badge-official"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="badge-seal" d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76z"></path><path class="badge-check" d="M8.5 12l2.5 2.5 4.5-5"></path></svg>
+					{%- if row.official == "video" -%}
+					{# MSG: Badge on a search result's thumbnail: the act's own verified channel uploaded this music video. #}
+					{% trans %}Official video{% endtrans %}
+					{%- else -%}
+					{# MSG: Badge on a search result's thumbnail: the act's label published this as audio only (a "Topic" channel upload). #}
+					{% trans %}Official audio{% endtrans %}
+					{%- endif -%}
+				</span>
+				{% endif %}
+			</div>
+			{% endif %}
 			{% if result.duration %}<span class="duration-badge">{{ result.duration }}</span>{% endif %}
 		</div>
 	</div>
 	<div class="search_result_items_body">
 		<div class="search_result_items_meta">
-			<div>
-				{{result.title}}
-				{% if result.channel or row.official %}<div class="is-size-7 has-text-grey">{{ result.channel }}{% if row.official %} <span class="tag is-info is-light">Official {{ row.official }}</span>{% endif %}</div>{% endif %}
-				<a href="{{result.url}}" target="_blank" rel="noopener noreferrer" class="is-size-7 has-text-info">YouTube ↗</a>
+			<div class="sr-main">
+				<span class="sr-title">{{result.title}}</span>
+				{% if result.channel %}<span class="sr-sub">{{ result.channel }}</span>{% endif %}
 			</div>
 			{% if row.existing_path %}
 			<button class="button is-success search_result_items_enqueue">{% trans %}Queue{% endtrans %}</button>
+			{% elif row.library_copies %}
+			{# MSG: Grey button on a search result card whose song the library already has under another upload: it opens the download dialog. The row under the card queues the library's copy instead. #}
+			<button class="button search_result_items_select">{% trans %}Download…{% endtrans %}</button>
 			{% else %}
 			<button class="button is-success search_result_items_select">{% trans %}Queue…{% endtrans %}</button>
 			{% endif %}
 		</div>
 		{% for path in row.library_copies %}
-		<div class="notification is-info is-light library-copy">
-			{# MSG: Note on a search result card naming a song already in the library that looks like this result. NAME is the song's file name. #}
-			<span>{% trans name=filename_from_path(path) %}In library: <strong>{{ name }}</strong>{% endtrans %}</span>
-			<button class="button is-success is-small library-copy-enqueue" data-file-path="{{ path }}">{% trans %}Queue{% endtrans %}</button>
+		<div class="library-copy">
+			<i class="icon icon-folder-open-empty" aria-hidden="true"></i>
+			<div class="sr-main">
+				{# MSG: Small label over a library song's file name, in a row under a search result that looks like it: the library has this song under another upload. #}
+				<span class="sr-sub">{% trans %}In library{% endtrans %}</span>
+				<strong>{{ filename_from_path(path) }}</strong>
+			</div>
+			<button class="button is-success library-copy-enqueue" data-file-path="{{ path }}">{% trans %}Queue{% endtrans %}</button>
 		</div>
 		{% endfor %}
 	</div>

@@ -101,18 +101,17 @@
 		padding: 0;
 		margin: 0;
 	}
-	ul.search_result_items li {
-		display: flex;
+	/* A card is a phone-rows.css .sr-row (its even-card shading, its 8px bleed into the page card),
+	   stacked on a phone and side by side from 768px. Bulma's li + li gap is not wanted: cards touch. */
+	ul.search_result_items li.sr-row {
 		flex-direction: column;
 		align-items: stretch;
-		gap: 0.75rem;
-		padding: 0.75rem;
-	}
-	ul.search_result_items li:nth-child(odd) {
-		background-color: rgb(50, 55, 55);
+		gap: 12px;
+		padding: 12px 8px;
+		margin-top: 0;
 	}
 	@media screen and (min-width: 768px) {
-		ul.search_result_items li {
+		ul.search_result_items li.sr-row {
 			flex-direction: row;
 			align-items: center;
 		}
@@ -133,12 +132,93 @@
 		position: relative;
 		overflow: hidden;
 		aspect-ratio: 16 / 9;
+		border-radius: 6px;
 	}
 	#search-results .img-wrapper img {
 		display: block;
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+	}
+
+	/* The badges on the thumbnail's top left: In library, then Official. Over the video, so not
+	   tappable, and above the card's player (z-index 2). Their size is a set of variables, so the
+	   small size (P5: while the player is in the card, and always from 768px) is one block of values. */
+	#search-results .card-badges {
+		--badge-inset: 10px;
+		--badge-gap: 6px;
+		--badge-pad: 6px 12px 6px 10px;
+		--badge-radius: 6px;
+		--badge-font: 15px;
+		--badge-line: normal;
+		--badge-icon: 18px;
+		--badge-icon-gap: 7px;
+		--badge-check: 2.4;
+		position: absolute;
+		top: var(--badge-inset);
+		left: var(--badge-inset);
+		right: var(--badge-inset);
+		z-index: 3;
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--badge-gap);
+		pointer-events: none;
+	}
+	#search-results li[data-preview="playing"] .card-badges,
+	#search-results li[data-preview="paused"] .card-badges {
+		--badge-inset: 8px;
+		--badge-gap: 4px;
+		--badge-pad: 3px 7px 3px 5px;
+		--badge-radius: 4px;
+		--badge-font: 12px;
+		--badge-line: 1.2;
+		--badge-icon: 13px;
+		--badge-icon-gap: 4px;
+		--badge-check: 2.8;
+	}
+	@media screen and (min-width: 768px) {
+		#search-results .card-badges {
+			--badge-inset: 8px;
+			--badge-gap: 4px;
+			--badge-pad: 3px 7px 3px 5px;
+			--badge-radius: 4px;
+			--badge-font: 12px;
+			--badge-line: 1.2;
+			--badge-icon: 13px;
+			--badge-icon-gap: 4px;
+			--badge-check: 2.8;
+		}
+	}
+	#search-results .card-badge {
+		display: flex;
+		align-items: center;
+		gap: var(--badge-icon-gap);
+		padding: var(--badge-pad);
+		border-radius: var(--badge-radius);
+		background: var(--thumb-overlay);
+		color: var(--dark-text-primary);
+		font-size: var(--badge-font);
+		font-weight: 700;
+		line-height: var(--badge-line);
+	}
+	#search-results .card-badge .icon {
+		width: var(--badge-icon);
+		height: var(--badge-icon);
+		font-size: var(--badge-icon);
+		color: var(--dark-success);
+	}
+	#search-results .card-badge svg {
+		flex: none;
+		width: var(--badge-icon);
+		height: var(--badge-icon);
+	}
+	#search-results .badge-seal { fill: var(--dark-info); }
+	#search-results .badge-check {
+		fill: none;
+		stroke: var(--dark-text-primary);
+		stroke-width: var(--badge-check);
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 
 	/* Body: the title row, then the library copies noted on the card; fills the text column */
@@ -150,27 +230,44 @@
 		min-width: 0;
 		text-align: left;
 	}
-	/* Meta: title fills space, button pinned right */
+	/* Meta: the title and channel (.sr-main) fill the space, the button is pinned right */
 	.search_result_items_meta {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
+		gap: 12px;
 	}
-	.search_result_items_meta > div:first-child {
-		flex: 1;
-		min-width: 0;
+	/* The card's button and the library row's Queue: one size. */
+	#search-results .search_result_items_enqueue,
+	#search-results .search_result_items_select,
+	#search-results .library-copy-enqueue {
+		flex: none;
+		min-width: 60px;
+		height: 44px;
+		padding: 0 12px;
+		border-radius: 6px;
+		font-size: 15px;
+		font-weight: 700;
 	}
-	/* A library copy of the searched song, noted on the first card it matches */
-	.search_result_items_body .library-copy {
+	/* A library copy of the searched song, noted on the first card it matches: a dark row with the
+	   folder, the file's name under "In library", and a Queue for that file. */
+	#search-results .library-copy {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
-		margin: 0;
-		padding: 0.5rem 0.75rem;
+		gap: 10px;
+		padding: 8px 8px 8px 12px;
+		border-radius: 6px;
+		background-color: var(--dark-bg-secondary);
 	}
-	.library-copy > span {
-		flex: 1;
-		min-width: 0;
+	#search-results .library-copy > .icon {
+		flex: none;
+		width: 18px;
+		height: 18px;
+		font-size: 18px;
+		color: var(--dark-text-sub);
+	}
+	#search-results .library-copy strong {
+		font-size: 15px;
+		line-height: 1.3;
 	}
 
 	/* The thumbnail's play button starts the card's preview; nothing else on the thumbnail is tappable. */
@@ -184,7 +281,7 @@
 		padding: 0;
 		border: none;
 		border-radius: 50%;
-		background: rgba(0, 0, 0, 0.6);
+		background: var(--thumb-overlay);
 		color: #fff;
 		cursor: pointer;
 		display: flex;
@@ -243,7 +340,7 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		background: rgba(0, 0, 0, 0.6);
+		background: var(--thumb-overlay);
 		color: #fff;
 		font-size: 12px;
 	}
@@ -326,7 +423,7 @@
 		padding: 0;
 		border: none;
 		border-radius: 50%;
-		background: rgba(0, 0, 0, 0.6);
+		background: var(--thumb-overlay);
 		color: #fff;
 		font-size: 1.6rem;
 		cursor: pointer;
@@ -338,7 +435,7 @@
 		position: relative;
 		padding: 0.4rem 0.9rem;
 		border-radius: 4px;
-		background: rgba(0, 0, 0, 0.6);
+		background: var(--thumb-overlay);
 		color: #fff;
 	}
 	@keyframes breathe { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
@@ -346,12 +443,12 @@
 
 	.duration-badge {
 		position: absolute;
-		bottom: 4px;
-		right: 4px;
-		background: rgba(0, 0, 0, 0.8);
+		bottom: 6px;
+		right: 6px;
+		background: var(--thumb-overlay);
 		color: #fff;
-		font-size: 0.75rem;
-		padding: 2px 4px;
+		font-size: 12px;
+		padding: 1px 5px;
 		border-radius: 3px;
 		pointer-events: none;
 		z-index: 3; /* above the card's player (z-index 2) while it loads */
@@ -361,6 +458,10 @@
 :root {
   --lyrics-dropdown-font-size: 1.1rem;
   --modal-width: 640px;
+  /* Black at 60%: every overlay on a thumbnail or a video (the badges, the duration, the play
+     circles, the player's bar, "Preview unavailable"). It holds the white text above it at 4.5:1
+     on a white frame. */
+  --thumb-overlay: rgba(0, 0, 0, 0.6);
 }
 #modal-js-example { align-items: flex-start; overflow-y: auto; }
 #modal-js-example .modal-content {
