@@ -82,6 +82,7 @@
   .rp-check { display: block; width: 100%; min-height: 44px; padding: 0 16px; border-radius: 6px; border: 1px solid var(--dark-link); background: transparent; color: var(--dark-link); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
   .rp-check:disabled { opacity: 0.5; cursor: not-allowed; }
   #lt-check { margin-top: 8px; }
+  #lt-preview-toggle, #lt-search-toggle { display: flex; }  /* one line each, or they read as one link */
   .rp-result { margin-top: 10px; }
   .rp-idle { padding: 12px; border-radius: 8px; border: 1px dashed var(--dark-border); color: var(--dark-text-muted); font-size: 13px; }
   .rp-card-head .info-tip, .rp-card-lines .info-tip { font-weight: 400; }
@@ -184,7 +185,7 @@
       movieAnswered: null, // the text Check fit's last shown answer was for
       movieSeq: 0,       // a check still loading when the text changes is for the old text
       lrcPick: LRC_MATCH ? 'disk' : null, // the match to time from: 'disk', or a search result's LRCLIB id
-      lrcCandidates: [], // LRCLIB's matches for the typed search, scored against the song's lyrics
+      lrcCandidates: [], // LRCLIB's matches for the typed search, each fitted to the clip as Check fit fits it
       lrcVideoLength: null,
       lrcSearchOpen: !LRC_MATCH, // with no match on disk the search is all there is
       lrcCard: null,     // Check fit's answer for the picked match; any other pick clears it
@@ -480,22 +481,18 @@
 
     /* --------------------------------------------------------- LRCLIB timing */
 
-    // The match's key in the list: 'disk' for the song's own .lrc, else the id of a search result.
-    function isOnDisk(candidate) {
-      return LRC_MATCH !== null && candidate.id != null && candidate.id === LRC_MATCH.id;
-    }
-
     // What Check fit and Regenerate send: a search result's id, nothing for the .lrc on disk.
     function lrcId() {
       return state.lrcPick === 'disk' ? null : state.lrcPick;
     }
 
-    // The .lrc on disk first, then the search's other results in the server's order; it carries its own
-    // verdict if the search listed it.
+    // The .lrc on disk first (key 'disk'), then the search's other results (keyed by id) in the server's
+    // order. The disk row takes the verdict of a result that is the same record with the same timing
+    // (``current``), so its Check fit says the same; one whose timing differs stays a row of its own.
     function lrcRows() {
       var rows = LRC_MATCH ? [$.extend({ key: 'disk', current: true }, LRC_MATCH)] : [];
       $.each(state.lrcCandidates, function (i, candidate) {
-        if (isOnDisk(candidate)) {
+        if (candidate.current && rows.length) {
           $.extend(rows[0], { verdict: candidate.verdict, best: candidate.best });
         } else {
           rows.push($.extend({ key: candidate.id }, candidate));

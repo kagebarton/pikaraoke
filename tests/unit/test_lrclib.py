@@ -311,6 +311,15 @@ class TestWriteReadLrc:
         assert texts == ["Hello", "World"]
         assert starts == [1.0, 5.0]
 
+    def test_without_id_tags_gives_back_the_records_own_text(self, tmp_path):
+        # A bare stamp (a break) looks like an ID tag and must stay.
+        synced = "[00:01.00]Hello\n[00:03.00]\n[00:05.00]World\n"
+        record = {"id": 42, "trackName": "T", "duration": 187.0, "syncedLyrics": synced}
+        path = tmp_path / "Song.lrc"
+        lrclib.write_lrc(path, record)
+
+        assert lrclib.without_id_tags(lrclib.read_lrc(path)[0]) == synced
+
 
 class TestEnsureLrc:
     _RECORD = {

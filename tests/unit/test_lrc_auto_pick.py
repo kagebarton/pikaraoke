@@ -17,7 +17,6 @@ from pikaraoke.lib.lrc_auto_pick import (
     SPEED,
     UNCLAIMED,
     evaluate,
-    pick,
     refusal,
     timing_key,
 )
@@ -39,6 +38,12 @@ def _fit(mistimed: int = 0, unclaimed_run: int = 0, shift_run: int = 0, **fields
 
 def _record(record_id: int, text: str = "a\nb", track: str = "Song", album: str = "Album") -> dict:
     return {"id": record_id, "syncedLyrics": text, "trackName": track, "albumName": album}
+
+
+def _picked(records: list[dict], streams: dict | None = None, length: float = 100.0):
+    """The download's pick (as ``lrc_auto_timing`` takes it): the first entry, when it passes."""
+    entries = evaluate(records, streams or {}, length)
+    return entries[0] if entries and entries[0].passes else None
 
 
 @pytest.fixture
@@ -98,7 +103,7 @@ class TestPick:
         fits.update({"flag": _fit(mistimed=1), "clean": CLEAN})
         records = [_record(1, "flag"), _record(2, "flag"), _record(3, "flag"), _record(9, "clean")]
 
-        chosen = pick(records, {}, 100.0)
+        chosen = _picked(records)
 
         assert chosen.record["id"] == 9
         assert chosen.timing_size == 1
@@ -107,7 +112,7 @@ class TestPick:
         fits.update({"common": CLEAN, "rare": CLEAN})
         records = [_record(1, "rare"), _record(5, "common"), _record(6, "common")]
 
-        chosen = pick(records, {}, 100.0)
+        chosen = _picked(records)
 
         assert (chosen.record["id"], chosen.timing_size) == (5, 2)
 
@@ -123,13 +128,13 @@ class TestPick:
         fits["t"] = CLEAN
         records = [_record(1, "t", track="Song (Live)"), _record(2, "t", track="Song")]
 
-        assert pick(records, {}, 100.0).record["id"] == 2
+        assert _picked(records).record["id"] == 2
 
     def test_then_the_shorter_album_name(self, fits):
         fits["t"] = CLEAN
         records = [_record(1, "t", album="Greatest Hits"), _record(2, "t", album="Hits")]
 
-        assert pick(records, {}, 100.0).record["id"] == 2
+        assert _picked(records).record["id"] == 2
 
     def test_a_record_with_no_album_counts_as_the_shortest(self, fits):
         fits["t"] = CLEAN
@@ -138,19 +143,19 @@ class TestPick:
             {"id": 2, "syncedLyrics": "t", "trackName": "Song"},
         ]
 
-        assert pick(records, {}, 100.0).record["id"] == 2
+        assert _picked(records).record["id"] == 2
 
     def test_then_the_lower_id(self, fits):
         fits["t"] = CLEAN
         records = [_record(30, "t"), _record(7, "t"), _record(12, "t")]
 
-        assert pick(records, {}, 100.0).record["id"] == 7
+        assert _picked(records).record["id"] == 7
 
     def test_fewer_mistimed_lines_come_before_everything_else(self, fits):
         fits.update({"flag": _fit(mistimed=1), "clean": CLEAN})
         records = [_record(1, "flag", track="A"), _record(2, "clean", track="A much longer name")]
 
-        assert pick(records, {}, 100.0).record["id"] == 2
+        assert _picked(records).record["id"] == 2
 
     def test_records_without_synced_text_are_ignored(self, fits):
         fits["t"] = CLEAN
@@ -167,23 +172,23 @@ class TestPick:
         fits.update({"shifted": _fit(shift_run=MAX_SHIFT_RUN + 1), "clean": CLEAN})
         records = [_record(1, "shifted"), _record(2, "shifted"), _record(9, "clean")]
 
-        assert pick(records, {}, 100.0).record["id"] == 9
+        assert _picked(records).record["id"] == 9
 
     def test_no_pick_when_every_passing_record_carries_the_shift(self, fits):
         fits.update({"a": _fit(shift_run=5), "b": _fit(shift_run=3)})
 
         records = [_record(1, "a"), _record(2, "b")]
 
-        assert pick(records, {}, 100.0) is None
+        assert _picked(records) is None
         assert [e.refusal for e in evaluate(records, {}, 100.0)] == [SHIFTED, SHIFTED]
 
     def test_no_pick_when_none_pass(self, fits):
         fits.update({"a": _fit(unclaimed_run=40), "b": SliceFit(REFUSED)})
 
-        assert pick([_record(1, "a"), _record(2, "b")], {}, 100.0) is None
+        assert _picked([_record(1, "a"), _record(2, "b")]) is None
 
     def test_no_pick_without_records(self, fits):
-        assert pick([], {}, 100.0) is None
+        assert _picked([]) is None
 
     def test_evaluate_puts_the_passing_first_and_keeps_every_refusal(self, fits):
         fits.update({"bad": _fit(unclaimed_run=40), "good": CLEAN, "none": SliceFit(REFUSED)})
@@ -230,7 +235,7 @@ def _lrc(lines: int, moved: dict[int, float] | None = None) -> str:
 
 class TestRealFit:
     def test_a_record_that_covers_the_singing_passes(self):
-        chosen = pick([_record(1, _lrc(30))], {TRANSCRIBE: _sung(30)}, 300.0)
+        chosen = _picked([_record(1, _lrc(30))], {TRANSCRIBE: _sung(30)}, 300.0)
 
         assert chosen is not None
         assert chosen.fit.unclaimed_run == 0
@@ -245,7 +250,7 @@ class TestRealFit:
         short, whole = _lrc(10), _lrc(30)
         records = [_record(1, short), _record(2, short), _record(3, short), _record(4, whole)]
 
-        chosen = pick(records, {TRANSCRIBE: _sung(30)}, 300.0)
+        chosen = _picked(records, {TRANSCRIBE: _sung(30)}, 300.0)
 
         assert chosen.record["id"] == 4
 
@@ -260,7 +265,7 @@ class TestRealFit:
     def test_a_stretch_of_the_allowed_length_passes(self):
         late = {k: 3.0 for k in range(14, 16)}
 
-        chosen = pick([_record(1, _lrc(30, late))], {TRANSCRIBE: _sung(30)}, 300.0)
+        chosen = _picked([_record(1, _lrc(30, late))], {TRANSCRIBE: _sung(30)}, 300.0)
 
         assert chosen is not None
         assert chosen.fit.shift_run == MAX_SHIFT_RUN

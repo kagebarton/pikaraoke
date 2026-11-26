@@ -707,8 +707,9 @@ class LibraryTools:
         The candidates come in the download's pick order (:func:`lrc_auto_pick.evaluate`): the
         records that pass the bar first, then the rest in LRCLIB's order, and ``best`` marks
         the first when it passes. Each carries its :class:`LrcTimingCheck` as ``check``, so a
-        row says what Check fit would say, and whether it is the match on disk (``current``).
-        The listed records are remembered for :meth:`repair`.
+        row says what Check fit would say. ``current`` marks a record that is the song's ``.lrc``
+        on disk, same id and same timing, so Check fit on either says the same. The listed
+        records are remembered for :meth:`repair`.
 
         Raises :class:`RegenError`, with a message for the admin, for a song that is not a
         video or a clip whose length can't be read, and
@@ -720,7 +721,12 @@ class LibraryTools:
         length = _clip_length(job)
         streams = heard_streams(job.bundle, self._asr_on_disk(job.song_path))
         entries = lrc_auto_pick.evaluate(self._search_synced(query), streams, length)
-        current_id = self._lrc_on_disk_id(song_path)
+        disk = lrclib.read_song_lrc(Path(song_path))
+        on_disk = (
+            (disk.meta.get("id"), lrc_auto_pick.timing_key(lrclib.without_id_tags(disk.text)))
+            if disk.state == "match" and disk.meta.get("id") is not None
+            else None
+        )
         candidates = []
         for rank, entry in enumerate(entries):
             record = entry.record
@@ -730,7 +736,8 @@ class LibraryTools:
                     **check.record,
                     "duration_diff_s": check.gap_s,
                     "best": rank == 0 and entry.passes,
-                    "current": current_id is not None and record.get("id") == current_id,
+                    "current": on_disk
+                    == (record.get("id"), lrc_auto_pick.timing_key(record["syncedLyrics"])),
                     "syncedLyrics": record["syncedLyrics"],
                     "check": check,
                 }

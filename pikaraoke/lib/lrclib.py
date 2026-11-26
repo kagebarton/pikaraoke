@@ -441,6 +441,16 @@ def read_lrc(path: Path) -> tuple[str, dict]:
     return text, meta
 
 
+def without_id_tags(text: str) -> str:
+    """A persisted ``.lrc``'s text without its ID-tag header, as the record's own synced
+    lyrics read: what a person reads, and what compares with the record."""
+    return "".join(
+        line
+        for line in text.splitlines(keepends=True)
+        if _LRC_STAMP.match(line.strip()) or not _ID_TAG_RE.match(line.strip())
+    )
+
+
 def _format_tag(tag: str, value: object) -> str:
     """An LRC ID tag with the value sanitised so it can't break the brackets."""
     safe = str(value).replace("\n", " ").replace("]", ")")

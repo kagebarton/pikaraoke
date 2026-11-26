@@ -114,12 +114,6 @@ def evaluate(
     return passing + [e for e in entries if not e.passes]
 
 
-def pick(records: list[dict], streams: dict[str, list[dict]], clip_length: float) -> Entry | None:
-    """The record that times the song, or None when no record passes the bar."""
-    entries = evaluate(records, streams, clip_length)
-    return entries[0] if entries and entries[0].passes else None
-
-
 def _pick_order(entry: Entry) -> tuple:
     """Fewer mistimed lines, then the timing most records carry, then the plainest record:
     the shorter track name and album name (a missing one counts as empty), then the lower id."""
