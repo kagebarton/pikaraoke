@@ -504,6 +504,11 @@
       return rows;
     }
 
+    // The row the pick names, if it is still listed.
+    function pickedLrcRow() {
+      return $.grep(lrcRows(), function (row) { return row.key === state.lrcPick; })[0];
+    }
+
     function renderLrcMatches(message) {
       var rows = lrcRows();
       var shown = state.lrcSearchOpen ? rows : $.grep(rows, function (row) { return row.key === state.lrcPick; });
@@ -516,6 +521,8 @@
       });
       list.toggleClass('is-hidden', !list.children().length);
       $('#lt-video-length').text(state.lrcVideoLength || '');
+      showTimingPreview('lt', pickedLrcRow());
+      $('#lt-preview-toggle').prop('disabled', !pickedLrcRow());
     }
 
     function lrcIdleText() {
@@ -613,6 +620,10 @@
     }
 
     $('#lt-check').on('click', checkLrc);
+
+    $('#lt-preview-toggle').on('click', function () {
+      toggleTimingPreview('lt', pickedLrcRow());
+    });
 
     $('#genius-search').on('click', searchGenius);
     $('#genius-q').on('keydown', function (e) {
@@ -763,7 +774,7 @@
       $('#lrclib-results input').each(function () {
         $(this).closest('.rp-opt').toggleClass('is-selected', $(this).prop('checked'));
       });
-      showTimingPreview();
+      showTimingPreview('lrclib', pickedCandidate());
       refreshStep2();
     }
 
@@ -773,7 +784,7 @@
       $.each(state.candidates, function (i, candidate) { list.append(lrclibOption(candidate)); });
       list.append(noneOption());
       $('#video-length').text(state.videoLength || '');
-      showTimingPreview();
+      showTimingPreview('lrclib', pickedCandidate());
       refreshStep2();
     }
 
@@ -781,11 +792,20 @@
       return $.grep(state.candidates, function (c) { return c.id === state.lrclib; })[0];
     }
 
-    function showTimingPreview() {
-      var box = $('#lrclib-preview');
+    // The timing preview of an LRCLIB list (``which``: 'lrclib' for step 2, 'lt' for LRCLIB timing) shows the
+    // ``picked`` match's lines with LRCLIB's own times. Open, it follows the pick and closes when none is left.
+    function showTimingPreview(which, picked) {
+      var box = $('#' + which + '-preview');
       if (box.hasClass('is-hidden')) return;
-      var candidate = pickedCandidate();
-      if (candidate) box.text(candidate.syncedLyrics); else closePreview('lrclib');
+      if (picked) box.text(picked.syncedLyrics); else closePreview(which);
+    }
+
+    function toggleTimingPreview(which, picked) {
+      var box = $('#' + which + '-preview');
+      if (!box.hasClass('is-hidden')) { closePreview(which); return; }
+      box.removeClass('is-hidden');
+      $('#' + which + '-preview-toggle').text(T.hidePreview);
+      showTimingPreview(which, picked);
     }
 
     function refreshStep2() {
@@ -799,11 +819,7 @@
     });
 
     $('#lrclib-preview-toggle').on('click', function () {
-      var box = $('#lrclib-preview');
-      if (!box.hasClass('is-hidden')) { closePreview('lrclib'); return; }
-      box.removeClass('is-hidden');
-      $(this).text(T.hidePreview);
-      showTimingPreview();
+      toggleTimingPreview('lrclib', pickedCandidate());
     });
 
     $('#send').on('click', function () {
@@ -925,6 +941,8 @@
       <div class="rp-sec"><span>{% trans %}Results{% endtrans %}</span><span id="lt-video-length"></span></div>
     </div>
     <div id="lt-matches" class="rp-list is-hidden" style="margin-top: 0"></div>
+    <button type="button" id="lt-preview-toggle" class="rp-link" disabled>{% trans %}Preview selected timing{% endtrans %}</button>
+    <div id="lt-preview" class="rp-preview is-hidden"></div>
     <button type="button" id="lt-search-toggle" class="rp-link">{% trans %}Search LRCLIB{% endtrans %}</button>
     <button type="button" id="lt-check" class="rp-check" disabled>{% trans %}Check fit{% endtrans %}</button>
     {{ answer_area('lt', _('Finding where this match sits in the clip…'), stretches=True) }}
