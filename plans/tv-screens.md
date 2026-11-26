@@ -1,10 +1,12 @@
 # TV screens: inter-song screen, during-song overlay, logo
 
-Model: Claude Opus 5.5 (design record). Executor not yet named.
+Model: Claude Opus 5.5 (design record 2026-11-23 to 25; build spec 2026-11-26). Executor:
+Claude Sonnet 5.5, Phases 1-5 of the build spec.
 
-Branch `tv_screens` off `dev` at `442269f6`, worktree `.claude/worktrees/tv_screens`. Design
-only so far: no code. Records the decisions and preferences from the 2026-11-23 design session.
-Each item gets its detail (files, tests, TV checks) when a plan for building it is written.
+Branch `tv_screens`, off `dev` at `442269f6`, rebased 2026-11-26 onto `dev` `efb91f2d` (plan
+commits only). Worktree on the VM: `.claude/worktrees/tv_screens`. **Executors: read "Build
+spec" (near the end) first.** It is the build target; the sections before it are the decision
+log it was built from, and where they differ the build spec wins.
 
 ## Canvases
 
@@ -336,8 +338,8 @@ points item 5, for this case).
    transition, not a separate line appearing. Single-stem songs show the key alone. While the
    full card is up its own row updates in place, as before.
 
-Made in the mock, not yet confirmed: the tags at 26 px (the compact card's artist is 28 px) on
-the full card's tag boxes; the grow and shrink over 400 ms in stepped resends, like the stage
+Made in the mock, confirmed 2026-11-26: the tags at 26 px (the compact card's artist is 28 px)
+on the full card's tag boxes; the grow and shrink over 400 ms in stepped resends, like the stage
 crossfades; whatever sits under the card (small Next line or up-next card) shifts down with it
 while the row is up, against the keep-movement-down preference.
 
@@ -410,7 +412,7 @@ use it.
 | Bare idle window | `screenshot-raw` refuses with no file loaded, so overlays there were not captured. Over a loaded still (how `placeholder.png` is shown today) both routes draw. |
 | Not tested | Output above 1080p. (Stepped fades on the TV: tested later the same day, see Decisions 2026-11-25.) |
 
-## Open for the build plan
+## Open for the build plan (each settled in the build spec below)
 
 - **Data the screens need that `QueuedSong` lacks:** artist (separate from title), processing
   state for the dashed slot, and more rows (A shows up to 5 after "up next", so 6 in all;
@@ -440,3 +442,619 @@ use it.
   - `hide_clock` -> clock pill; `hide_url` -> QR and address pill. `hide_now_playing_overlay`
     hides the during-song cards only (ruled 2026-11-25; today it also hides the idle queue list).
   - `hide_notifications` is phone-only (Socket.IO); its UI label still says "splash screen".
+
+## Build spec (Claude Opus 5.5, 2026-11-26)
+
+Executor: Claude Sonnet 5.5, Phases 1-5, one phase per session. Stop after each phase's Results
+row so Ken can `/compact`. Phase 6 is Ken's, at the TV.
+
+This section is the build target. Every ruling above is already in it; where it and the decision
+log differ, this section wins. For every size, padding, gap, corner radius and colour not
+repeated here, use the board sources in `plans/tv-screens/screens-canvas/`: `Main.dc.html`
+(inter-song), `Empty.dc.html` (empty queue) and `DuringCards.dc.html` (during song). They already
+carry the 2026-11-25 TV-session values. Canvas CSS px map 1:1 to the 1920 x 1080 ASS canvas.
+
+### Rulings (Ken, 2026-11-26)
+
+1. The settings-row mock is confirmed: tags at 26 px, the card grows and shrinks over 400 ms in
+   stepped resends, and whatever sits under the compact card shifts down with it.
+2. The box widths stay: inter-song panel 620 px, full card 656 px, compact card at most 560 px.
+3. `overlay_scale`: the plan decides how the cards stay on screen at large scales (item 3
+   below).
+
+### Decided by this plan
+
+Ken can overrule any of these at Phase 6. Each is one constant or one rule.
+
+1. The full card shows for the first **15 s** of playing time (the record says 15-20 s).
+2. The countdown setting is **`song_countdown`**: default 8 s, range 0-99, labelled "Countdown
+   before the next song (seconds)" in the Queue section where `splash_delay` was. On the command
+   line it is `-s` / `--song-countdown`, and `--splash-delay` stays as another name for the same
+   flag. On the first start after the change, a saved `splash_delay` is copied to
+   `song_countdown` (unless that is already set) and then removed. A saved 2 stays 2.
+3. **`overlay_scale` runs 0.5-2** (was 0.5-3). At 2 the full card is 1312 px wide and still fits
+   beside the QR; at 3 it is wider than the screen. A saved value above 2 reads as 2.
+4. `static/fonts/Arial.ttf` and `DroidSansFallback.ttf` are deleted (nothing references them).
+5. The play clock that times the full card restarts on Restart. Seeking does not move it.
+6. Text widths are measured with Pillow and the bundled Lato files. East Asian wide characters
+   (CJK, Hangul, most emoji) count as one em each, because libass draws them from a fallback
+   font. Phase 2 checks this against libass's own measurement.
+7. The key tag reads `Key 0` when the key is unchanged, otherwise `Key +2` or `Key -1`.
+   Single-stem songs have no vocal tag.
+8. Each AFTER THAT row keeps its phone number (its place among the queue's non-failed songs),
+   and the Up next song's row is left out. Usually the list starts at 2. When a held song's turn
+   has gone to a later song, the numbers can skip one.
+9. When the up-next card has to move (a pause in the last 30 s puts the full card above it), it
+   crossfades to its new place instead of jumping.
+10. The compact card's settings row shows for any change in the last 4 s, including one made
+    while the full card was up.
+11. The `.ass` files keep `Arial,60` in their style line. At playback the override draws them in
+    Lato Bold 66 (TV-session ruling 8). `pipeline/config.py` does not change.
+12. TV text is written in plain English in the code, without `_()` (inter-song ruling 12).
+13. The up-next card cuts the singer's name short before it cuts ", you're up next".
+
+### The code today (read 2026-11-26 at `dev` `efb91f2d`)
+
+- `lib/overlay_manager.py`: `OverlayState` -> `compute_overlays()` -> one `Overlay` per OSD id
+  (6 ids) -> diffed against what was last sent -> `osd_overlay`/`clear_osd`. The QR is a
+  bitmap in overlay slot 0 at (0, 0): `send_qr_bitmap(px)` writes a temp file and calls
+  `overlay-add`. Every size comes from `_qr_height` = `max(120, screen_h // 6) × overlay_scale`.
+- What triggers a render (`MpvController.tick_overlays`): `_on_time_pos` at most every 0.5 s
+  while `time-pos` moves (`on_tick`); `_on_osd_dim` (`invalidate()` + `on_resize`);
+  `play_file`; `end_song`; `refresh_overlays()`, called by the preference route for
+  `_OVERLAY_PREFS` (`routes/preferences.py:23`) and by `Karaoke.rename_singer`.
+- `PlaybackController.build_overlay_state()` reads five preferences with `get_or_default`, and
+  each read re-reads `config.ini`. It does not take `_playback_lock`, which `play_file` holds
+  through the whole load.
+- `karaoke.py:326-334` wires the provider; `_get_queue_preview` is `upcoming(5)` mapped to
+  `QueuedSong(title, singer)`.
+- `Karaoke.run()` (`karaoke.py:704-731`): when a song can play, it calls `reset_now_playing()`,
+  waits `splash_delay` by counting 500 ms loop steps, then runs `pop_next()` and `play_file()`.
+- `QueueManager.upcoming(n)` follows play order (`_take_next`), so it never returns a held,
+  paused or failed song. The phone Queue page (`templates/queue.html`) lists `/get_queue` in
+  queue order. Its slot words are `downloading`, `processing`, `lyrics` (for `pick`) and
+  `paused`, and a waiting word beats paused. It numbers every row except a failed one
+  (`place++` skips failed). `/get_queue` splits titles with `split_title`, which returns
+  `("", title)` when it can't find an artist.
+- `skip()` has two callers: the `/skip` route, and `queue_clear`'s `skip_requested` event. No
+  page sends the Socket.IO `end_song` event (`routes/socket_events.py:34`).
+- Only `mpv_controller.py` references `static/images/placeholder.png`. Nothing references
+  `static/fonts/*`.
+- The karaoke `.ass` style is named `Karaoke` (`pipeline/stages/lyric_align.py:1251`);
+  `font_size` is 60 (`pipeline/config.py:295`).
+- `splash_delay` appears in `preference_manager.py` (DEFAULTS), `args.py` (`-s/--splash-delay`),
+  `app.py:174`, `karaoke.py` (parameter, docstring, run loop), `routes/info.py:75`,
+  `templates/info.html:369` and the tests (`test_preference_manager.py`, which uses it as its
+  example int setting throughout; `test_info_routes.py`; `test_karaoke_singer_playback.py`).
+  The `overlay_scale` input is at `info.html:352` (`max="3"`).
+- VM: the libmpv is 0.42.0, the same as production, and `DISPLAY=:10.0` (the RDP desktop). A
+  minimized 1920 x 1080 libmpv window renders OSD text and `screenshot-to-file <path> window`
+  captures it; CJK text falls back per glyph to Noto CJK. Both checked 2026-11-26. The
+  `ui-check` skill runs mpv with `vo=null`, so it has no picture.
+
+### Design
+
+#### Modules
+
+The new package is `pikaraoke/lib/tv/`:
+
+| Module | Holds | Phase |
+| --- | --- | --- |
+| `fonts.py` | `FONTS_DIR` (`static/fonts`), the three Lato files by weight, the `\fn` names | 1 |
+| `draw.py` | pure ASS helpers: colours, alpha, escaping, text events, rounded rects, rings, dashed rects, clipped strips, the mic, pause and logo drawings | 2 |
+| `text_fit.py` | `text_width`, `fit` (one line, ellipsis), `wrap` (n lines, last one ellipsized) | 2 |
+| `screens.py` | `Layer`, `Frame`, `compute_layers(state)`; the corners, and the black layer (Phase 5) | 2 |
+| `timeline.py` | `TvTimeline`: countdown, play clock, settings change, starting and ending | 3-5 |
+| `queue_view.py` | the pure `queue_view(items, up_next)` -> `QueueView` | 3 |
+| `inter_song.py` | the inter-song and empty-queue layers | 3 |
+| `during_song.py` | the stage rules and the cards' layers | 4 |
+
+`overlay_manager.py` keeps `OverlayState`, `ScreenMode` and `OverlayManager`. `OverlayManager`
+becomes the render thread and the animator. Its old builders go in Phases 2-4.
+
+#### Render loop (Phase 2)
+
+- `OverlayManager` runs one daemon thread. Each frame: build the state with the provider, run
+  `compute_layers(state)` to get `Frame(layers, animating)`, have the animator turn that into
+  one ASS string, and send it as `osd-overlay` id 1 only when it differs from what was last
+  sent (clear the overlay when the string is empty). Then do the QR.
+- Cadence: 50 ms while the animator or the frame is animating, 250 ms otherwise. `wake()`
+  renders at once. `tick_overlays()` keeps its name and now only wakes the thread, so
+  `play_file`, `end_song`, the preference route and `rename_singer` still render at once.
+- One OSD id holds everything. The order of events inside the string is the stacking order,
+  because libass draws later events over earlier ones, so no z ids are needed. The QR stays a
+  bitmap, and mpv always draws bitmaps over ASS.
+- The provider runs on this thread. It must not take `_playback_lock`; it may take the queue
+  lock.
+- `_on_time_pos` keeps updating `position` but no longer triggers a render. `set_callbacks`
+  loses `on_tick` and `on_resize`: the thread covers both, and `_on_osd_dim` calls
+  `invalidate()`, which also wakes the thread.
+- `MpvController.start()` starts the thread once the player exists. `quit()` stops and joins
+  it before shutting the player down.
+- When a frame raises, log it with `log.exception` (a repeat of the same message only once)
+  and keep looping.
+- `render_frame()` is a plain method, so tests drive frames with a fake clock and never start
+  the thread.
+
+#### Layers and fades (Phase 2)
+
+```python
+@dataclass(frozen=True)
+class Layer:
+    key: str                            # identity: a new key fades in, a vanished one fades out
+    z: int                              # 0 black, 1 screens and cards, 2 corners
+    draw: Callable[[float], list[str]]  # opacity 0-1 -> ASS events
+    fade_s: float = FADE_S              # 0.4; 0 = appears and goes at once
+```
+
+- The animator keeps one opacity ramp per key (from, to, start time). A key that appears ramps
+  from 0 to 1. A key that disappears keeps its last `draw`, ramps to 0, and is then dropped. A
+  key that comes back mid-fade ramps up from wherever it is. Opacity moves in 50 ms steps
+  (`round(fade_s / 0.05)` steps, so 8 for 400 ms), and a fade resends 8 times.
+- A crossfade is two keys: the old one fades out while the new one fades in. So the key carries
+  whatever should crossfade when it changes: the stage (`full`, `compact`), the next song's
+  identity (`upnext:<file>:<singer>`), and where a box sits (`...:under-full`). Everything else
+  (time, list rows, progress, the settings row) updates in place under the same key.
+- Output order: by `z`, then by place in the latest list. A fading-out layer keeps its last
+  place.
+- `draw` multiplies its own alphas by the opacity it is given: a 70% black panel drawn at
+  opacity 0.5 comes out at 35%.
+- `Frame.animating` is True while a countdown runs, while the settings row is growing or
+  shrinking, while the black layer is between 0 and 1, and while a song has under 1.5 s left.
+  The animator adds its own "a fade is running".
+
+#### State
+
+`OverlayState` (frozen) grows over the phases. Its final shape:
+
+- `mode`, `screen_h`, `server_url`, `hide_url`, `hide_now_playing`, `hide_clock`
+- `overlay_scale` (clamped to 0.5-2), `overlay_margin` (clamped to 0-40), `song_countdown`
+- `now` (monotonic) and `clock_text` ("9:42 PM"), so `compute_layers` stays pure
+- `song: NowSong | None`: song and artist (`split_title` of the title), singer, semitones,
+  dual_stem, vocal_volume, position, duration
+- `queue: QueueView`
+- `timeline: TimelineSnapshot`
+
+The old fields (`now_playing_title`, `queue_preview`, `singer_name` and the rest) go with the
+old builders in Phases 3-4, and `QueuedSong` goes in Phase 4.
+
+#### Text (Phase 2)
+
+- Every text event looks like `{\an7\pos(x,y)\q2\fn<name>\b<0|1>\fs<size>\fsp<ls>\bord0\shad0\c<colour>\1a<alpha>}text`.
+  `\q2` stops libass from wrapping lines. `\bord0\shad0` override mpv's OSD style, because
+  overlay text has no outline (TV-session ruling 8). Weights: Black is `\fnLato Black\b0`, Bold
+  `\fnLato\b1`, Regular `\fnLato\b0`.
+- Sizes are the boards' CSS px, and `\fs` = px x 1.2 (Lato's line box, measured 2026-11-25).
+  With `\an7`, a line whose CSS line-height is L goes at `line top + (L − 1.2) × px / 2`.
+- Escape every user string with `_ass_escape`, moved to `draw.py`. Extend it to turn `\n` and
+  `\r` into spaces: one osd-overlay string holds one event per line, so a newline in a singer's
+  name would start a new event.
+- `text_width(text, px, weight)`: Pillow's `ImageFont.truetype(<Lato file>, px).getlength()`
+  for runs of narrow characters, plus `px` for each character whose
+  `unicodedata.east_asian_width` is `W` or `F`. Cache the results.
+- `fit(text, max_w, ...)` returns the text, or else the longest start of it plus `…` that fits.
+  `wrap(text, max_w, lines, ...)` breaks at spaces and between wide characters, and the last
+  line `fit`s whatever is left. A word longer than a whole line is cut with `…`.
+- When `overlay_scale` is not 1, measure at the scaled size.
+
+#### Drawing (Phase 2)
+
+- Panels: one `\p1` event per shape, with `\an7\pos(x,y)` and `\bord0\shad0`, filled through
+  `\c` and `\1a`, with bezier corners (k = 0.5523 × r).
+- Borders (the up-next card's 3 px green): draw a ring, the outer rounded rect plus the inner
+  one wound the other way. Don't use `\bord`: libass fills the outline as a whole shape under
+  the fill, which tints a see-through fill. A CSS border sits inside the box.
+- Dashed slots (held rows): dashes about 6 px long with 5 px gaps along the straight edges, and
+  solid corners. This doesn't match the CSS exactly; Ken judges it on the TV.
+- Progress strip: a strip rect with `\clip(<the card's rounded-rect drawing>)`, so it follows
+  the bottom corners (worked on production 2026-11-25).
+- Icons come from the boards' SVGs (viewBox 24, scaled). Mic: a capsule ring (rect 9,2,6x12,
+  rx 3), the lower half of a circle at (12,10) with radius 7, and a stem from (12,17) to
+  (12,22). Each 2.2-wide stroke becomes a filled outline with round caps. Pause: two rounded
+  rects. Logo bars: from `Empty.dc.html` (5 bars) and `Main.dc.html` (4 bars), viewBox 200.
+  Never use font glyphs for icons (TV-session ruling 1).
+
+#### Timeline (Phases 3-5)
+
+`TvTimeline(clock=time.monotonic)` is owned by `PlaybackController` as `timeline`. It holds a
+lock, and `snapshot()` returns a frozen `TimelineSnapshot` with the times already turned into
+seconds and progress.
+
+| Call | Called by | Phase |
+| --- | --- | --- |
+| `start_countdown(key, seconds)`, `clear_countdown()` | run loop | 3 |
+| `song_started()` | `play_file`, after `mpv.play` returns | 4 |
+| `paused()`, `resumed()` | `PlaybackController.pause`, by the state it ends in | 4 |
+| `restarted()` | `PlaybackController.restart` | 4 |
+| `setting_changed("key" or "vocals")` | `set_pitch`, `set_vocal_volume` | 4 |
+| `song_cleared()` | `end_song`, and a start that fails | 4 |
+| `song_starting()` | run loop, when the countdown runs out | 5 |
+| `song_ending()` -> bool (False when already ending) | `skip` | 5 |
+
+Snapshot fields: `countdown_key`, `countdown_left`, `countdown_s`; `play_s` (playing seconds,
+pauses not counted, reset by `song_started` and `restarted`); `started` and `since_start`;
+`row_progress` (0-1, stepped) and `row_changed`; `starting`; `since_ending` (None when not
+ending).
+
+Settings row: `setting_changed` keeps the row's current progress p, setting
+`shown_since = now − p × 0.4` and `hold_until = now + 4.0`. The row grows over 0.4 s from
+`shown_since`, holds until `hold_until`, then shrinks over 0.4 s. A change during the shrink
+grows the row back from where it is.
+
+### The screens
+
+#### Corners (both screens, Phase 2)
+
+All four sit `overlay_margin` px in from the edges (default 16, not scaled). Their sizes scale
+with `overlay_scale`. They never fade at a song switch.
+
+- QR: bitmap, top-left, 180 x `overlay_scale` canvas px square. The bitmap overlay works in
+  screen px, so multiply size and position by `screen_h / 1080` (the 120 px floor goes).
+  `hide_url` hides it.
+- Clock: a bottom-left pill. "9:42 PM" in Bold 52 white, line-height 1.15, on 40% black with
+  padding 0 / 12 and corner radius 10. `hide_clock` hides it.
+- Address: a bottom-right pill. "Add a song" in Bold 34 white, a 14 px gap, then the URL in
+  Regular 34 teal `#1abc9c`, line-height 1.2, on 40% black with padding 2 / 12 and corner
+  radius 10. `hide_url` hides it.
+
+#### Inter-song screen (Phase 3; `Main.dc.html`, `Empty.dc.html`)
+
+On the black placeholder. `overlay_scale` and `hide_now_playing_overlay` leave it alone.
+
+- **Up next** (when a song is next, `upcoming(1)`): a column centred vertically in the box from
+  x 88 to 1204 and y 260 to 930, with 28 px gaps:
+  - `UP NEXT` in Bold 36, letter-spacing 6, `#b5bfc0`.
+  - A mic icon (104 px), a 28 px gap, then the singer in Black 150 green `#2ecc71` on one line,
+    cut short with `…`.
+  - The song title in Bold 76 amber `#f1b70e`, line-height 1.1, wrapping to two lines and then
+    cut short. Then, 10 px below, the artist in Regular 52 `#dbdee0` on one line (no artist
+    line when there is no artist).
+  - The countdown row, 24 px further down: a bar (14 px tall, corner radius 7, track
+    `#282f2f`, filled in `#3298dc` from the left by the share of time gone), a 28 px gap, then
+    "Starts in 0:08" in Bold 40 `#b5bfc0` (seconds left rounded up, as m:ss). If the countdown
+    isn't running for this song yet (the run loop polls every 0.5 s), the bar is empty and the
+    text shows `song_countdown`.
+  - Key: `inter:upnext:<file>:<singer>`, so a change of song crossfades.
+- **Waiting message** (no song is next, but the queue has songs that haven't failed): in the
+  same box, Bold 76 white, line-height 1.15. It reads "Getting the first song ready." when any
+  of those songs is held and not paused, else "Every song in the queue is paused." Key:
+  `inter:wait:<message>`.
+- **Panel**: top-right at the margin, 620 px wide, bottom edge at y 930, padding 32, corner
+  radius 20, fill `#1f2424`, 26 px gaps:
+  - The heading `AFTER THAT` (`IN THE QUEUE` when no song is next) in Bold 28, letter-spacing
+    5, `#b5bfc0`.
+  - Up to 5 rows. A row has an 80 x 80 slot with corner radius 14. A ready slot is filled
+    `#282f2f` with its number in Black 38 white. A held or paused slot has no fill, a 2 px
+    dashed `#8c9b9d` border, its number in Black 38 `#b5bfc0`, and its word 4 px under it in
+    Regular 14. Then a 22 px gap and a text column: the singer in Black 44 green, line-height
+    1.1, and under it "song · artist" (just the song when there's no artist) in Regular 30
+    `#dbdee0`, line-height 1.2, each on one line cut short with `…`. On held and paused rows
+    the text column is at 40% opacity; the slot stays at full strength.
+  - "+ N more in the queue" in Regular 28 `#b5bfc0`, at the panel's bottom.
+  - The panel is one key and its rows update in place.
+- **Footer logo**: bottom centre, 20 px up. The 4-bar icon at 52 px, a 14 px gap, then the
+  wordmark in Black 38, letter-spacing −1, with `gpu` in amber and `karaoke` in white. Not on
+  the empty screen.
+- **Empty queue** (no songs that haven't failed): a column centred in the box from y 200 to
+  930, with 40 px gaps: the 5-bar logo at 240 px, the wordmark in Black 120 with
+  letter-spacing −3, then the message in Regular 48 `#dbdee0`: "The queue is empty. Scan the
+  code to add a song.", or "The queue is empty. Add a song from your phone." when `hide_url`
+  is on.
+- `queue_view`: rows are the queue's non-failed songs in queue order, numbered by their place
+  among the non-failed songs, with the Up next song's row taken out. It shows the first 5, and
+  `more` counts the rest. The words are `downloading` / `processing` / `lyrics`, else `paused`.
+
+#### During song (Phase 4; `DuringCards.dc.html`)
+
+Top-right at the margin. Every size is multiplied by `overlay_scale`. Boxes are stacked with an
+8 px gap and right-aligned.
+
+- **Full card**: 656 px wide, padding 12 / 16, corner radius 14, 70% black.
+  - Line 1: the title (Black 44 amber, line-height 1.2, wrapping to two lines, then cut short)
+    and, 24 px to its right, the singer block: a 34 px mic, a 10 px gap, then the name in Black
+    40 green, at most 260 px wide, cut short with `…`, top-aligned.
+  - Then the artist (Regular 34 `#dbdee0`, line-height 1.2, one line, cut short), 4 px below.
+  - 12 px below that, the settings row. On the left are tags (Bold 28 white, padding 4 / 10,
+    corner radius 10, 14% white fill, 10 px apart): `Key +2`, plus `Original Vocals 40%` for
+    dual-stem songs. On the right is the time, "1:42 / 5:55", in Regular 30 `#dbdee0`. While
+    paused, the time is replaced by a 24 px pause icon, a 10 px gap and "Paused" in Bold 30
+    white.
+- **NEXT line**, under the full card and as wide: padding 8 / 16, corner radius 12, 70% black.
+  `NEXT` in Bold 24, letter-spacing 4, `#b5bfc0`, then the singer in Black 34 green, then the
+  song in Regular 30 `#dbdee0` cut short, with 16 px gaps and baselines aligned.
+- **Compact card**: as wide as its content, between 420 and 560 px. Padding 6 at the top, 12 at
+  the bottom and 12 at the sides; corner radius 10; 70% black.
+  - Line 1: the title (Black 36 amber, one line, cut short), a 20 px gap, a 28 px mic, a 10 px
+    gap, then the singer (Black 34 green, at most 220 px).
+  - Line 2, 2 px below: the artist (Regular 28 `#dbdee0`, cut short) on the left and the time
+    (Regular 28 `#dbdee0`, with 6 px of padding before it) on the right. With no artist, the
+    time stands alone on the right.
+  - A 6 px progress strip runs along the card's bottom edge: a 18% white track, filled in
+    `#3298dc` up to position / duration, and clipped to the rounded bottom corners.
+- **Settings row on the compact card** (Phase 4, commit 2): 6 px under line 2, the full card's
+  tags at 26 px. The tag that changed is amber `#f1b70e`; the other is `#dbdee0` at 70%. The
+  row's height and its tags' opacity follow `row_progress`. The card's bottom edge (and so the
+  strip, and every box below it) moves with it.
+- **Small Next line**, under the compact card: at most 560 px wide, padding 3 / 10, corner
+  radius 8, 70% black, 28 px with line-height 1.2, on one line cut short with `…`. It reads
+  "Next " (`#b5bfc0`), the singer (Black green), " · " and the song (`#dbdee0`).
+- **Up-next card**: 596 px wide, a 3 px green border inside the box, padding 12 / 16, corner
+  radius 14, 75% black, 6 px gaps. "<singer>, you're up next" in Black 46 green (only the name
+  is cut short). Then the song in Bold 32 amber, followed by " · <artist>" in Regular 32
+  `#dbdee0` (just the song when there's no artist), on one line cut short.
+
+Which boxes show is a pure function of the state:
+
+- `full_s = 15` and `up_s = 30`; when the duration is under 45 s, both are duration / 2.
+- Full card: when paused, or when `play_s < full_s`. Compact card: otherwise.
+- Up-next card: when a song is next and the time left is at most `up_s`.
+- NEXT line: with the full card, when a song is next and the up-next card is not up.
+- Small Next line: with the compact card, under the same condition.
+- `hide_now_playing_overlay` hides all of these; the corners stay.
+- Cards only show once the song has started (`timeline.started`). In Phase 5, they also go
+  while the song is ending or in its last 1 s.
+- Keys: `full`, `compact`, `next:<id>`, `smallnext:<id>`, `upnext:<id>:<under full|compact>`.
+  A new key crossfades over 400 ms in 8 steps.
+- Text: "Key +2" style as in Decided item 7; vocals as `round(vocal_volume × 100)`; time as
+  m:ss / m:ss.
+
+#### Song switches (Phase 5)
+
+- **Black layer**: a full-screen black rect, `z` 0 (under the cards and corners; the QR bitmap
+  is always on top), `fade_s` 0. Its opacity comes from the state and moves in 50 ms steps:
+  - natural end: `1 − time_left` over the last 1 s, when the duration is known;
+  - skip: `since_ending / 1.0`;
+  - song start: 1 from `song_starting()` until `song_started()`, then `1 − since_start / 1.0`.
+  - It is listed whenever `starting` or `since_ending` is set, whatever the mode. At other times
+    it shows only while a song plays and is in its first or last 1 s, so it isn't on the
+    inter-song screen, which sits on the black placeholder.
+  - `end_song` calls `timeline.song_cleared()` after `load_placeholder()`. After a skip the
+    black layer stays up until then: `reset_now_playing()` switches the mode to idle before the
+    placeholder replaces the video, and without the black layer a video frame could flash in
+    that gap.
+- **Skip**: `skip()` returns at once. If `timeline.song_ending()` is False (already ending),
+  it does nothing more. Otherwise a short-lived thread steps mpv's `volume` property (a new
+  `MpvController.set_player_volume`, kept apart from `set_system_volume`) from 100
+  to 0 in 20 steps over 1 s, then runs `end_song("skip")` under `_playback_lock`. `end_song`'s
+  existing `is_playing` guard covers a natural end that lands in between. `MpvController.play`
+  sets `volume` back to 100 before `loadfile`. The master volume is the system mixer, so mpv's
+  own `volume` is otherwise always 100.
+- **Natural end**: no music fade. The cards go when 1 s is left, the black layer fades in, the
+  video ends, `end_song` runs, and the inter-song pieces fade in (400 ms).
+- **Song start**: when the countdown runs out, the run loop calls `timeline.song_starting()`,
+  the inter-song layers stop being listed (so they fade out over 400 ms) and the black layer
+  is drawn opaque. The run loop sleeps 0.4 s, then calls `pop_next()` and `play_file()`.
+  `play_file` calls `timeline.song_started()`, after which the video fades in from black over
+  1 s and the full card and NEXT line fade in. If `pop_next()` returns None or the play fails,
+  `timeline.song_cleared()` brings the inter-song screen back.
+- The Socket.IO `end_song` handler keeps ending at once (no page sends it).
+
+### Settings (Phases 2-3)
+
+- `overlay_margin` (Phase 2): an int in DEFAULTS, default 16. A number input in the Display
+  section after `overlay_scale`: `min="0" max="40" step="1"`, labelled "Overlay margin from
+  screen edge (px)", with a `{# MSG: ... #}` comment. Add it to `_OVERLAY_PREFS` and pass it
+  from `routes/info.py`.
+- `overlay_scale` (Phase 2): the input's `max` becomes 2, and the state builder clamps the value
+  to 0.5-2.
+- `song_countdown` (Phase 3): replaces `splash_delay` in every place listed under "The code
+  today", with the default, flag and migration from Decided item 2. The migration is
+  `PreferenceManager.migrate_splash_delay()`, called in `Karaoke.__init__` straight after
+  `scaffold_hidden_settings()`. No `.po` updates (as on earlier branches).
+
+### Accepted edges
+
+1. At `overlay_scale` 2, the QR (360 px) can overlap the Up next singer line, because the
+   inter-song layout has fixed sizes.
+2. If a file's duration is longer than its real end, the natural-end fade stops short of black.
+3. If the next song changes during the 0.4 s start fade, the song that plays is the new next
+   one, under a name that already faded out.
+4. A Restart during a skip's fade doesn't stop the skip.
+5. CJK widths are estimated (Decided item 6); a few px of overrun into a card's padding is
+   possible.
+6. A held song is never named as Next during a song, because only `upcoming()` songs are.
+7. The provider re-reads `config.ini` on every frame (up to 20 a second during animations).
+   That's cheap, and the cache it would need isn't worth it.
+
+### Phases
+
+Every commit: tests ride with their code; use real `EventSystem` and `PreferenceManager`
+instances. Before each commit, run the full suite
+(`/home/ken/miniconda3/envs/pik/bin/python -m pytest`), then pre-commit on the changed files,
+then read `git diff --cached` against this spec. Delete what each commit replaces, tests
+included.
+
+**Screenshots** go to `/home/ken/pikaraoke/.claude/tv-shots/phase<N>/` (local, gitignored),
+named after the canvas board they match. Take them with a scratchpad harness that subclasses
+`mpv.MPV` the way `ui-check`'s `run_app.py` does, adding `window_minimized=True` and
+`geometry="1920x1080"`. Drive the real `MpvController` and `OverlayManager`, and save with
+`screenshot-to-file <path> window`. For the during-song shots, load the stills in
+`screens-canvas/backgrounds/` (16:9, 4:3, cinematic) as the video. Read every shot back, and
+note in the Results anything that differs from its board beyond font hinting.
+
+#### Phase 1: Lato and the lyrics (1 commit)
+
+`feat(tv): bundle Lato and draw the lyrics in Lato Bold`
+
+- Run `apt download fonts-lato` (2.015) into the scratchpad and unpack it with
+  `dpkg-deb -x`. Copy `Lato-Regular.ttf`, `Lato-Bold.ttf` and `Lato-Black.ttf` to
+  `pikaraoke/static/fonts/`, and put the SIL OFL 1.1 text with Lato's copyright line from the
+  package's copyright file into `static/fonts/OFL.txt`. Delete `Arial.ttf` and
+  `DroidSansFallback.ttf`.
+- `lib/tv/__init__.py` (empty) and `lib/tv/fonts.py`: `FONTS_DIR`, the files by weight, and the
+  names `Lato` and `Lato Black`.
+- `MpvController.start()`: pass `osd_fonts_dir=FONTS_DIR`, `sub_fonts_dir=FONTS_DIR` and
+  `sub_ass_style_overrides="Karaoke.Fontname=Lato,Karaoke.Fontsize=66,Karaoke.Bold=-1"` to the
+  constructor. `SRT_STYLE`: `sub-font` Lato, `sub-font-size` 44, `sub-bold` yes.
+- Tests: the constructor gets the three options; the `SRT_STYLE` values; the three font files
+  exist.
+- VM checks, recorded in the Results:
+  1. Shots (harness, `play()` with the real sub paths, seek to a sung line, pause) of a karaoke
+     song with Latin lyrics, a karaoke song in Chinese or Korean, and a song in SRT mode. The
+     library is `/home/ken/shared-drives/D:/Shared/pikaraoke-songs` (`karaoke/*.ass`,
+     `subtitles/*.srt`).
+  2. Using `osd-overlay` with `hidden=yes compute_bounds=yes`, compare the widths of
+     "Hamburgefonstiv" under `\fnLato\b0`, `\fnLato\b1`, `\fnLato Black\b0` and a font name
+     that doesn't exist. All four must differ, which proves the bundled files load.
+- **Stop** and report, without committing, if the lyrics aren't in Lato or the CJK lyrics lose
+  their glyphs.
+- The commit stands alone, so Ken can copy it to `dev` early if he wants the lyrics sooner.
+
+#### Phase 2: drawing kit, render thread, corners (2 commits)
+
+1. `feat(tv): an ASS drawing kit and a text measurer for the TV screens`: `draw.py` and
+   `text_fit.py` with their tests (colour and alpha, escaping including newlines,
+   rounded-rect, ring and dash paths, opacity multiplying, the width rule, fit, wrap with CJK
+   and an over-long word). Nothing is wired in yet.
+2. `feat(tv): one render thread draws the TV overlay with stepped fades; new corners`: the
+   render loop, `Layer`/`Frame`/animator, `screens.compute_layers` with the three corners, the
+   QR at the margin in canvas units, `overlay_margin`, `overlay_scale` 0.5-2, and the callback
+   cleanup. The URL and clock builders are deleted. The idle list, now-playing, timecode and
+   up-next builders stay, joined into one `legacy` layer (`z` 1, `fade_s` 0) until Phases 3-4.
+   Tests:
+   - A 400 ms fade gives exactly 8 distinct strings, then stops resending.
+   - A key change crossfades; a fading-out layer is dropped after its fade; a key that returns
+     mid-fade ramps from where it was.
+   - The fast cadence is on only while something is animating.
+   - Corner positions at margins 0, 16 and 40 and scales 1 and 2; the QR's bitmap size and
+     position at `screen_h` 1080 and 2160.
+   - `hide_url` and `hide_clock`.
+   - The preference route refreshes for `overlay_margin`.
+
+VM checks:
+
+1. Measurer against libass: at least 150 titles from the library's file names (including every
+   CJK one), each at Black 36 and Regular 30. Tabulate the `text_width` against the
+   `compute_bounds` width (x1 − x0). Record the max and the mean difference in px, split into
+   CJK and the rest.
+2. Shots of the corners on the black placeholder and over each still, at scales 1 and 2,
+   margins 0 / 16 / 40, and with `hide_url` and `hide_clock`.
+3. The CPU of the process on an idle inter-song screen over 30 s (`ps -o %cpu`).
+
+**Stop** and report if any title is under-measured by more than 8 px at Black 36. That decides
+whether the measurer switches to `compute_bounds`, which is Opus's call.
+
+A `/code-review` is due after Phase 2 (a new render thread). The session writes the line at its
+checkpoint.
+
+#### Phase 3: the inter-song screen (2 commits)
+
+1. `feat(tv): the countdown before each song replaces splash_delay and restarts when the next
+   song changes`: `song_countdown` with the flag and the migration, `timeline.py` (countdown
+   part), and `Karaoke._count_down()`. In a loop that sleeps 0.1 s, it keys the next song by
+   `(file, user)` from `upcoming(1)`, restarts the deadline when the key changes, publishes it
+   with `start_countdown`, returns False (and clears) when nothing can play or the app stops,
+   and returns True when time runs out. `run()` calls it in place of the `splash_delay` loop.
+   Tests: the restart on a change, the countdown at 0, the queue emptying mid-countdown (fake
+   clock and sleep), the migration (value carried, key removed, an existing `song_countdown`
+   kept), and the CLI alias.
+2. `feat(tv): the inter-song screen: up next with its countdown, the queue as on the phone, the
+   empty screen`: `queue_view.py`, `inter_song.py`, the logo drawings, and a black 1344 x 768
+   `placeholder.png` in place of the image. The provider adds `queue` (built under the queue
+   lock from a copy of the items plus `upcoming(1)`), the timeline snapshot and
+   `song_countdown`. Delete the idle list builder, `OSD_QUEUE_PREVIEW` and their tests.
+   Tests for `queue_view` (numbering, Up next left out, failed hidden and not counted, words,
+   the two waiting messages, the empty queue, `more`) and the inter-song layers (which keys show
+   for each state, heading text, countdown text and bar share, the `hide_url` message, wrap and
+   cut on long names).
+
+VM checks: add a window mode to `ui-check`'s `run_app.py` (local and gitignored). When
+`UI_CHECK_MPV_IPC=<socket path>` is set, it keeps a real minimized 1920 x 1080 window with
+`input-ipc-server=<socket>` instead of `vo=null` (still `ao=null`); with the variable unset,
+nothing changes. Launch from this worktree on an unusual port with `FAKE_JOB_S=20`, drive the
+queue over HTTP, and take shots through the socket (`screenshot-to-file`). Record each:
+
+1. Empty queue, and the same with `hide_url` (`Empty`, `EmptyNoUrl`).
+2. Songs added while still processing: "Getting the first song ready." with dashed rows
+   (`InterPreparing`).
+3. The first song becomes ready: Up next with a countdown, and a second shot 3 s later shows
+   the bar has moved (`InterShort`, `Main`).
+4. Pause the Up next song (the queue's pause route): the next song takes over Up next and the
+   countdown restarts (two shots, 2 s apart, plus the log).
+5. Every song paused: "Every song in the queue is paused." (`InterAllPaused`).
+6. Long names (a singer of 30+ characters, a title over two lines) and 7+ songs, so the panel
+   shows "+ N more" (`InterLong`).
+7. `song_countdown` set to 3 on the Settings page: the next countdown runs 3 s.
+
+#### Phase 4: the during-song cards (2 commits)
+
+1. `feat(tv): during-song cards in three stages`: the timeline's play clock (`song_started`,
+   `paused`, `resumed`, `restarted`, `song_cleared`) wired into `PlaybackController`, and
+   `during_song.py` with the stage rules, pause, short songs, the hide setting and long titles.
+   Delete the legacy layer and everything only it used: the old builders, `Overlay`,
+   `render_ass`, `_OVERLAY_STYLE`, the old colours and icons, `_qr_height`,
+   `_overlay_font_size`, `QueuedSong`, `_get_queue_preview` and the old `OverlayState` fields,
+   along with their tests.
+   Tests:
+   - A stage table over (play_s, time_left, duration, paused, next song or none, hidden),
+     covering every bullet of "Which boxes show".
+   - The play clock not counting pauses, and resetting on restart.
+   - Keys that change at each transition, and the up-next card's key changing when a pause
+     puts the full card above it.
+   - The time text and the Paused swap.
+   - Single-stem: no vocal tag.
+   - No card before `started`.
+2. `feat(tv): a key or vocal change grows the compact card by a settings row for 4 s`:
+   `setting_changed`, `row_progress`, the row on the compact card, and the boxes below
+   following it. Tests: progress over time (grow, hold, shrink); a second change during the hold
+   (holds longer) and during the shrink (grows back from where it was); highlight colours; the
+   full card's row updating in place with no highlight.
+
+VM checks: hand-built states in the harness over the three stills, one shot per board:
+`DuringCards`, `DuringCardsMid`, `DuringCardsEnd`, `DuringHidden`, `DuringPaused`,
+`DuringPausedEnd`, `DuringSettingKey`, `DuringSettingVocals`, `DuringQueueEmpty`,
+`DuringLongTitle` and `DuringLongTitleMid`. Then one pass in the real app (window mode, real
+library songs):
+
+1. A song starts with the full card, and a shot at 20 s shows the compact card.
+2. `/seek` to 40 s before the end: the up-next card shows. `/seek` back: it goes.
+3. `/pause`: the full card with Paused. Resume: back to compact.
+4. `/transpose/2` mid-song: the row grows. Shots at 1 s and at 5 s (gone).
+
+A `/code-review` of Phases 3-4 is due after Phase 4.
+
+#### Phase 5: songs fade through black (1 commit)
+
+`feat(tv): songs fade through black at the end and the start; a skip fades the music`: the
+black layer, `song_starting`/`song_ending`, the skip thread with `set_player_volume`,
+the volume reset in `play()`, and the run loop's start sequence. Tests:
+
+- Black opacity in each case (natural end, skip, start before and after `started`), stepped.
+- The skip thread's 20 volume steps, then `end_song` (fake sleep).
+- A second skip while ending does nothing; a natural end during the fade ends the song once.
+- `play()` resets the volume.
+- A `pop_next()` that returns None during the start fade brings the inter-song screen back.
+
+VM checks:
+
+1. Audio: with `ao=pcm` to a wav in the scratchpad and the app's dual-stem filter graph on a
+   library song, step `volume` from 100 to 0 mid-song. Record the RMS of the wav in 100 ms
+   windows. **Stop** and report if the level doesn't fall by at least 40 dB: then the music fade
+   needs a different route, which is Opus's call.
+2. App, window mode: `/skip` mid-song, with shots at about 0.5 s (black partly in, cards gone)
+   and at 1.5 s (inter-song screen). Seek to 3 s before the end and shoot the last second.
+   Shoot a song start just after the countdown runs out (black, corners only) and at 0.5 s.
+
+A `/code-review` of Phase 5 is due after it.
+
+#### Phase 6: Ken at the TV
+
+On the production box, from this branch. Record each finding as a ruling in this file.
+
+1. Lyrics in Lato Bold over 16:9 and 4:3 songs, and a song in SRT mode (the first SRT look on
+   the TV).
+2. Corners at 16 px: the QR scans, the pills read well, `overlay_margin` changes live.
+3. Inter-song: Up next and the countdown, held and paused rows, the dashed slots, "+ N more",
+   the footer logo, the empty screen.
+4. During song: full to compact to up-next, pause and resume, a key change (the row), a long
+   title, the hide setting, a short song.
+5. Song end, skip (and its music fade), song start.
+6. A quick look at `overlay_scale` 2.
+7. Settings: the countdown's value after the migration (set it to 8 if it carried a 2). Then
+   Decided items 1, 7 and 13, which are the ones most likely to read differently on the TV.
+
+## Results log
+
+(Executor: one entry per phase, with the commit hashes, suite count, pre-commit, each VM check's
+outcome with screenshot paths and raw numbers, and anything that departed from this spec and
+why. No verdicts on the stop rules; report the numbers and stop.)
