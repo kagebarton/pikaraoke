@@ -6,7 +6,8 @@ Branch `repair_lrc_fit_list` off `dev` at `efb91f2d`, worktree
 `.claude/worktrees/repair_lrc_fit_list`.
 
 **Status: Phase 1 built and ui-checked 2026-11-26 (`535c817e`, `5a7e397e`, `503090f1`); raw readings in the
-Results log. Next: Opus judges (read-only), then Ken's `/code-review`.**
+Results log. Opus judged it 2026-11-26: passes, three fixes ruled (Results log, "Phase 1 rulings"). Next: Ken's
+`/code-review`, whose fix pass also makes the three ruled fixes.**
 
 ## The problem
 
@@ -227,8 +228,8 @@ verdicts. Then Opus judges (read-only), then Ken's `/code-review`.
 - Ken's checks on his phone: the four songs' lists and cards, the warning card's wording, the
   preview's place.
 - Landing: commits 1-3 and their fixes copied onto `dev` one by one (CLAUDE.md, Branches); this
-  plan stays on the branch. On `dev`, plan-only: close the two entries (decision 7) and update
-  "Landing order".
+  plan stays on the branch. On `dev`, plan-only: close the two entries (decision 7), add the
+  disk-row entry (Results log, "Phase 1 rulings", R4) and update "Landing order".
 
 ## Not in this plan
 
@@ -249,6 +250,7 @@ verdicts. Then Opus judges (read-only), then Ken's `/code-review`.
 | 2026-11-26 | 1, commit 2 | `5a7e397e` | Rows scored with Check fit's fit. `evaluate`/`pick` take streams; `lrc_auto_timing.check` passes `heard_streams({"transcribe_words": words}, None)`, the probe `{TRANSCRIBE: words}`; `LibraryTools.lrc_timing_candidates`, `_search_synced`, `_lrc_on_disk_id`, `_lrc_check` (the check built from a fit, shared with `_fit_lrc_timing`); `current_lines` and its tests deleted; `/song_info/lrc_search` rewritten with `verdict`; `matchOption` takes a `score` element. Touched test files (library tools, library routes, lrc auto pick, lrc auto timing, probe): 1056 passed after. |
 | 2026-11-26 | 1, commit 3 | `503090f1` | `#lt-preview-toggle` / `#lt-preview`, `_lrc_match(status, song)` carries the disk text, `showTimingPreview(which, picked)` and `toggleTimingPreview` shared by step 2 and LRCLIB timing. Full suite after commit 3: 4561 passed (86.8 s). |
 | 2026-11-26 | 1, ui-check | (artifacts, untracked) | Port 5743 on this worktree at `503090f1`, four songs, readings below. Artifacts: `.claude/ui-check/repair_lrc_fit_list/` (`results.json`, 25 screenshots, `check_repair_lrc.py`, `extra_readings.py`). Regenerate never pressed. |
+| 2026-11-26 | 1, judge | (this commit) | Opus judged the readings and commits 1-3 against decisions 1-8 and the Phase 1 spec, read-only. Passes; rulings R1-R4 below. No code. |
 
 ### Phase 1 executor notes (facts, no verdicts)
 
@@ -431,3 +433,44 @@ Card screenshots: love_me_now_2_card_good_row0.png, love_me_now_2_card_bad_fits_
 | 18 | Rolling in the Deep | - | 5:11 · 77 s longer | fits, check first · matches 50 of 58 lines (rp-bad) | bad · Fits, but read the warning first. | 16 lines are heard far from their time. | 2:15–3:26 · 21 lines | 3:12–3:19 · 3 lines | False |
 
 Card screenshots: rolling_in_the_deep_2_card_good_row0.png, rolling_in_the_deep_2_card_bad_fits_row11.png.
+
+### Phase 1 rulings (Opus, 2026-11-26)
+
+Read: commits `535c817e`, `5a7e397e`, `503090f1` (`git diff c1f938a7..503090f1`), the readings above,
+`love_me_now_0_load.png` and `love_me_now_1_list.png`. Against the decisions: 1, 2, 3 and 8 as read in the four
+songs' tables (each row's label, tone and count equal its own card; passing rows first; `best` on the first passing
+row, none on Defying Gravity; Love Me Now's disk match, 35 s short, regenerates with no override box; speed,
+mistimed and unclaimed warnings live, shifted by tests). 5: step 2's rows keep the text count (`lrclibOption`
+unchanged in substance). 6: tests only (`test_library_tools.py:1802`, `test_library_routes.py:3293`). Download
+unchanged: `lrc_auto_timing.check` now passes `{}` where it passed `{TRANSCRIBE: []}` for no words, and `fit_slice`
+drops empty streams before anything else (`srt_slice_fit.py:304-306`), so both give `NO_REFERENCE`.
+
+Fixes, made in the `/code-review` fix pass:
+
+- **R1. Delete `_lrc_verdict`'s flagged-runs case** (head "Fits, but check these lines first.",
+  `routes/song_info.py:961`) and the hand-made-check test that reaches it (`test_library_routes.py` around 2891).
+  Unreachable: `flagged_runs` needs `MIN_FLAGGED_RUN` (2) mistimed lines, and `refusal` returns `mistimed` above
+  `MAX_MISTIMED` (1), checked before; the check's `refusal` is always `lrc_auto_pick.refusal(fit)` (`_lrc_check`).
+  A fit with a run reads "Fits, but read the warning first." and its runs still list on the card. The msgid leaves
+  the catalogs at the next regen (Ken); no catalog edits. The Commit 1 spec's third case was a spec miss.
+- **R2. `#lt-preview-toggle` and `#lt-search-toggle` each on their own line**, preview first (decision 4), search
+  below. Both are `.rp-link` (`inline-flex`), so with the preview closed they sit on one line, about 3 px apart
+  (`x` 25 + `w` 148, then `x` 176, same `y`), and read as one link "Preview selected timing Search LRCLIB"
+  (`love_me_now_0_load.png`). With the preview open the search link already falls below the box.
+- **R3. The disk row's preview shows the timed lines only.** `_lrc_match` sends `read_song_lrc(song).text`, the
+  whole file (`read_lrc`: "its header tags are harmless to the cue parser"), so the disk preview's first lines are
+  the ID tags (`[ti:]`, `[ar:]`, `[al:]`, `[length:]`, `[lrclib_id:]`; readings 3 in all four songs), where the
+  same record picked from the search starts on its first timed line. Strip the ID-tag lines from the disk row's
+  `syncedLyrics`; the repair path re-reads the file and is unaffected.
+
+Logged, not fixed here:
+
+- **R4. The disk row has no verdict when the search does not list its record** (Belle: the disk match is refused,
+  `unclaimed`, and sits first with no label above row 1's `best fit`; only the card the page loads for a
+  `?source=lrclib` link says so). Not a regression (before this branch it had no score either) and outside
+  decision 1, which covers search results. Fitting it with the rest raises whether the disk record joins the pick
+  order and can take `best`. Proposed `plans/open-issues.md` entry, added at landing: "Repair's LRCLIB timing: the
+  match on disk gets no verdict when the search doesn't list it."
+
+Noted, no action: the search's wall time (2.7-4.3 s on the page, against 1.0-1.3 s for the LRCLIB GET alone) is
+the per-record fitting decision 1 accepted; Ken's phone checks judge it.
