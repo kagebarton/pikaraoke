@@ -281,6 +281,51 @@ def test_one_ticked_add_to_queue_box_leads_advanced_with_or_without_results(
     assert "add-to-queue-direct" not in body
 
 
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_only_the_search_box_pins_to_the_top_not_clear_or_advanced(mock_get, client):
+    """Pinned rows cover what scrolls under them, so the pin holds just the box and its button;
+    Clear and Advanced are seldom used and scroll away. The pin is Browse's shared class."""
+    body = _search_body(client, mock_get, _RESULTS, _karaoke_with_library([]))
+
+    assert "pin-top" in _ancestor_classes(body, "search-form")
+    assert "pin-top" in _ancestor_classes(body, "search-link")
+    for outside in (
+        "clear-search",
+        "show-advanced",
+        "advanced-settings",
+        "container_search_result",
+    ):
+        assert "pin-top" not in _ancestor_classes(body, outside)
+    assert 'href="/static/phone-rows.css"' in body
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_search_page_takes_the_phone_look_without_bulmas_amber_button_or_box(mock_get, client):
+    body = _search_body(client, mock_get, _RESULTS, _karaoke_with_library([]))
+
+    assert 'id="search-link"' in body
+    for tag, element_id in (("button", "search-link"), ("div", "advanced-settings")):
+        element = re.search(rf'<{tag}[^>]*id="{element_id}"[^>]*>', body).group(0)
+        assert not re.search(r"is-(warning|primary|rounded)|has-background|\bbox\b", element)
+    download = re.search(r'<button[^>]*id="direct-download-button"[^>]*>', body).group(0)
+    assert not re.search(r"is-(warning|primary|rounded)", download)
+    # The Advanced inset's own rule is the only <hr> on the page; none sits above the results.
+    page = body[body.index('id="search-form"') :]
+    assert page.count("<hr") == 1
+    assert page.index("<hr") < page.index('id="direct-download-url"')
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_labels_keep_their_text_and_show_more_reads_show_more(mock_get, client):
+    """The restyle changes no msgid: the translations already made still apply."""
+    body = _search_body(client, mock_get, _filler(30), _karaoke_with_library([]), query="abc")
+
+    label = re.search(r'<p class="results-label">(.*?)</p>', body, re.S).group(1)
+    assert " ".join(label.split()) == "Search results for <small><i>'abc'</i></small>"
+    assert "Direct download YouTube url:" in body
+    assert re.search(r'id="show-more"[^>]*>\s*Show more\s*</button>', body)
+
+
 # ---------------------------------------------------------------------------
 # Library songs: cards first, and a copy under another YouTube ID noted on its card
 # ---------------------------------------------------------------------------
@@ -609,22 +654,25 @@ def test_every_card_has_one_play_button_in_its_frame_and_no_thumbnail_link(mock_
 
 
 class _Ancestors(HTMLParser):
-    """The ids of the elements an element with the given id sits inside."""
+    """The ids and the classes of the elements an element with the given id sits inside."""
 
     VOID = {"img", "input", "br", "hr", "meta", "link"}
 
     def __init__(self, target_id: str):
         super().__init__()
         self.target_id = target_id
-        self.stack: list[str | None] = []
+        self.stack: list[tuple[str | None, str]] = []
         self.ancestors: list[str] | None = None
+        self.ancestor_classes: list[str] | None = None
 
     def handle_starttag(self, tag, attrs):
-        element_id = dict(attrs).get("id")
+        attributes = dict(attrs)
+        element_id = attributes.get("id")
         if element_id == self.target_id:
-            self.ancestors = [i for i in self.stack if i]
+            self.ancestors = [i for i, _ in self.stack if i]
+            self.ancestor_classes = [name for _, classes in self.stack for name in classes.split()]
         if tag not in self.VOID:
-            self.stack.append(element_id)
+            self.stack.append((element_id, attributes.get("class") or ""))
 
     def handle_endtag(self, tag):
         if tag not in self.VOID and self.stack:
@@ -635,6 +683,12 @@ def _ancestor_ids(body: str, element_id: str) -> list[str] | None:
     parser = _Ancestors(element_id)
     parser.feed(body)
     return parser.ancestors
+
+
+def _ancestor_classes(body: str, element_id: str) -> list[str] | None:
+    parser = _Ancestors(element_id)
+    parser.feed(body)
+    return parser.ancestor_classes
 
 
 @patch("pikaraoke.routes.search.get_site_name", return_value="PiKaraoke")

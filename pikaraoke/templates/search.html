@@ -1,9 +1,100 @@
 {% extends 'base.html' %}
 {% from 'search_result.html' import result_card %}
 {% from 'info_tip.html' import info_tip %}
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='phone-rows.css') }}">
+{% endblock %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='library-pages.js') }}"></script>
 <style>
+	/* --- The search row, Advanced and the results label ------- */
+	/* The row pins to the top (phone-rows.css .pin-top, which bleeds to the card's edges), so it
+	   takes the card's side inset itself. */
+	#search-form {
+		display: flex;
+		gap: 8px;
+		margin: 0 20px;
+	}
+	#search-input,
+	#direct-download-url {
+		height: 44px;
+		padding: 0 12px;
+		border-radius: 6px;
+		background-color: var(--dark-bg-secondary);
+		color: var(--dark-text-primary);
+	}
+	#search-input {
+		flex: 1;
+		width: auto;
+		min-width: 0;
+	}
+	/* The grey .button at the phone pages' size. Its text colour comes from the theme, which also
+	   greys it while disabled and recolours it for a result. */
+	#search-link,
+	#direct-download-button,
+	#show-more {
+		height: 44px;
+		border-radius: 6px;
+		font-size: 15px;
+		font-weight: 700;
+	}
+	#search-link,
+	#direct-download-button {
+		padding: 0 16px;
+	}
+	#search-options {
+		display: flex;
+		justify-content: flex-end;
+		align-items: center;
+		gap: 16px;
+	}
+	#search-options > * {
+		display: flex;
+		align-items: center;
+		min-height: 44px;
+		font-size: 15px;
+	}
+	#clear-search {
+		color: var(--dark-danger-text);
+		cursor: pointer;
+	}
+	#search-options label {
+		color: var(--dark-text-light);
+	}
+	/* Advanced: an inset on the card. Its URL field is a step darker than the inset so it shows. */
+	#advanced-settings {
+		margin-top: 10px;
+		padding: 16px;
+		border-radius: 6px;
+		background-color: var(--dark-bg-secondary);
+	}
+	#advanced-settings hr {
+		height: 1px;
+		background-color: var(--dark-bg-raised);
+	}
+	#advanced-settings .label {
+		margin-bottom: 4px;
+		font-size: 13px;
+		font-weight: 400;
+		color: var(--dark-text-sub);
+	}
+	#advanced-settings #direct-download-url {
+		background-color: var(--dark-bg-primary);
+	}
+	/* What the search found, or is looking for, as one small line above the cards. */
+	#searching_loader,
+	#container_search_result .results-label {
+		margin: 0 0 8px;
+		font-size: 13px;
+		color: var(--dark-text-sub);
+	}
+	#container_search_result .no-more {
+		margin-top: 12px;
+		text-align: center;
+		font-size: 13px;
+		color: var(--dark-text-sub);
+	}
+
 	/* --- Search result list ---------------------------------- */
 	ul.search_result_items {
 		list-style: none;
@@ -364,7 +455,7 @@
 			if (cardsHtml) {
 				$btn.remove();
 			} else {
-				$btn.replaceWith('<p class="has-text-centered has-text-grey mt-3">No more results</p>');
+				$btn.replaceWith($("<p>").addClass("no-more").text(TEXT.noMoreResults));
 			}
 		}
 
@@ -629,7 +720,7 @@
 					saveMoreCards(cardsHtml);
 				},
 				error: function () {
-					showNotification("Couldn't load more results.", "is-danger");
+					showNotification(TEXT.couldNotLoadMore, "is-danger");
 					$btn.prop("disabled", false).removeClass("is-loading");
 				},
 			});
@@ -708,6 +799,10 @@ var TEXT = {
   {# MSG: Accessible name of the speaker button under a search result's video preview while it has sound: it turns the sound off. #}
   mute: {{ _("Mute") | tojson }},
   unmute: {{ _("Unmute") | tojson }},
+  {# MSG: Shown under the search results when Show more found nothing new. #}
+  noMoreResults: {{ _("No more results") | tojson }},
+  {# MSG: Shown when the Show more button could not load the next page of search results. #}
+  couldNotLoadMore: {{ _("Couldn't load more results.") | tojson }},
 };
 
 // What a button shows for each way a tap can end: its colour, an icon and a label. Green means
@@ -1376,37 +1471,34 @@ $(document).on("click.search", ".search_result_items_select", function () {
 {% endblock %} {% block content %}
 
 <div>
-	<form id="search-form" action="{{ url_for('search.search') }}" method="get">
-		<div class="field has-addons mb-1">
-			<div class="control is-expanded">
-				<input
-					class="input"
-					id="search-input"
-					type="text"
-					name="search_string"
-					value="{{ search_string or '' }}"
-					autocomplete="off"
-					enterkeyhint="search"
-				/>
-			</div>
-			<div class="control">
-				{# MSG: Submit button on the search form for searching YouTube. #}
-				<button type="submit" class="button is-warning" id="search-link">{% trans %}Search{% endtrans %}</button>
-			</div>
-		</div>
-	</form>
-	<div class="control is-flex is-justify-content-flex-end is-align-items-center mb-2">
-		<a id="clear-search" class="has-text-danger" style="margin-right: 15px">
+	{# Only the search box and its button pin; Clear, Advanced and the list scroll under them. #}
+	<div class="pin-top">
+		<form id="search-form" action="{{ url_for('search.search') }}" method="get">
+			<input
+				class="input"
+				id="search-input"
+				type="text"
+				name="search_string"
+				value="{{ search_string or '' }}"
+				autocomplete="off"
+				enterkeyhint="search"
+			/>
+			{# MSG: Submit button on the search form for searching YouTube. #}
+			<button type="submit" class="button" id="search-link">{% trans %}Search{% endtrans %}</button>
+		</form>
+	</div>
+	<div id="search-options">
+		<a id="clear-search">
 			{# MSG: Link which clears the text from the search box. #} {% trans %}Clear{% endtrans %}</a
 		>
-		<label class="checkbox is-flex is-align-items-center">
+		<label class="checkbox">
 			<input type="checkbox" id="show-advanced" class="checkbox" name="show-advanced" />
 			{# MSG: Checkbox label which enables more options when searching. #} {% trans %}Advanced{% endtrans %}
 		</label>
 	</div>
 
 	<div>
-		<div id="advanced-settings" class="box has-background-black-bis" style="margin-top: 10px; display: none">
+		<div id="advanced-settings" style="display: none">
 			<div class="field">
 				<label class="checkbox is-flex is-align-items-center">
 					<input type="checkbox" class="checkbox" checked id="add-to-queue" />
@@ -1427,7 +1519,7 @@ $(document).on("click.search", ".search_result_items_select", function () {
 						value="https://www.youtube.com/watch?v="
 					/>
 					<div class="has-text-right" style="margin-top: 5px">
-						<button class="button is-rounded is-primary" disabled id="direct-download-button">
+						<button class="button" disabled id="direct-download-button">
 							{# MSG: Button label for the direct download form's submit button. #} {% trans %}Download{%
 							endtrans %}
 						</button>
@@ -1436,8 +1528,6 @@ $(document).on("click.search", ".search_result_items_select", function () {
 			</div>
 		</div>
 	</div>
-
-	<hr />
 
 	<div id="searching_loader" class="control is-loading is-hidden">
 		{% set placeholder_search_term %}
@@ -1449,19 +1539,19 @@ $(document).on("click.search", ".search_result_items_select", function () {
 	</div>
 	{% if search_rows %}
 	<div class="field" id="container_search_result">
-		<label class="label">
+		<p class="results-label">
 			{# MSG: Html text which displays what was searched for, in quotes. #} {% trans search_term=search_string -%}
 			Search results for
 			<small><i>'{{search_string}}'</i></small>
 			{%- endtrans %}
-		</label>
+		</p>
 		<ul id="search-results" class="search_result_items">
 			{% for row in search_rows %}
 			{{ result_card(row) }}
 			{% endfor %}
 		</ul>
 			{% if show_more %}
-			<button id="show-more" class="button is-fullwidth mt-3" data-search-string="{{ search_string }}">Show more</button>
+			<button id="show-more" class="button is-fullwidth mt-3" data-search-string="{{ search_string }}">{# MSG: Button under the search results which loads the next page of results. #}{% trans %}Show more{% endtrans %}</button>
 			{% endif %}
 	</div>
 	{% endif %}

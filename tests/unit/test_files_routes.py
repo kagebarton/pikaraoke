@@ -320,6 +320,17 @@ def test_the_toggle_keeps_the_letter(browse):
     ]
 
 
+def test_the_toggle_and_the_strip_pin_together_through_the_shared_class(browse):
+    """The pin is phone-rows.css's .pin-top, which Search's row shares; Browse no longer has a
+    rule of its own for it."""
+    page = browse(LIBRARY)
+
+    [pin] = page.find_all(cls="pin-top")
+    assert pin.find_all(cls="bp-toggle")
+    assert pin.find_all("nav", aria_label="Songs by letter")
+    assert "bp-pin" not in page.html
+
+
 def test_the_first_visit_opens_the_hash_entry_when_it_has_songs(browse):
     assert browse(LIBRARY + HASH_SONGS).label == "# artists"
 
