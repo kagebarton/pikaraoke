@@ -15,13 +15,19 @@
 		gap: 8px;
 		margin: 0 20px;
 	}
+	/* The page's dark fields: the search box, Advanced's link, the dialog's typed search and its list. */
+	#search-input,
+	#direct-download-url,
+	#lyrics-custom-input,
+	#lyrics-select-wrap select {
+		border-radius: 6px;
+		background-color: var(--dark-bg-secondary);
+		color: var(--dark-text-primary);
+	}
 	#search-input,
 	#direct-download-url {
 		height: 44px;
 		padding: 0 12px;
-		border-radius: 6px;
-		background-color: var(--dark-bg-secondary);
-		color: var(--dark-text-primary);
 	}
 	#search-input {
 		flex: 1;
@@ -32,6 +38,7 @@
 	   greys it while disabled and recolours it for a result. */
 	#search-link,
 	#direct-download-button,
+	#lyrics-custom-btn,
 	#show-more {
 		height: 44px;
 		border-radius: 6px;
@@ -39,7 +46,8 @@
 		font-weight: 700;
 	}
 	#search-link,
-	#direct-download-button {
+	#direct-download-button,
+	#lyrics-custom-btn {
 		padding: 0 16px;
 	}
 	#search-options {
@@ -394,6 +402,8 @@
 	.video-container {
 		position: relative;
 		aspect-ratio: 16 / 9;
+		border-radius: 6px;
+		overflow: hidden;
 	}
 	.video-container video {
 		width: 100%;
@@ -407,7 +417,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: #343c3d;
+		background: var(--dark-bg-secondary);
 	}
 	#modal-thumb {
 		position: absolute;
@@ -434,7 +444,7 @@
 	#modal-preview-unavailable {
 		position: relative;
 		padding: 0.4rem 0.9rem;
-		border-radius: 4px;
+		border-radius: 6px;
 		background: var(--thumb-overlay);
 		color: #fff;
 	}
@@ -464,18 +474,21 @@
   --thumb-overlay: rgba(0, 0, 0, 0.6);
 }
 #modal-js-example { align-items: flex-start; overflow-y: auto; }
+/* The dialog's content sits on a card, like every page and Queue's confirm dialog. */
 #modal-js-example .modal-content {
   width: 95vw;
   max-width: var(--modal-width);
   max-height: none;
   margin: 20px auto;
+  padding: 16px;
   overflow: visible;
+  border-radius: 8px;
+  background-color: var(--dark-bg-tertiary);
 }
 #lyrics-dropdown,
+#lyrics-custom-input { font-size: var(--lyrics-dropdown-font-size) !important; }
 #lyrics-custom-input,
-#lyrics-custom-btn { font-size: var(--lyrics-dropdown-font-size) !important; }
-#lyrics-custom-input,
-#lyrics-custom-btn { height: 2.5em; line-height: 2.5em; }
+#lyrics-custom-btn { height: 44px; }
 #lyrics-dropdown { max-width: 100%; }
 /* The list is full size, 48px like Queue. Bulma draws its arrow with borders in em of the wrapper, so
    the wrapper takes the list's font size and the arrow scales with it; the box height is Bulma's
@@ -488,17 +501,29 @@
 .lyrics-label-row { display: flex; align-items: center; margin-bottom: 4px; font-size: 15px; color: #dbdee0; }
 .lyrics-label-row strong { color: #fff; }
 #modal-js-example .info-tip-btn { margin: -8px -4px -8px -6px; }
-.lyrics-hint { display: block; margin-bottom: 4px; font-size: 13px; color: #a3b0b2; }
+.lyrics-hint { display: block; margin-bottom: 4px; font-size: 13px; color: var(--dark-text-sub); }
 #lyrics-empty { display: flex; align-items: center; min-height: 44px; margin: 0; font-size: var(--lyrics-dropdown-font-size); color: var(--dark-warning); }
 #lyrics-search-none { margin: 4px 0 0; font-size: 13px; color: var(--dark-warning); }
-#lyrics-search-open { height: 44px; gap: 8px; }
-#lyrics-queue-btn { height: 48px; margin-top: 8px; font-size: var(--lyrics-dropdown-font-size); font-weight: 700; }
+/* "Search for other lyrics…" is an outline: it is the quieter way, beside Queue. */
+#lyrics-search-open {
+  height: 44px;
+  gap: 8px;
+  border-radius: 6px;
+  background-color: transparent;
+  border-color: var(--dark-border);
+  font-size: 15px;
+  color: var(--dark-text-primary);
+}
+/* The typed search: the box and its button on one row. */
+#lyrics-custom-row { display: flex; gap: 8px; }
+#lyrics-custom-input { flex: 1; width: auto; min-width: 0; }
+#lyrics-queue-btn { height: 48px; margin-top: 8px; border-radius: 6px; font-size: var(--lyrics-dropdown-font-size); font-weight: 700; }
 /* Why Queue did not go through, under it; it stays until the next tap or the dialog closes. */
 #lyrics-send-error { margin: -4px 0 0; text-align: center; font-size: 13px; color: var(--dark-danger-text); }
 /* "In library" on a button shows a green folder. */
 #lyrics-queue-btn .icon-folder-open-empty,
 #direct-download-button .icon-folder-open-empty { color: var(--dark-success); }
-#lyrics-other { display: block; margin: -4px auto 0; min-height: 44px; padding: 0 12px; background: none; border: 0; font-size: 14px; color: #a3b0b2; cursor: pointer; }
+#lyrics-other { display: block; margin: -4px auto 0; min-height: 44px; padding: 0 12px; background: none; border: 0; font-size: 14px; color: var(--dark-text-sub); cursor: pointer; }
 #lyrics-other:hover { color: #fff; }
 /* The wait line sits where the Queue button will appear, 36px below the thumbnail. */
 #lyrics-wait {
@@ -515,7 +540,25 @@
   #modal-play.is-waiting { animation: none; opacity: 0.5; }
   #search-results li[data-preview="loading"] .card-play { animation: none; opacity: 0.5; }
 }
-#modal-video-head { margin-bottom: 0.5rem; }
+#modal-video-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 0.5rem; }
+#modal-video-text { flex: 1; min-width: 0; }
+/* The X sits inside the card, its 44px tap area pulled into the corner so the 16px mark is not far
+   from the title. A tap on the backdrop closes the dialog as well. */
+#modal-close {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: -12px -12px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--dark-text-primary);
+  cursor: pointer;
+}
 #modal-video-title {
   color: #fff;
   font-size: 1.1rem;
@@ -523,7 +566,7 @@
   margin: 0;
   word-break: break-word;
 }
-#modal-video-meta { margin: 0; font-size: 13px; color: #a3b0b2; }
+#modal-video-meta { margin: 0; font-size: 13px; color: var(--dark-text-sub); }
 #modal-js-example.is-fading-out { transition: opacity 2s; opacity: 0; pointer-events: none; }
 </style>
 <script>
@@ -1544,7 +1587,7 @@ function openPreviewModal($li) {
 
   _modal.classList.remove("is-fading-out");
   _modal.classList.add("is-active");
-  var closeButton = _modal.querySelector(".modal-close");
+  var closeButton = document.getElementById("modal-close");
   closeButton.focus();
   closeButton.onclick = closePreviewModal;
   _modal.querySelector(".modal-background").onclick = closePreviewModal;
@@ -1663,8 +1706,11 @@ $(document).on("click.search", ".search_result_items_select", function () {
 		<div class="modal-background"></div>
 		<div class="modal-content">
 			<div id="modal-video-head">
-				<p id="modal-video-title"></p>
-				<p id="modal-video-meta" class="is-hidden"></p>
+				<div id="modal-video-text">
+					<p id="modal-video-title"></p>
+					<p id="modal-video-meta" class="is-hidden"></p>
+				</div>
+				<button type="button" id="modal-close" aria-label="{{ _('Close') }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg></button>
 			</div>
 			<div class="video-container">
 				<video id="modal-video" controls playsinline muted preload="metadata"></video>
@@ -1707,13 +1753,9 @@ $(document).on("click.search", ".search_result_items_select", function () {
 					</button>
 					<div id="lyrics-custom-search" class="mt-3 is-hidden">
 						<label class="lyrics-hint" for="lyrics-custom-input">{% trans %}Type the song title and artist{% endtrans %}</label>
-						<div class="field has-addons mb-0">
-							<div class="control is-expanded">
-								<input id="lyrics-custom-input" class="input" type="text" />
-							</div>
-							<div class="control">
-								<button id="lyrics-custom-btn" type="button" class="button is-warning">{% trans %}Search{% endtrans %}</button>
-							</div>
+						<div id="lyrics-custom-row">
+							<input id="lyrics-custom-input" class="input" type="text" />
+							<button id="lyrics-custom-btn" type="button" class="button">{% trans %}Search{% endtrans %}</button>
 						</div>
 						<p id="lyrics-search-none" class="is-hidden">{% trans %}Nothing found for that search.{% endtrans %}</p>
 					</div>
@@ -1724,7 +1766,6 @@ $(document).on("click.search", ".search_result_items_select", function () {
 				<button id="lyrics-other" type="button" class="is-hidden">{% trans %}Other lyrics…{% endtrans %}</button>
 			</div>
 		</div>
-		<button class="modal-close is-large" aria-label="close"></button>
 	</div>
 
 	{# The one card player, hidden here; the script moves it into the frame of the card that previews,

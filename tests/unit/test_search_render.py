@@ -371,14 +371,20 @@ class _Node:
             " ".join(c if isinstance(c, str) else c.text for c in self.children).split()
         )
 
-    def find_all(self, tag: str | None = None, cls: str | None = None) -> list["_Node"]:
+    def find_all(
+        self, tag: str | None = None, cls: str | None = None, id: str | None = None
+    ) -> list["_Node"]:
         found = []
         for child in self.children:
             if isinstance(child, str):
                 continue
-            if (tag is None or child.tag == tag) and (cls is None or cls in child.classes):
+            if (
+                (tag is None or child.tag == tag)
+                and (cls is None or cls in child.classes)
+                and (id is None or child.attrs.get("id") == id)
+            ):
                 found.append(child)
-            found.extend(child.find_all(tag, cls))
+            found.extend(child.find_all(tag, cls, id))
         return found
 
 
@@ -409,8 +415,10 @@ class _Fragment(HTMLParser):
     def handle_data(self, data):
         self._open.children.append(data)
 
-    def find_all(self, tag: str | None = None, cls: str | None = None) -> list[_Node]:
-        return self.root.find_all(tag, cls)
+    def find_all(
+        self, tag: str | None = None, cls: str | None = None, id: str | None = None
+    ) -> list[_Node]:
+        return self.root.find_all(tag, cls, id)
 
 
 def _badges(card: str) -> list[str]:
@@ -961,6 +969,39 @@ def test_the_dialog_offers_lyrics_only_and_no_raw_transcription(mock_get, client
         assert gone not in body
     # The typed search's own Enter handler binds to this id.
     assert body.count('id="lyrics-custom-input"') == 1
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_dialog_has_one_labelled_close_button_inside_its_card_and_no_bulma_close(
+    mock_get, client
+):
+    """The X sits at the card's top right, inside it (Bulma's .modal-close hung off the page
+    corner); a tap on the backdrop closes the dialog as well."""
+    body = _search_body(client, mock_get, _RESULTS, _karaoke_with_library([]))
+
+    page = _Fragment(body)
+    [dialog] = page.find_all(id="modal-js-example")
+    [card] = dialog.find_all(cls="modal-content")
+    [close] = card.find_all(id="modal-close")
+    assert close.tag == "button" and close.attrs["type"] == "button"
+    assert close.attrs["aria-label"] == "Close"
+    assert page.find_all(id="modal-close") == [close]  # the one close button on the page
+    assert dialog.find_all(cls="modal-background")  # the backdrop still closes it
+    assert not page.find_all(cls="modal-close")
+    assert ".modal-close" not in body
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_typed_lyrics_search_is_one_row_with_a_plain_button(mock_get, client):
+    body = _search_body(client, mock_get, _RESULTS, _karaoke_with_library([]))
+
+    page = _Fragment(body)
+    [row] = page.find_all(id="lyrics-custom-row")
+    assert len(row.find_all(id="lyrics-custom-input")) == 1
+    [button] = row.find_all(id="lyrics-custom-btn")
+    assert "is-warning" not in button.classes
+    [dialog] = page.find_all(id="modal-js-example")
+    assert not dialog.find_all(cls="has-addons")
 
 
 @patch("pikaraoke.routes.search.get_karaoke_instance")
