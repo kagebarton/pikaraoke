@@ -261,6 +261,19 @@ class LrcTimingCheck:
     regenerate_helps: bool
 
 
+def _lrc_check(job: SongJob, record: dict, length: float, fit: SliceFit) -> LrcTimingCheck:
+    """The check for ``record``'s ``fit`` to the song's clip, the one way Check fit and the
+    search list's rows make it."""
+    return LrcTimingCheck(
+        fit,
+        length,
+        length_gap_s(record.get("duration"), length),
+        lrclib.record_meta(record),
+        lrc_auto_pick.refusal(fit),
+        regenerate_helps=job.bundle is not None,
+    )
+
+
 class LrcTimingRefused(RegenError):
     """An LRCLIB match that can't time the song; ``check`` says why.
 
@@ -628,14 +641,7 @@ class LibraryTools:
         """:meth:`check_lrc_timing` for a song already checked and read, and its match."""
         length = _clip_length(job)
         fit = self._fit_to_clip(job, lrc_to_srt(record["syncedLyrics"]), length)
-        return LrcTimingCheck(
-            fit,
-            length,
-            length_gap_s(record.get("duration"), length),
-            lrclib.record_meta(record),
-            lrc_auto_pick.refusal(fit),
-            regenerate_helps=job.bundle is not None,
-        )
+        return _lrc_check(job, record, length, fit)
 
     def _fit_to_clip(self, job: SongJob, srt_text: str, length: float) -> SliceFit:
         """``srt_text`` fitted to the song's clip against the words already heard in it."""
@@ -655,14 +661,6 @@ class LibraryTools:
         if lrc.state == "skipped":
             raise RegenError("This song's LRCLIB match was skipped. Search for one.")
         return {**lrc.meta, "syncedLyrics": lrc.text}
-
-    def current_lines(self, song_path: str) -> list[str]:
-        """The lyric lines the song's last run timed, or none when it has no bundle.
-
-        What an LRCLIB timing search scores its matches against.
-        """
-        lyrics = (self._song_job(song_path).bundle or {}).get("lyrics") or {}
-        return list(lyrics.get("lines") or [])
 
     def genius_sheet_lines(self, genius_id: int) -> list[str]:
         """A Genius song's lyric lines, as they display, for scoring an LRCLIB search.
@@ -684,15 +682,9 @@ class LibraryTools:
         Raises :class:`~pikaraoke.lib.lrclib.LrclibUnavailable` when LRCLIB can't be reached.
         """
         video_s = media_duration(self._song_job(song_path))
-        records = [r for r in lrclib.search_query(query) if r.get("syncedLyrics")]
-        with self._lrclib_lock:
-            for record in records:
-                # Only an integer id can come back in a repair request.
-                if isinstance(record.get("id"), int):
-                    _remember(self._lrclib_records, record["id"], record, LRCLIB_CACHE_SIZE)
+        records = self._search_synced(query)
         best = lrclib.select_candidate(records, sheet, video_s)
-        lrc = lrclib.read_song_lrc(Path(song_path))
-        current_id = lrc.meta.get("id") if lrc.state == "match" else None
+        current_id = self._lrc_on_disk_id(song_path)
         candidates = []
         for record in records:
             cue_texts, _ = lrclib.parse_lrc_lines(record["syncedLyrics"])
@@ -708,6 +700,58 @@ class LibraryTools:
                 }
             )
         return {"video_duration_s": video_s, "candidates": candidates}
+
+    def lrc_timing_candidates(self, song_path: str, query: str) -> dict:
+        """LRCLIB's synced matches for the admin's search, each fitted as Check fit fits it.
+
+        The candidates come in the download's pick order (:func:`lrc_auto_pick.evaluate`): the
+        records that pass the bar first, then the rest in LRCLIB's order, and ``best`` marks
+        the first when it passes. Each carries its :class:`LrcTimingCheck` as ``check``, so a
+        row says what Check fit would say, and whether it is the match on disk (``current``).
+        The listed records are remembered for :meth:`repair`.
+
+        Raises :class:`RegenError`, with a message for the admin, for a song that is not a
+        video or a clip whose length can't be read, and
+        :class:`~pikaraoke.lib.lrclib.LrclibUnavailable` when LRCLIB can't be reached.
+        """
+        if not self.is_video(song_path):
+            raise RegenError("Lyrics tools work on video songs only.")
+        job = self._song_job(song_path)
+        length = _clip_length(job)
+        streams = heard_streams(job.bundle, self._asr_on_disk(job.song_path))
+        entries = lrc_auto_pick.evaluate(self._search_synced(query), streams, length)
+        current_id = self._lrc_on_disk_id(song_path)
+        candidates = []
+        for rank, entry in enumerate(entries):
+            record = entry.record
+            check = _lrc_check(job, record, length, entry.fit)
+            candidates.append(
+                {
+                    **check.record,
+                    "duration_diff_s": check.gap_s,
+                    "best": rank == 0 and entry.passes,
+                    "current": current_id is not None and record.get("id") == current_id,
+                    "syncedLyrics": record["syncedLyrics"],
+                    "check": check,
+                }
+            )
+        return {"video_duration_s": length, "candidates": candidates}
+
+    def _search_synced(self, query: str) -> list[dict]:
+        """LRCLIB's records with synced lyrics for ``query``, remembered for :meth:`repair`."""
+        records = [r for r in lrclib.search_query(query) if r.get("syncedLyrics")]
+        with self._lrclib_lock:
+            for record in records:
+                # Only an integer id can come back in a repair request.
+                if isinstance(record.get("id"), int):
+                    _remember(self._lrclib_records, record["id"], record, LRCLIB_CACHE_SIZE)
+        return records
+
+    @staticmethod
+    def _lrc_on_disk_id(song_path: str) -> int | None:
+        """The id of the LRCLIB match on the song's disk, None when it has none."""
+        lrc = lrclib.read_song_lrc(Path(song_path))
+        return lrc.meta.get("id") if lrc.state == "match" else None
 
     def repair(
         self,

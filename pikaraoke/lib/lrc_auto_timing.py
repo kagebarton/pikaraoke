@@ -13,7 +13,7 @@ from pathlib import Path
 
 from pikaraoke.lib import lrc_auto_pick, lrclib
 from pikaraoke.lib.lrc_auto_pick import Entry
-from pikaraoke.lib.srt_slice_fit import TRANSCRIBE, heard_streams
+from pikaraoke.lib.srt_slice_fit import heard_streams
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ def check(genius: dict, words: list[dict], clip_length: float) -> AutoCheck:
     query = ""
     try:
         query = lrclib.query_text(genius["title"], genius["artist"])
-        heard = heard_streams({"transcribe_words": words}, None).get(TRANSCRIBE, [])
+        heard = heard_streams({"transcribe_words": words}, None)
         entries = lrc_auto_pick.evaluate(lrclib.search_query(query), heard, clip_length)
     except lrclib.LrclibUnavailable as e:
         logger.warning("%s", e)

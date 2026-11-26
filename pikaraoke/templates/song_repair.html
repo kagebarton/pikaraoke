@@ -490,12 +490,13 @@
       return state.lrcPick === 'disk' ? null : state.lrcPick;
     }
 
-    // The .lrc on disk first, then the search's other results; it carries its own score if the search listed it.
+    // The .lrc on disk first, then the search's other results in the server's order; it carries its own
+    // verdict if the search listed it.
     function lrcRows() {
       var rows = LRC_MATCH ? [$.extend({ key: 'disk', current: true }, LRC_MATCH)] : [];
       $.each(state.lrcCandidates, function (i, candidate) {
         if (isOnDisk(candidate)) {
-          $.extend(rows[0], { mapped: candidate.mapped, sheet_lines: candidate.sheet_lines, best: candidate.best });
+          $.extend(rows[0], { verdict: candidate.verdict, best: candidate.best });
         } else {
           rows.push($.extend({ key: candidate.id }, candidate));
         }
@@ -510,7 +511,8 @@
       if (message) list.append(el('div', 'rp-empty', message));
       $.each(shown, function (i, row) {
         list.append(matchOption(row, 'lt-match', row.key === state.lrcPick, T.onDisk,
-          state.lrcSearchOpen && row.sheet_lines > 0, function () { pickLrc(row.key); }));
+          state.lrcSearchOpen && row.verdict ? verdictScore(row.verdict) : null,
+          function () { pickLrc(row.key); }));
       });
       list.toggleClass('is-hidden', !list.children().length);
       $('#lt-video-length').text(state.lrcVideoLength || '');
@@ -718,9 +720,15 @@
       return el('span', tone, candidate.fit);
     }
 
+    // The score under a row of the LRCLIB timing list: Check fit's verdict, coloured by its tone.
+    function verdictScore(verdict) {
+      var tone = { good: 'rp-good', bad: 'rp-bad', info: 'rp-muted' }[verdict.tone];
+      return el('span', tone, verdict.text);
+    }
+
     // One row of an LRCLIB match list: step 2's, and LRCLIB timing's. ``currentLabel`` names the match
-    // on disk; ``showMapped`` adds how many of the song's lines the match maps to.
-    function matchOption(candidate, name, selected, currentLabel, showMapped, onPick) {
+    // on disk; ``score``, when given, is the element saying how well the match does.
+    function matchOption(candidate, name, selected, currentLabel, score, onPick) {
       var label = el('label', 'rp-opt' + (selected ? ' is-selected' : ''));
       var input = $('<input type="radio">').attr('name', name).val(candidate.id).prop('checked', selected);
       var head = el('span', 'rp-opt-head').append(el('span', null, candidate.trackName));
@@ -728,14 +736,15 @@
       if (candidate.current) head.append(el('span', 'rp-tag', currentLabel));
       var sub = $.grep([candidate.artistName, candidate.albumName], Boolean).join(' · ');
       var fit = el('span', 'rp-fit').append(fitLine(candidate));
-      if (showMapped) fit.append(el('span', null, fill(T.matches, { n: candidate.mapped, m: candidate.sheet_lines })));
+      if (score) fit.append(score);
       label.append(input, el('span', 'rp-opt-body').append(head, el('span', 'rp-muted', sub), fit));
       input.on('change', onPick);
       return label;
     }
 
     function lrclibOption(candidate) {
-      return matchOption(candidate, 'lrclib', state.lrclib === candidate.id, T.current, true,
+      var score = el('span', null, fill(T.matches, { n: candidate.mapped, m: candidate.sheet_lines }));
+      return matchOption(candidate, 'lrclib', state.lrclib === candidate.id, T.current, score,
         function () { selectLrclib(candidate.id); });
     }
 

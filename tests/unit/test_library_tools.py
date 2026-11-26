@@ -58,6 +58,7 @@ from pikaraoke.lib.song_list import SongList
 from pikaraoke.lib.song_manager import SongManager
 from pikaraoke.lib.srt_cues import cue_spans_from_srt, cues_to_srt
 from pikaraoke.lib.srt_slice_fit import (
+    ASR,
     DISAGREE,
     FITS,
     NO_REFERENCE,
@@ -66,6 +67,7 @@ from pikaraoke.lib.srt_slice_fit import (
     TOO_FEW,
     TOO_LONG,
     fit_slice,
+    heard_streams,
 )
 from pikaraoke.lib.word_edit import WordsCleaned, WordSheet
 from tests.unit.movie_slices import (
@@ -1424,7 +1426,7 @@ class TestLrcTimingRepair:
         monkeypatch.setattr(lrclib, "get_record", MagicMock(side_effect=AssertionError("fetched")))
         monkeypatch.setattr(lrclib, "search_query", lambda query: [{**LRC_RECORD, "id": 13}])
         tools, _ = make_tools(tmp_path, [str(song)])
-        tools.lrclib_candidates(str(song), ["one"], "t a")
+        tools.lrc_timing_candidates(str(song), "t a")
 
         assert tools.check_lrc_timing(str(song), 13).record["id"] == 13
 
@@ -1582,7 +1584,7 @@ class TestLrcTimingRepair:
         listed = {**LRC_RECORD, "id": 14, "trackName": "Listed"}
         monkeypatch.setattr(lrclib, "search_query", lambda query: [listed])
         tools, processing = make_tools(tmp_path, [str(song)])
-        tools.lrclib_candidates(str(song), ["one"], "t a")
+        tools.lrc_timing_candidates(str(song), "t a")
 
         tools.repair(str(song), "lrclib", lrclib_id=14)
 
@@ -1664,25 +1666,223 @@ class TestLrcTimingRepair:
         assert processing.enqueue_regen.call_args.args[0].song.plan.custom_text == check.fit.srt
 
 
-class TestCurrentLines:
-    """What an LRCLIB timing search scores its matches against."""
+class TestLrcTimingCandidates:
+    """The LRCLIB timing search: every match fitted as Check fit fits it, in the download's order."""
 
-    def lines(self, tmp_path, song):
-        tools, _ = make_tools(tmp_path, [str(song)])
-        return tools.current_lines(str(song))
+    LATE = lrc_slice(offset=lambda k: 20.0 if k >= 8 else 0.0)  # fits, with lines far from time
+    OFF = lrc_slice(lines=range(40, 52))  # words the clip never sings: refused
 
-    def test_the_lines_the_last_run_timed(self, tmp_path):
+    @pytest.fixture
+    def song(self, tmp_path):
+        """A song with heard words and the LRC on disk (record 11)."""
         [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
-        write_bundle(tmp_path, video.stem, lyrics={"origin": "genius", "lines": ["one", "two"]})
+        write_bundle(
+            tmp_path,
+            video.stem,
+            lyrics={"origin": "genius", "genius": GENIUS, "lines": ["one", "two"]},
+            media_duration_s=CLIP_S,
+            transcribe_words=heard_words(),
+        )
+        TestLrcTimingRepair.write_match(video, LRC_RECORD)
+        return video
 
-        assert self.lines(tmp_path, video) == ["one", "two"]
+    @staticmethod
+    def record(record_id: int, text: str | None = None, **fields) -> dict:
+        return {**LRC_RECORD, "id": record_id, "syncedLyrics": text or lrc_slice(), **fields}
 
-    def test_a_song_with_no_bundle_or_no_lines_has_none(self, tmp_path):
-        [video, bare] = make_videos(tmp_path, "A---aaaaaaaaaaa", "B---bbbbbbbbbbb")
-        write_bundle(tmp_path, bare.stem, lyrics={"origin": "srt"})
+    def search(self, tmp_path, song, records, monkeypatch):
+        """The candidates for a search that finds ``records``, and the tools that made them."""
+        monkeypatch.setattr(lrclib, "search_query", lambda query: records)
+        tools, _ = make_tools(tmp_path, [str(song)])
+        return tools.lrc_timing_candidates(str(song), "t a"), tools
 
-        assert self.lines(tmp_path, video) == []
-        assert self.lines(tmp_path, bare) == []
+    def test_the_passing_record_comes_first_then_the_rest_in_the_searchs_order(
+        self, tmp_path, song, monkeypatch
+    ):
+        records = [
+            self.record(1, self.LATE),
+            self.record(2, self.OFF),
+            self.record(3),
+            self.record(4, self.LATE, trackName="Another"),
+        ]
+
+        found, _ = self.search(tmp_path, song, records, monkeypatch)
+
+        assert [(c["id"], c["best"]) for c in found["candidates"]] == [
+            (3, True),
+            (1, False),
+            (2, False),
+            (4, False),
+        ]
+        assert found["video_duration_s"] == CLIP_S
+
+    def test_best_is_the_first_only_and_only_when_it_passes(self, tmp_path, song, monkeypatch):
+        records = [self.record(1, self.LATE), self.record(2, self.OFF)]
+
+        found, _ = self.search(tmp_path, song, records, monkeypatch)
+
+        assert [c["id"] for c in found["candidates"]] == [1, 2]
+        assert [c["best"] for c in found["candidates"]] == [False, False]
+
+    def test_each_candidate_carries_the_check_a_check_fit_of_it_makes(
+        self, tmp_path, song, monkeypatch
+    ):
+        records = [
+            self.record(1, self.LATE),
+            self.record(2, self.OFF, duration=CLIP_S + 38),
+            self.record(3),
+        ]
+        found, tools = self.search(tmp_path, song, records, monkeypatch)
+        monkeypatch.setattr(lrclib, "get_record", MagicMock(side_effect=AssertionError("fetched")))
+
+        for candidate in found["candidates"]:
+            assert candidate["check"] == tools.check_lrc_timing(str(song), candidate["id"])
+
+        by_id = {c["id"]: c["check"] for c in found["candidates"]}
+        assert (by_id[3].fit.status, by_id[3].refusal) == (FITS, None)
+        assert (by_id[1].fit.status, by_id[1].refusal) == (FITS, lrc_auto_pick.MISTIMED)
+        assert (by_id[2].fit.status, by_id[2].refusal) == (REFUSED, lrc_auto_pick.NO_FIT)
+
+    def test_a_candidates_refusal_is_the_bars_own(self, tmp_path, song, monkeypatch):
+        records = [self.record(1, self.LATE), self.record(2, self.OFF), self.record(3)]
+        monkeypatch.setattr(lrclib, "search_query", lambda query: records)
+        clip_streams = heard_streams({"transcribe_words": heard_words()}, None)
+
+        found, _ = self.search(tmp_path, song, records, monkeypatch)
+
+        entries = lrc_auto_pick.evaluate(records, clip_streams, CLIP_S)
+        assert [c["check"].refusal for c in found["candidates"]] == [e.refusal for e in entries]
+        assert [c["id"] for c in found["candidates"]] == [e.record["id"] for e in entries]
+
+    def test_the_candidate_names_its_match_and_how_far_its_length_is(
+        self, tmp_path, song, monkeypatch
+    ):
+        found, _ = self.search(tmp_path, song, [self.record(5, duration=CLIP_S + 9)], monkeypatch)
+
+        [candidate] = found["candidates"]
+        assert (candidate["id"], candidate["trackName"], candidate["albumName"]) == (
+            5,
+            "Invented Song",
+            "Invented Album",
+        )
+        assert (candidate["duration_diff_s"], candidate["syncedLyrics"]) == (9, lrc_slice())
+        assert {"mapped", "sheet_lines"}.isdisjoint(candidate)
+
+    def test_current_is_the_match_the_lrc_on_disk_records(self, tmp_path, song, monkeypatch):
+        found, _ = self.search(tmp_path, song, [self.record(11), self.record(12)], monkeypatch)
+
+        assert {c["id"]: c["current"] for c in found["candidates"]} == {11: True, 12: False}
+
+    @pytest.mark.parametrize("on_disk", ["marker", "not-utf8"])
+    def test_no_candidate_is_current_without_a_readable_match_on_disk(
+        self, tmp_path, song, monkeypatch, on_disk
+    ):
+        lrc = lrclib.lrc_path(song)
+        if on_disk == "marker":
+            lrclib.write_skip_marker(lrc)
+        else:
+            lrc.write_bytes("[ti:Caf\xe9]\n".encode("latin-1"))
+
+        found, _ = self.search(tmp_path, song, [self.record(11)], monkeypatch)
+
+        assert [c["current"] for c in found["candidates"]] == [False]
+
+    def test_a_record_without_synced_lyrics_is_left_out(self, tmp_path, song, monkeypatch):
+        plain = {"id": 3, "trackName": "Plain only", "syncedLyrics": None}
+
+        found, _ = self.search(tmp_path, song, [plain, self.record(1)], monkeypatch)
+
+        assert [c["id"] for c in found["candidates"]] == [1]
+
+    def test_no_matches_is_an_empty_list(self, tmp_path, song, monkeypatch):
+        found, _ = self.search(tmp_path, song, [], monkeypatch)
+
+        assert found == {"video_duration_s": CLIP_S, "candidates": []}
+
+    def test_a_song_with_no_heard_words_says_it_cannot_check_any_and_picks_none(
+        self, tmp_path, monkeypatch
+    ):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "srt"}, media_duration_s=CLIP_S)
+
+        found, _ = self.search(tmp_path, video, [self.record(1), self.record(2)], monkeypatch)
+
+        checks = [c["check"] for c in found["candidates"]]
+        assert [c.fit.status for c in checks] == [NO_REFERENCE, NO_REFERENCE]
+        assert [c.regenerate_helps for c in checks] == [True, True]
+        assert [c["best"] for c in found["candidates"]] == [False, False]
+
+    def test_a_song_with_no_bundle_is_checked_against_nothing_too(self, tmp_path, monkeypatch):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: CLIP_S)
+
+        found, _ = self.search(tmp_path, video, [self.record(1)], monkeypatch)
+
+        [candidate] = found["candidates"]
+        assert (candidate["check"].fit.status, candidate["check"].regenerate_helps) == (
+            NO_REFERENCE,
+            False,
+        )
+        assert candidate["best"] is False
+
+    def test_the_youtube_auto_caption_is_a_stream_the_rows_are_fitted_to(
+        self, tmp_path, monkeypatch
+    ):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "srt"}, media_duration_s=CLIP_S)
+        asr = tmp_path / "subtitles" / f"{video.stem}.en.asr.json3"
+        asr.parent.mkdir()
+        asr.write_text(asr_json3(), encoding="utf-8")
+
+        found, _ = self.search(tmp_path, video, [self.record(1)], monkeypatch)
+
+        [candidate] = found["candidates"]
+        assert (candidate["check"].fit.status, candidate["check"].fit.heard_source) == (FITS, ASR)
+        assert candidate["best"] is True
+
+    def test_the_listed_records_are_remembered_for_the_repair(self, tmp_path, song, monkeypatch):
+        listed = self.record(14, trackName="Listed")
+        monkeypatch.setattr(lrclib, "get_record", MagicMock(side_effect=AssertionError("fetched")))
+        monkeypatch.setattr(lrclib, "search_query", lambda query: [listed])
+        tools, processing = make_tools(tmp_path, [str(song)])
+        tools.lrc_timing_candidates(str(song), "t a")
+
+        tools.repair(str(song), "lrclib", lrclib_id=14)
+
+        assert processing.enqueue_regen.call_args.args[0].song.plan.lrclib_record is listed
+
+    def test_lrclib_out_of_reach_raises(self, tmp_path, song, monkeypatch):
+        def search_query(query):
+            raise lrclib.LrclibUnavailable("timed out")
+
+        monkeypatch.setattr(lrclib, "search_query", search_query)
+        tools, _ = make_tools(tmp_path, [str(song)])
+
+        with pytest.raises(lrclib.LrclibUnavailable):
+            tools.lrc_timing_candidates(str(song), "t a")
+
+    def test_a_clip_whose_length_cannot_be_read_is_refused_before_lrclib_is_asked(
+        self, tmp_path, monkeypatch
+    ):
+        [video] = make_videos(tmp_path, "A---aaaaaaaaaaa")
+        write_bundle(tmp_path, video.stem, lyrics={"origin": "srt"}, transcribe_words=heard_words())
+        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: None)
+        asked = MagicMock(return_value=[])
+        monkeypatch.setattr(lrclib, "search_query", asked)
+        tools, _ = make_tools(tmp_path, [str(video)])
+
+        with pytest.raises(RegenError, match="clip's length"):
+            tools.lrc_timing_candidates(str(video), "t a")
+
+        asked.assert_not_called()
+
+    def test_the_search_takes_video_songs_only(self, tmp_path):
+        mp3 = tmp_path / "Track---aaaaaaaaaaa.mp3"
+        mp3.write_bytes(b"")
+        tools, _ = make_tools(tmp_path, [str(mp3)])
+
+        with pytest.raises(RegenError, match="video songs only"):
+            tools.lrc_timing_candidates(str(mp3), "t a")
 
 
 class TestCustomStart:

@@ -2068,7 +2068,7 @@ class TestRepairPage:
             "artistName": "Invented Artist",
             "albumName": "Invented Album",
             "fit": "3:20 · within a few s",
-            "fit_near": True,
+            "fit_near": None,  # the length colours nothing here
         }
 
     @pytest.mark.parametrize("state", ["none", "skipped"])
@@ -2179,6 +2179,22 @@ class TestRepairPage:
         assert code.count("function matchOption(") == 1
         assert "return matchOption(candidate, 'lrclib'," in code
         assert "matchOption(row, 'lt-match'," in code
+
+    def test_each_list_hands_its_rows_their_own_score(self, env):
+        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+
+        assert (
+            "function matchOption(candidate, name, selected, currentLabel, score, onPick)" in code
+        )
+        assert "if (score) fit.append(score);" in code
+        # Step 2 keeps its text count; LRCLIB timing shows Check fit's verdict, coloured by tone.
+        assert "fill(T.matches, { n: candidate.mapped, m: candidate.sheet_lines })" in code
+        assert "state.lrcSearchOpen && row.verdict ? verdictScore(row.verdict) : null" in code
+        assert "{ good: 'rp-good', bad: 'rp-bad', info: 'rp-muted' }[verdict.tone]" in code
+        # The match on disk takes its verdict and best tag from its search row, nothing of the text count.
+        assert "$.extend(rows[0], { verdict: candidate.verdict, best: candidate.best });" in code
+        lrc_rows = code[code.index("function lrcRows") : code.index("function renderLrcMatches")]
+        assert "mapped" not in lrc_rows and "sheet_lines" not in lrc_rows
 
     def test_a_movie_subtitles_song_is_current_on_the_movie_card_alone(self, env):
         song = env.add_song("A---aaaaaaaaaaa.mp4", movie_bundle())
@@ -3124,10 +3140,27 @@ class TestLrcFitRoute:
 
 
 class TestLrcSearchRoute:
-    """The LRCLIB timing search: matches scored against the lyrics the song has now."""
+    """The LRCLIB timing search: each match fitted to the clip as Check fit fits it, in the
+    download's order."""
+
+    LATE = lrc_slice(offset=lambda k: 20.0 if k >= 8 else 0.0)  # fits, with lines far from time
+    OFF = lrc_slice(lines=range(40, 52))  # words the clip never sings: refused
 
     def search(self, env, song, query="invented song"):
         return env.client.get("/song_info/lrc_search", query_string={"song": song, "q": query})
+
+    @staticmethod
+    def listing(monkeypatch, *records):
+        monkeypatch.setattr(lrclib, "search_query", lambda query: list(records))
+
+    @staticmethod
+    def record(record_id: int, text: str | None = None, **fields) -> dict:
+        return {
+            **LrcTimingEnv.RECORD,
+            "id": record_id,
+            "syncedLyrics": text or lrc_slice(),
+            **fields,
+        }
 
     def test_a_guest_gets_403_json(self, env):
         song = LrcTimingEnv.song(env)
@@ -3138,9 +3171,7 @@ class TestLrcSearchRoute:
     def test_a_path_outside_the_library_is_rejected(self, env):
         assert self.search(env, "/not/in/the/library.mp4").status_code == 400
 
-    def test_matches_are_scored_against_the_lines_the_song_was_last_timed_from(
-        self, env, monkeypatch
-    ):
+    def test_the_query_is_trimmed_and_a_row_is_worded_for_the_page(self, env, monkeypatch):
         song = LrcTimingEnv.song(env)
         searched = []
 
@@ -3155,9 +3186,79 @@ class TestLrcSearchRoute:
         assert searched == ["invented song"]
         assert found["video_length"] == "video is 3:20"
         [candidate] = found["candidates"]
-        assert (candidate["id"], candidate["sheet_lines"]) == (11, 2)  # the bundle's two lines
-        assert candidate["fit"] == "3:20 · within a few s" and candidate["fit_near"] is True
-        assert candidate["current"] is True  # the match on disk
+        assert candidate["id"] == 11 and candidate["current"] is True  # the match on disk
+        assert candidate["best"] is True
+        assert candidate["fit"] == "3:20 · within a few s"
+        assert candidate["fit_near"] is None  # the length colours nothing here
+        assert candidate["verdict"] == {"tone": "good", "text": "fits · matches 12 of 12 lines"}
+        assert {"check", "mapped", "sheet_lines"}.isdisjoint(candidate)
+
+    def test_a_far_length_is_shown_and_colours_nothing(self, env, monkeypatch):
+        song = LrcTimingEnv.song(env)
+        self.listing(monkeypatch, self.record(5, duration=CLIP_S + 38))
+
+        [candidate] = self.search(env, song).get_json()["candidates"]
+
+        assert (candidate["fit"], candidate["fit_near"]) == ("3:58 · 38 s longer", None)
+        assert candidate["verdict"]["tone"] == "good"
+
+    def test_rows_are_in_the_bars_order_with_each_verdict_worded_for_its_fit(
+        self, env, monkeypatch
+    ):
+        song = LrcTimingEnv.song(env)
+        self.listing(
+            monkeypatch, self.record(1, self.LATE), self.record(2, self.OFF), self.record(3)
+        )
+
+        rows = self.search(env, song).get_json()["candidates"]
+
+        assert [(r["id"], r["best"], r["verdict"]) for r in rows] == [
+            (3, True, {"tone": "good", "text": "fits · matches 12 of 12 lines"}),
+            (1, False, {"tone": "bad", "text": "fits, check first · matches 12 of 12 lines"}),
+            (2, False, {"tone": "bad", "text": "doesn't fit · matches 0 of 12 lines"}),
+        ]
+
+    def test_with_no_passing_record_none_is_best(self, env, monkeypatch):
+        song = LrcTimingEnv.song(env)
+        self.listing(monkeypatch, self.record(1, self.LATE), self.record(2, self.OFF))
+
+        rows = self.search(env, song).get_json()["candidates"]
+
+        assert [(r["id"], r["best"]) for r in rows] == [(1, False), (2, False)]
+
+    def test_a_rows_verdict_is_the_tone_check_fit_gives_the_same_match(self, env, monkeypatch):
+        song = LrcTimingEnv.song(env)
+        self.listing(
+            monkeypatch, self.record(1, self.LATE), self.record(2, self.OFF), self.record(3)
+        )
+        monkeypatch.setattr(lrclib, "get_record", MagicMock(side_effect=AssertionError("fetched")))
+
+        rows = self.search(env, song).get_json()["candidates"]
+
+        for row in rows:
+            card = env.client.post(
+                "/song_info/lrc_fit", json={"song": song, "lrclib_id": row["id"]}
+            ).get_json()
+            assert row["verdict"]["tone"] == card["tone"], row["id"]
+
+    def test_a_song_with_no_heard_words_cannot_check_any_row_and_picks_none(self, env, monkeypatch):
+        song = LrcTimingEnv.song(env, words=[])
+        self.listing(monkeypatch, self.record(1), self.record(2))
+
+        rows = self.search(env, song).get_json()["candidates"]
+
+        assert [(r["best"], r["verdict"]) for r in rows] == [
+            (False, {"tone": "info", "text": "can't check"})
+        ] * 2
+
+    def test_a_song_with_no_bundle_cannot_be_checked_either(self, env, monkeypatch):
+        song = env.add_song("B---bbbbbbbbbbb.mp4")
+        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: CLIP_S)
+        self.listing(monkeypatch, self.record(1))
+
+        [row] = self.search(env, song).get_json()["candidates"]
+
+        assert (row["best"], row["verdict"]["text"]) == (False, "can't check")
 
     def test_lrclib_out_of_reach_is_an_error_not_an_empty_list(self, env, monkeypatch):
         song = LrcTimingEnv.song(env)
@@ -3172,14 +3273,24 @@ class TestLrcSearchRoute:
         assert resp.status_code == 502
         assert "LRCLIB can't be reached" in resp.get_json()["error"]
 
-    def test_a_song_with_no_bundle_is_scored_against_no_lines(self, env, monkeypatch):
+    def test_a_clip_whose_length_cannot_be_read_is_a_400_with_the_reason(self, env, monkeypatch):
         song = env.add_song("B---bbbbbbbbbbb.mp4")
-        monkeypatch.setattr(lrclib, "search_query", lambda query: [LrcTimingEnv.RECORD])
-        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: CLIP_S)
+        monkeypatch.setattr("pikaraoke.lib.library_regen.probe_duration", lambda path: None)
 
-        [candidate] = self.search(env, song).get_json()["candidates"]
+        resp = self.search(env, song)
 
-        assert candidate["sheet_lines"] == 0
+        assert resp.status_code == 400
+        assert "clip's length" in resp.get_json()["error"]
+
+    def test_a_song_that_is_not_a_video_is_a_400(self, env):
+        track = env.folder / "Track---aaaaaaaaaaa.mp3"
+        track.write_bytes(b"")
+        env.songs.add(str(track))
+
+        resp = self.search(env, str(track))
+
+        assert resp.status_code == 400
+        assert "video songs only" in resp.get_json()["error"]
 
 
 class TestLrcRepairRoute:

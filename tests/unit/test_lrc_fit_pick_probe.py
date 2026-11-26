@@ -428,7 +428,7 @@ def _lrc(lines: int) -> str:
 
 class TestRecords:
     def _entries(self, records):
-        return evaluate(records, _sung(30), 300.0)
+        return evaluate(records, {TRANSCRIBE: _sung(30)}, 300.0)
 
     def test_the_on_disk_record_the_search_returned_is_the_pools_own(self):
         entries = self._entries([{"id": 5, "syncedLyrics": _lrc(30)}])
@@ -521,7 +521,7 @@ class TestTableK:
         )
         song = SongResult(CAPTIONED, "", False, "vid", "Title", "stem", 300.0, _sung(30))
         song.recs, _ = probe.make_recs(
-            evaluate([{"id": 1, "syncedLyrics": _lrc(30)}], song.words, 300.0),
+            evaluate([{"id": 1, "syncedLyrics": _lrc(30)}], {TRANSCRIBE: song.words}, 300.0),
             None,
             song.words,
             300.0,
@@ -631,7 +631,7 @@ class TestAutoCaptionFile:
             {**w, "start": w["start"] + 3.0} if 14 * 5 <= n < 17 * 5 else w
             for n, w in enumerate(heard)
         ]
-        entries = evaluate([{"id": 5, "syncedLyrics": _lrc(30)}], heard, 300.0)
+        entries = evaluate([{"id": 5, "syncedLyrics": _lrc(30)}], {TRANSCRIBE: heard}, 300.0)
         recs, _ = probe.make_recs(entries, None, heard, 300.0)
 
         probe.add_asr_fits(recs, late, 300.0)

@@ -562,7 +562,7 @@ def _lrc_match(status: SongStatus) -> dict | None:
     if meta is None:
         return None
     row = {**meta, "duration_diff_s": length_gap_s(meta.get("duration"), status.media_duration_s)}
-    row["fit"], row["fit_near"] = _candidate_fit(row)
+    row["fit"] = _candidate_fit(row)[0]  # no ``fit_near`` (so None): the length colours nothing
     return {
         key: row.get(key)
         for key in ("id", "trackName", "artistName", "albumName", "fit", "fit_near")
@@ -960,6 +960,25 @@ def _lrc_verdict(check: LrcTimingCheck) -> tuple[str, str]:
     return "good", _("Fits. This match can time this song.")
 
 
+def _lrc_row_verdict(check: LrcTimingCheck) -> dict:
+    """What a search row says of its match: the card's tone and a short label with the count."""
+    tone, _head = _lrc_verdict(check)
+    if tone == "good":
+        label = _("fits")
+    elif tone == "info":
+        label = _("can't check")
+    elif check.fit.status == FITS:
+        label = _("fits, check first")
+    else:
+        label = _("doesn't fit")
+    parts = [label]
+    if check.fit.total:
+        parts.append(
+            _("matches %(n)s of %(m)s lines") % {"n": check.fit.matched, "m": check.fit.total}
+        )
+    return {"tone": tone, "text": " · ".join(parts)}
+
+
 def _lrc_fit_card(check: LrcTimingCheck, length: str | None) -> dict:
     """The card for a match whose lines fit: the numbers, then the lines to read before confirming.
 
@@ -1101,15 +1120,30 @@ def lrc_fit():
 
 @song_info_bp.route("/song_info/lrc_search")
 def lrc_search():
-    """LRCLIB matches for the typed search, scored against the lyrics the song has now."""
+    """LRCLIB matches for the typed search, each fitted to the clip as Check fit fits it.
+
+    The rows come in the download's pick order, each with its ``verdict``: Check fit's tone
+    and count. The length is shown but colours nothing, being no rule here.
+    """
     if not is_admin():
         return _error(_("Admin only"), 403)
     k = get_karaoke_instance()
     song = library_song(k, request.args.get("song"))
     if song is None:
         return _error(_("Not a song in the library"), 400)
-    sheet = k.library_tools.current_lines(song)
-    return _lrclib_results(song, sheet, request.args.get("q", "").strip())
+    try:
+        found = k.library_tools.lrc_timing_candidates(song, request.args.get("q", "").strip())
+    except LrclibUnavailable as e:
+        logger.warning("LRCLIB search for %s: %s", song, e)
+        return _error(_("LRCLIB can't be reached right now. Try again."), 502)
+    except RegenError as e:
+        return _error(str(e), 400)
+    for candidate in found["candidates"]:
+        candidate["verdict"] = _lrc_row_verdict(candidate.pop("check"))
+        candidate["fit"] = _candidate_fit(candidate)[0]
+        candidate["fit_near"] = None  # as the disk row's: the length colours nothing
+    found["video_length"] = _("video is %(length)s") % {"length": _mmss(found["video_duration_s"])}
+    return jsonify(found)
 
 
 @song_info_bp.route("/song_info/repair", methods=["POST"])
