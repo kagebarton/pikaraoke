@@ -11,7 +11,7 @@ import flask_babel
 from flask import abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_smorest import Blueprint
 
-from pikaraoke.lib import lrc_auto_timing
+from pikaraoke.lib import lrc_auto_pick, lrc_auto_timing
 from pikaraoke.lib.current_app import get_karaoke_instance, get_site_name, is_admin
 from pikaraoke.lib.genius import GeniusUnavailable
 from pikaraoke.lib.library_regen import (
@@ -27,7 +27,6 @@ from pikaraoke.lib.library_regen import (
 )
 from pikaraoke.lib.library_status import HistoryEntry, SongStatus, length_gap_s
 from pikaraoke.lib.library_tools import (
-    LRC_MAX_GAP_S,
     REPAIR_SOURCES,
     LrcTimingCheck,
     LrcTimingRefused,
@@ -763,13 +762,15 @@ def _timing_changes(fit: SliceFit) -> tuple[bool, bool]:
 
 
 def _fit_lines(
-    fit: SliceFit, earlier: str, later: str, speed_tip: str
+    fit: SliceFit, earlier: str, later: str, speed_tip: str, show_speed: bool = False
 ) -> list[tuple[str, str | None]]:
     """The lines under a fit's headline: how many matched, how the times move, the speed, the
     lines dropped. ``earlier`` and ``later`` are the move sentence, ``speed_tip`` the speed's note.
+    ``show_speed`` keeps the speed line when the change is too small to show on its own.
     """
     lines = [(_("matches %(n)s of %(m)s lines") % {"n": fit.matched, "m": fit.total}, None)]
     moves, speeds = _timing_changes(fit)
+    speeds = speeds or show_speed
     if moves:
         move = later if fit.move_s > 0 else earlier
         lines.append((move % {"time": _hms(fit.move_s)}, None))
@@ -919,44 +920,79 @@ def _line_runs(runs: list[tuple[int, int]], lines: Sequence[tuple[str, float]]) 
     ]
 
 
+def _bar_warning(check: LrcTimingCheck) -> str | None:
+    """The line saying what the download's bar refused a fit for, None when it passes or the
+    refusal is the speed, whose own line is the warning."""
+    fit = check.fit
+    if check.refusal == lrc_auto_pick.MISTIMED:
+        return ngettext(
+            "%(num)d line is heard far from its time.",
+            "%(num)d lines are heard far from their time.",
+            len(fit.mistimed),
+        )
+    if check.refusal == lrc_auto_pick.UNCLAIMED:
+        return _(
+            "The clip has %(num)d words in a row that no line of this match has. "
+            "The video may have a section this match lacks."
+        ) % {"num": fit.unclaimed_run}
+    if check.refusal == lrc_auto_pick.SHIFTED:
+        return _(
+            "%(num)d lines in a row are heard a few seconds off their time. "
+            "The video may be a different cut here."
+        ) % {"num": fit.shift_run}
+    return None
+
+
+def _lrc_verdict(check: LrcTimingCheck) -> tuple[str, str]:
+    """The tone and head of a match's card, the one answer the card and the search list's rows give.
+
+    A fit that fits may always time the song; the download's bar (``check.refusal``) and the
+    flagged lines only say what to read first.
+    """
+    fit = check.fit
+    if fit.status != FITS:
+        card = _lrc_refusal_card(check, None)
+        return card["tone"], card["head"]
+    if check.refusal is not None:
+        return "bad", _("Fits, but read the warning first.")
+    if flagged_runs(fit.mistimed, fit.unheard, MIN_FLAGGED_RUN):
+        return "bad", _("Fits, but check these lines first.")
+    return "good", _("Fits. This match can time this song.")
+
+
 def _lrc_fit_card(check: LrcTimingCheck, length: str | None) -> dict:
     """The card for a match whose lines fit: the numbers, then the lines to read before confirming.
 
     ``runs`` are stretches heard far from where the match puts them, the warning; ``unheard``
-    are stretches nothing was heard for, so they could not be checked, a quieter note.
+    are stretches nothing was heard for, so they could not be checked, a quieter note. The
+    length is for reading only: it rules nothing out.
     """
     fit = check.fit
     runs = _line_runs(flagged_runs(fit.mistimed, fit.unheard, MIN_FLAGGED_RUN), fit.lines)
     unheard = _line_runs(unheard_runs(fit.unheard, MIN_UNHEARD_RUN), fit.lines)
+    speed_tip = _(
+        "The match runs at a different speed than the clip. That happens when it was "
+        "made for a different frame rate, or when the video is sped up or slowed down."
+    )
     lines = _fit_lines(
         fit,
         earlier=_("Line times move %(time)s earlier."),
         later=_("Line times move %(time)s later."),
-        speed_tip=_(
-            "The match runs at a different speed than the clip. That happens when it was "
-            "made for a different frame rate, or when the video is sped up or slowed down."
-        ),
+        speed_tip=speed_tip,
+        show_speed=check.refusal == lrc_auto_pick.SPEED,
     )
-    too_far = not check.viable  # the lines fit, so only the length can be what rules it out
-    tone, head = "good", _("Fits. This match can time this song.")
-    if too_far:
-        tone = "bad"
-        head = _("The lines fit, but the length is too far off.")
-        if length is None:
-            head = _("The lines fit, but the match has no length to check.")
-    elif runs:
-        tone, head = "bad", _("Fits, but check these lines first.")
     if length is not None:
-        limit = _(
-            "A match this much longer or shorter than the video is usually another edit or "
-            "another recording, so its line times would drift. The limit is %(n)d s."
-        )
-        lines.insert(1, (length, limit % {"n": LRC_MAX_GAP_S} if too_far else None))
-    if not (runs or unheard or fit.mistimed):
+        lines.insert(1, (length, None))
+    warning = _bar_warning(check)
+    if warning is not None:
+        lines.append((warning, None))
+    elif not (runs or unheard or fit.mistimed):
         lines.append((_("No line was heard far from its time."), None))
-    card = _card(fit, tone, head, lines)
-    if too_far and length is not None:
-        card["lines"][1]["warn"] = True
+    card = _card(fit, *_lrc_verdict(check), lines)
+    if warning is not None:
+        card["lines"][-1]["warn"] = True
+    elif check.refusal == lrc_auto_pick.SPEED:
+        next(line for line in card["lines"] if line["tip"] == speed_tip)["warn"] = True
     card.update(runs=runs, unheard=unheard)
     return card
 
@@ -992,37 +1028,10 @@ def _lrc_refusal_card(check: LrcTimingCheck, length: str | None) -> dict:
     )
 
 
-def _override_tip(check: LrcTimingCheck) -> str:
-    """What using a match whose length is off gives up, for the checkbox's (i).
-
-    The length was the only guard against extra or cut material at the start or end of the
-    song, which the flagged lines can't see, so the admin's ear is that check.
-    """
-    if check.gap_s is None:
-        why = _("The match has no length, so the video can't be compared with it.")
-    else:
-        why = _("The video is more than %(n)d s longer or shorter than this match.") % {
-            "n": LRC_MAX_GAP_S
-        }
-    return " ".join(
-        [
-            why,
-            _(
-                "That's fine if the extra is talk, applause or an intro before or after the "
-                "song; those parts get no lyrics. It's wrong if the video skips or adds a "
-                "section at the start or end. The checks above can't see that, so listen first."
-            ),
-        ]
-    )
-
-
 def _lrc_card(check: LrcTimingCheck) -> dict:
     """The Check fit card for how an LRCLIB match's own line times checked against the clip.
 
-    The movie card's shape, plus ``viable`` (whether Regenerate may be offered),
-    ``overridable`` (it may be, once the admin ticks "use this match anyway", with
-    ``override_tip`` saying what that gives up) and the ``runs`` and ``unheard`` stretches
-    of the match's lines.
+    The movie card's shape, plus the ``runs`` and ``unheard`` stretches of the match's lines.
     """
     fit = check.fit
     length = (
@@ -1035,9 +1044,6 @@ def _lrc_card(check: LrcTimingCheck) -> dict:
     else:
         card = _lrc_refusal_card(check, length)
         card.update(runs=[], unheard=[])
-    card["viable"] = check.viable
-    card["overridable"] = check.overridable
-    card["override_tip"] = _override_tip(check) if check.overridable else None
     return card
 
 
@@ -1121,9 +1127,6 @@ def repair():
     skip = body.get("lrclib_skip", False)
     if not isinstance(skip, bool):
         return _error(_("lrclib_skip must be true or false"), 400)
-    allow_gap = body.get("allow_gap", False)
-    if not isinstance(allow_gap, bool):
-        return _error(_("allow_gap must be true or false"), 400)
     try:
         k.library_tools.repair(
             song,
@@ -1132,7 +1135,6 @@ def repair():
             lrclib_id=body.get("lrclib_id"),
             lrclib_skip=skip,
             text=body.get("text"),
-            allow_gap=allow_gap,
         )
     except MovieSliceRefused as e:
         return _error(_card_text(_slice_card(e.check)), 400)

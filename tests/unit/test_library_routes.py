@@ -23,7 +23,7 @@ if not hasattr(werkzeug, "__version__"):
     werkzeug.__version__ = "3.0.0"
 
 import pikaraoke
-from pikaraoke.lib import lrclib
+from pikaraoke.lib import lrc_auto_pick, lrclib
 from pikaraoke.lib.alignment_capture import SCHEMA_VERSION
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import GeniusSong, GeniusUnavailable, read_choice
@@ -2124,46 +2124,29 @@ class TestRepairPage:
         assert "state.lrcChecking" not in pick
         assert ".prop('disabled', state.lrcPick === null || state.lrcChecking)" in code
 
-    def test_regenerate_is_on_for_a_viable_answer_or_an_overridable_one_with_the_box_ticked(
-        self, env
-    ):
+    def test_regenerate_is_on_for_any_answer_that_fits(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
         step1 = code[code.index("function refreshStep1") : code.index("// The LRCLIB matches")]
 
-        assert "state.source === 'lrclib' && state.lrcCard !== null &&" in step1
-        assert "(state.lrcCard.viable || (state.lrcCard.overridable && state.lrcOverride))" in step1
+        assert (
+            "(state.source === 'lrclib' && state.lrcCard !== null && state.lrcCard.status === 'fits');"
+            in step1
+        )
 
-    def test_regenerate_sends_the_id_and_allow_gap_only_when_the_box_is_ticked(self, env):
-        code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
+    def test_regenerate_sends_the_picked_id_alone(self, env):
+        html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
+        code = script(html)
         click = code.index("$('#go').on('click'")
         go = code[click : code.index("/* ---", click)]
 
-        assert "var body = { source: 'lrclib', lrclib_id: lrcId() };" in go
-        assert "if (state.lrcOverride) body.allow_gap = true;" in go
-        assert go.count("allow_gap") == 1
+        assert "send({ source: 'lrclib', lrclib_id: lrcId() });" in go
+        assert "allow_gap" not in code
 
-    def test_the_override_box_shows_under_an_overridable_card_with_its_note_and_is_cleared(
-        self, env
-    ):
+    def test_the_page_has_no_override_box(self, env):
         html = text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle())))
-        code = script(html)
-        section = html[html.index('id="lrclib-section"') : html.index('id="movie-section"')]
-        check = code[code.index("function checkLrc") : code.index("$('#lt-check').on('click'")]
-        pick = code[code.index("function pickLrc") : code.index("function startLrcSearch")]
 
-        assert 'id="lt-override" class="rp-override is-hidden"' in section
-        assert 'type="checkbox" id="lt-override-box"' in section
-        assert "Use this match anyway" in section
-        assert section.index('id="lt-card"') < section.index('id="lt-override"')
-        assert (
-            "$('#lt-override').toggleClass('is-hidden', state.lrcCard === null || !state.lrcCard.overridable);"
-            in code
-        )
-        # The note comes from the card, not a literal, so the limit it names is the server's.
-        assert "infoTip(card.override_tip)" in check
-        assert "15 s" not in html
-        # A new Check fit or another match unticks the box.
-        assert "state.lrcOverride = false;" in check and "state.lrcOverride = false;" in pick
+        for gone in ("lt-override", "rp-override", "lrcOverride", "Use this match anyway"):
+            assert gone not in html
 
     def test_a_link_from_a_list_checks_the_match_on_disk_at_once(self, env):
         code = script(text(self.page(env, env.add_song("A---aaaaaaaaaaa.mp4", caption_bundle()))))
@@ -2708,20 +2691,22 @@ class TestLrcCard:
         """The fit's lines in the clip: the lines, 5 s apart from 0:10."""
         return tuple((line, 10.0 + 5 * n) for n, line in enumerate(cls.LINES))
 
-    def check(self, status="fits", *, gap=0, viable=True, helps=True, record=None, **fit) -> dict:
+    def made(self, status="fits", *, gap=0, helps=True, refusal="auto", **fit) -> LrcTimingCheck:
+        """A check by hand; its ``refusal`` is the bar's own on the fit unless given."""
         fields = {"matched": 5, "total": 6, "lines": self.fitted()}
         fields.update(fit)
-        duration = None if gap is None else 211 + gap
-        check = LrcTimingCheck(
-            SliceFit(status=status, **fields),
+        fitted = SliceFit(status=status, **fields)
+        return LrcTimingCheck(
+            fitted,
             clip_s=211.0,
             gap_s=gap,
-            record=record or {"id": 11, "duration": duration},
-            viable=viable,
-            overridable=status == "fits" and not viable,  # as the check works it out
+            record={"id": 11, "duration": None if gap is None else 211 + gap},
+            refusal=lrc_auto_pick.refusal(fitted) if refusal == "auto" else refusal,
             regenerate_helps=helps,
         )
-        return _lrc_card(check)
+
+    def check(self, status="fits", **kwargs) -> dict:
+        return _lrc_card(self.made(status, **kwargs))
 
     def texts(self, card: dict) -> list[str]:
         return [line["text"] for line in card["lines"]]
@@ -2729,11 +2714,7 @@ class TestLrcCard:
     def test_a_clean_fit_says_nothing_was_heard_far_from_its_time(self):
         card = self.check()
 
-        assert (card["tone"], card["head"], card["viable"]) == (
-            "good",
-            "Fits. This match can time this song.",
-            True,
-        )
+        assert (card["tone"], card["head"]) == ("good", "Fits. This match can time this song.")
         assert self.texts(card) == [
             "matches 5 of 6 lines",
             "The match is 3:31; this video is 3:31.",
@@ -2752,7 +2733,7 @@ class TestLrcCard:
         )
 
     def test_the_move_speed_and_dropped_lines_follow_the_length_in_the_matchs_words(self):
-        card = self.check(move_s=2.0, speed=23.976 / 25, dropped=2)
+        card = self.check(move_s=2.0, speed=23.976 / 25, dropped=2)  # the speed is also a warning
 
         assert self.texts(card)[2:5] == [
             "Line times move 0:00:02 later.",
@@ -2762,13 +2743,13 @@ class TestLrcCard:
         assert "The match runs at a different speed than the clip." in card["lines"][3]["tip"]
         assert "No line was heard far from its time." in self.texts(card)
 
-    def test_a_run_of_mistimed_lines_is_the_warning_and_does_not_stop_regenerate(self):
+    def test_a_run_of_mistimed_lines_is_a_warning_with_its_lines_to_read(self):
         card = self.check(mistimed=(2, 3, 4))
 
-        assert (card["tone"], card["head"], card["viable"]) == (
+        assert (card["status"], card["tone"], card["head"]) == (
+            "fits",
             "bad",
-            "Fits, but check these lines first.",
-            True,
+            "Fits, but read the warning first.",
         )
         assert card["runs"] == [
             {
@@ -2817,70 +2798,85 @@ class TestLrcCard:
     def test_a_run_and_an_unheard_stretch_can_be_shown_together(self):
         card = self.check(mistimed=(4, 5), unheard=(1, 2, 3))
 
-        assert card["head"] == "Fits, but check these lines first."
+        assert card["head"] == "Fits, but read the warning first."
         assert [r["title"] for r in card["runs"]] == ["0:30–0:35 · 2 lines"]
         assert [r["title"] for r in card["unheard"]] == ["0:15–0:25 · 3 lines"]
 
-    def test_a_length_past_the_limit_is_amber_and_says_what_the_limit_is(self):
-        card = self.check(gap=38, viable=False)
+    @pytest.mark.parametrize("gap", [38, -38, None])
+    def test_a_length_far_off_or_missing_is_a_plain_line_and_rules_nothing_out(self, gap):
+        card = self.check(gap=gap)
 
-        assert (card["tone"], card["head"], card["viable"]) == (
-            "bad",
-            "The lines fit, but the length is too far off.",
-            False,
-        )
-        length = card["lines"][1]
-        assert length["text"] == "The match is 4:09; this video is 3:31 (38 s longer)."
-        assert length["warn"] is True and "The limit is 15 s." in length["tip"]
-        assert "warn" not in card["lines"][0]
+        assert (card["tone"], card["head"]) == ("good", "Fits. This match can time this song.")
+        assert all("warn" not in line for line in card["lines"])
+        assert all(line["tip"] is None for line in card["lines"])
+        assert "viable" not in card and "overridable" not in card and "override_tip" not in card
+        if gap is None:
+            assert self.texts(card) == [
+                "matches 5 of 6 lines",
+                "No line was heard far from its time.",
+            ]
+        else:
+            assert self.texts(card)[1].startswith("The match is ")
 
-    def test_a_length_past_the_limit_offers_the_override_and_says_what_it_gives_up(self):
-        card = self.check(gap=38, viable=False)
+    def test_flagged_runs_the_bar_passes_still_say_to_check_those_lines(self):
+        """The bar's one-mistimed-line limit is under a run's two lines, so a real fit with a
+        run is always refused; a check made by hand shows the verdict's own rule."""
+        card = self.check(mistimed=(2, 3), refusal=None)
 
-        assert (card["viable"], card["overridable"]) == (False, True)
-        assert card["override_tip"] == (
-            "The video is more than 15 s longer or shorter than this match. "
-            "That's fine if the extra is talk, applause or an intro before or after the song; "
-            "those parts get no lyrics. It's wrong if the video skips or adds a section at "
-            "the start or end. The checks above can't see that, so listen first."
-        )
-
-    def test_a_match_with_no_length_offers_the_override_with_its_own_reason(self):
-        card = self.check(gap=None, viable=False)
-
-        assert card["overridable"] is True
-        assert card["override_tip"].startswith(
-            "The match has no length, so the video can't be compared with it. That's fine if"
-        )
-        assert "15 s" not in card["override_tip"]
+        assert (card["tone"], card["head"]) == ("bad", "Fits, but check these lines first.")
+        assert len(card["runs"]) == 1
+        assert all("warn" not in line for line in card["lines"])
 
     @pytest.mark.parametrize(
-        "kwargs",
+        ("fit", "refusal", "warning"),
         [
-            {},
-            {"mistimed": (2, 3, 4)},
-            {"status": REFUSED, "reason": TOO_FEW, "matched": 3, "total": 53, "viable": False},
-            {"status": NOT_SRT, "matched": 0, "total": 0, "viable": False},
-            {"status": NO_REFERENCE, "matched": 0, "total": 0, "viable": False},
+            ({"speed": 23.976 / 25}, "speed", "Speed adjusted by 4.1%."),
+            ({"speed": 1.0004}, "speed", "Speed adjusted by 0.0%."),
+            ({"mistimed": (1, 4)}, "mistimed", "2 lines are heard far from their time."),
+            (
+                {"unclaimed_run": 13},
+                "unclaimed",
+                "The clip has 13 words in a row that no line of this match has. "
+                "The video may have a section this match lacks.",
+            ),
+            (
+                {"offsets": (2.0, 2.0, 2.0, 0.0, None, 0.0)},
+                "shifted",
+                "3 lines in a row are heard a few seconds off their time. "
+                "The video may be a different cut here.",
+            ),
         ],
-        ids=["clean", "flagged", "too_few", "not_srt", "no_reference"],
     )
-    def test_a_viable_or_refused_answer_offers_no_override(self, kwargs):
-        card = self.check(**kwargs)
+    def test_a_fit_the_download_would_refuse_still_fits_and_says_why(self, fit, refusal, warning):
+        check = self.made(**fit)
+        card = _lrc_card(check)
 
-        assert (card["overridable"], card["override_tip"]) == (False, None)
+        assert check.refusal == refusal
+        assert (card["status"], card["tone"], card["head"]) == (
+            "fits",
+            "bad",
+            "Fits, but read the warning first.",
+        )
+        assert [line["text"] for line in card["lines"] if line.get("warn")] == [warning]
+        assert card["lines"][0].get("warn") is None  # the count is not a warning
+        assert card["lines"][1].get("warn") is None  # nor is the length
 
-    def test_a_match_with_no_length_says_so_and_has_no_length_line(self):
-        card = self.check(gap=None, viable=False)
+    def test_the_mistimed_warning_counts_the_lines(self):
+        card = self.check(mistimed=(0, 2, 3))
 
-        assert card["head"] == "The lines fit, but the match has no length to check."
-        assert self.texts(card) == ["matches 5 of 6 lines", "No line was heard far from its time."]
+        assert self.texts(card)[-1] == "3 lines are heard far from their time."
+
+    def test_a_refusal_the_bar_has_no_line_for_is_not_a_warning(self):
+        """A fit that is not ``fits`` is the card's own refusal, not a warning on a fit."""
+        card = self.check(REFUSED, reason=TOO_FEW, matched=3, total=53)
+
+        assert (card["tone"], card["head"]) == ("bad", "Doesn't fit.")
         assert all("warn" not in line for line in card["lines"])
 
     def test_too_few_lines_say_how_few_and_what_to_check(self):
-        card = self.check(REFUSED, reason=TOO_FEW, matched=3, total=53, viable=False, gap=5)
+        card = self.check(REFUSED, reason=TOO_FEW, matched=3, total=53, gap=5)
 
-        assert (card["tone"], card["head"], card["viable"]) == ("bad", "Doesn't fit.", False)
+        assert (card["tone"], card["head"]) == ("bad", "Doesn't fit.")
         assert self.texts(card) == [
             "Only 3 of 53 lines were found in the clip.",
             "The match is 3:36; this video is 3:31 (5 s longer).",
@@ -2889,7 +2885,7 @@ class TestLrcCard:
         assert (card["runs"], card["unheard"]) == ([], [])
 
     def test_lines_that_disagree_say_so_and_blame_another_edit(self):
-        card = self.check(REFUSED, reason=DISAGREE, matched=28, total=57, viable=False, gap=97)
+        card = self.check(REFUSED, reason=DISAGREE, matched=28, total=57, gap=97)
 
         assert self.texts(card) == [
             "Found 28 of 57 lines, but they don't agree on one timing.",
@@ -2898,12 +2894,12 @@ class TestLrcCard:
         assert "different edit of the song" in card["tip"]
 
     def test_a_match_with_no_lines_to_check_is_refused_as_such(self):
-        card = self.check(REFUSED, reason=TOO_FEW, matched=0, total=0, viable=False)
+        card = self.check(REFUSED, reason=TOO_FEW, matched=0, total=0)
 
         assert self.texts(card)[0] == "This match has no lines to check."
 
     def test_a_match_with_no_timed_lines_is_not_called_an_srt_file(self):
-        card = self.check(NOT_SRT, matched=0, total=0, viable=False)
+        card = self.check(NOT_SRT, matched=0, total=0)
 
         assert (card["head"], self.texts(card)) == (
             "Doesn't fit.",
@@ -2911,7 +2907,7 @@ class TestLrcCard:
         )
 
     def test_a_match_past_the_cue_limit_is_refused(self):
-        card = self.check(TOO_LONG, matched=0, total=3001, viable=False)
+        card = self.check(TOO_LONG, matched=0, total=3001)
 
         assert card["head"] == "This match has more than 3,000 lines."
 
@@ -2923,14 +2919,13 @@ class TestLrcCard:
         ],
     )
     def test_no_heard_words_say_whether_a_regenerate_would_help(self, helps, head, link, mention):
-        card = self.check(NO_REFERENCE, matched=0, total=0, viable=False, helps=helps)
+        card = self.check(NO_REFERENCE, matched=0, total=0, helps=helps)
 
         assert (card["tone"], card["head"], card["song_info_link"]) == ("info", head, link)
         assert mention in " ".join(self.texts(card))
-        assert card["viable"] is False
 
     def test_the_repairs_refusal_is_the_cards_head_lines_and_tip(self):
-        card = self.check(REFUSED, reason=TOO_FEW, matched=3, total=53, viable=False, gap=5)
+        card = self.check(REFUSED, reason=TOO_FEW, matched=3, total=53, gap=5)
 
         assert _card_text(card) == (
             "Doesn't fit. Only 3 of 53 lines were found in the clip. "
@@ -3026,7 +3021,7 @@ class TestLrcFitRoute:
 
         body = self.check(env, song).get_json()
 
-        assert (body["status"], body["tone"], body["viable"]) == ("fits", "good", True)
+        assert (body["status"], body["tone"]) == ("fits", "good")
         assert body["head"] == "Fits. This match can time this song."
         assert [line["text"] for line in body["lines"]] == [
             f"matches {SLICE_LINES} of {SLICE_LINES} lines",
@@ -3054,34 +3049,28 @@ class TestLrcFitRoute:
 
         self.assert_nothing_written(env)
 
-    def test_a_length_past_the_limit_is_not_viable_and_the_length_line_is_marked(self, env):
+    def test_a_length_far_off_is_a_plain_line_and_the_card_still_fits(self, env):
         song = LrcTimingEnv.song(env, record={"duration": CLIP_S + 38})
 
         body = self.check(env, song).get_json()
 
-        assert (body["status"], body["viable"]) == ("fits", False)
-        assert body["head"] == "The lines fit, but the length is too far off."
-        assert body["lines"][1]["warn"] is True
-        assert body["overridable"] is True and "listen first" in body["override_tip"]
-
-    def test_a_clean_answer_and_a_refused_one_are_not_overridable(self, env):
-        clean = LrcTimingEnv.song(env)
-        refused = LrcTimingEnv.song(
-            env,
-            "B---bbbbbbbbbbb.mp4",
-            record={"duration": CLIP_S + 38, "syncedLyrics": lrc_slice(lines=range(40, 52))},
+        assert (body["status"], body["tone"], body["head"]) == (
+            "fits",
+            "good",
+            "Fits. This match can time this song.",
         )
-
-        for song in (clean, refused):
-            body = self.check(env, song).get_json()
-            assert (body["overridable"], body["override_tip"]) == (False, None)
+        assert body["lines"][1] == {
+            "text": "The match is 3:58; this video is 3:20 (38 s longer).",
+            "tip": None,
+        }
+        assert not {"viable", "overridable", "override_tip"} & body.keys()
 
     def test_lines_the_clip_does_not_sing_are_refused_with_the_length(self, env):
         song = LrcTimingEnv.song(env, record={"syncedLyrics": lrc_slice(lines=range(40, 52))})
 
         body = self.check(env, song).get_json()
 
-        assert (body["status"], body["head"], body["viable"]) == ("refused", "Doesn't fit.", False)
+        assert (body["status"], body["head"]) == ("refused", "Doesn't fit.")
         assert [line["text"] for line in body["lines"]] == [
             f"Only 0 of {SLICE_LINES} lines were found in the clip.",
             "The match is 3:20; this video is 3:20.",
@@ -3093,7 +3082,7 @@ class TestLrcFitRoute:
 
         body = self.check(env, song).get_json()
 
-        assert (body["head"], body["viable"]) == ("Fits. This match can time this song.", True)
+        assert body["head"] == "Fits. This match can time this song."
         assert body["runs"] == []
         [stretch] = body["unheard"]
         assert stretch["title"] == "0:25–0:45 · 5 lines"
@@ -3114,11 +3103,10 @@ class TestLrcFitRoute:
 
         body = self.check(env, song).get_json()
 
-        assert (body["head"], body["tone"], body["viable"]) == (
-            "Fits, but check these lines first.",
-            "bad",
-            True,
-        )
+        assert (body["head"], body["tone"]) == ("Fits, but read the warning first.", "bad")
+        assert [line["text"] for line in body["lines"] if line.get("warn")] == [
+            "2 lines are heard far from their time."
+        ]
         assert [r["title"] for r in body["runs"]] == ["1:15–1:20 · 2 lines"]
         assert [r["title"] for r in body["unheard"]] == ["0:25–0:35 · 3 lines"]
 
@@ -3132,7 +3120,7 @@ class TestLrcFitRoute:
             "info",
             "Can't check yet.",
         )
-        assert body["song_info_link"] is True and body["viable"] is False
+        assert body["song_info_link"] is True
 
 
 class TestLrcSearchRoute:
@@ -3229,12 +3217,6 @@ class TestLrcRepairRoute:
         ("record", "refusal"),
         [
             (
-                {"duration": CLIP_S + 38},
-                "The lines fit, but the length is too far off. matches 12 of 12 lines "
-                "The match is 3:58; this video is 3:20 (38 s longer). "
-                "No line was heard far from its time.",
-            ),
-            (
                 {"syncedLyrics": lrc_slice(lines=range(40, 52))},
                 "Doesn't fit. Only 0 of 12 lines were found in the clip. "
                 "The match is 3:20; this video is 3:20. "
@@ -3242,7 +3224,7 @@ class TestLrcRepairRoute:
                 "another language won't match the words heard.",
             ),
         ],
-        ids=["too_far", "too_few"],
+        ids=["too_few"],
     )
     def test_a_match_that_cannot_time_the_song_is_refused_in_the_previews_words(
         self, env, record, refusal
@@ -3264,40 +3246,27 @@ class TestLrcRepairRoute:
         assert self.repair(env, song, lrclib_id=lrclib_id).status_code == 400
         env.processing.enqueue_regen.assert_not_called()
 
-    def test_a_fit_past_the_length_limit_is_queued_only_when_the_gap_is_allowed(self, env):
-        song = LrcTimingEnv.song(env, record={"duration": CLIP_S + 38})
+    @pytest.mark.parametrize("gap", [38, -35, None])
+    def test_a_fit_is_queued_whatever_the_matchs_length(self, env, gap):
+        song = LrcTimingEnv.song(env, record={"duration": None if gap is None else CLIP_S + gap})
 
-        assert self.repair(env, song).status_code == 400
-        assert self.repair(env, song, allow_gap=False).status_code == 400
-        env.processing.enqueue_regen.assert_not_called()
-
-        response = self.repair(env, song, allow_gap=True)
+        response = self.repair(env, song)
 
         assert response.get_json() == {"success": True}
         plan = env.processing.enqueue_regen.call_args.args[0].song.plan
         assert plan.seed == {"lyrics_origin": "lrclib_srt"}
 
-    def test_a_refused_fit_is_refused_when_the_gap_is_allowed_too(self, env):
+    def test_a_refused_fit_is_refused_whatever_the_length(self, env):
         song = LrcTimingEnv.song(
             env, record={"duration": CLIP_S + 38, "syncedLyrics": lrc_slice(lines=range(40, 52))}
         )
 
-        response = self.repair(env, song, allow_gap=True)
+        response = self.repair(env, song)
 
         assert response.status_code == 400
         assert response.get_json()["error"].startswith("Doesn't fit.")
         env.processing.enqueue_regen.assert_not_called()
         assert not list(env.folder.glob("regen_backups/*"))
-
-    @pytest.mark.parametrize("allow_gap", ["true", 1, 0, None, [True]])
-    def test_an_allow_gap_that_is_not_true_or_false_is_rejected(self, env, allow_gap):
-        song = LrcTimingEnv.song(env, record={"duration": CLIP_S + 38})
-
-        response = self.repair(env, song, allow_gap=allow_gap)
-
-        assert response.status_code == 400
-        assert response.get_json()["error"] == "allow_gap must be true or false"
-        env.processing.enqueue_regen.assert_not_called()
 
     def test_with_no_lrc_and_no_id_nothing_is_queued(self, env):
         song = LrcTimingEnv.song(env, record=False)
@@ -3693,7 +3662,6 @@ class TestRepairRoute:
             {"source": "genius", "genius_id": 8, "lrclib_id": 5.5},
             {"source": "genius", "genius_id": 8, "lrclib_id": "5"},
             {"source": "genius", "genius_id": 8, "lrclib_skip": "yes"},
-            {"source": "genius", "genius_id": 8, "allow_gap": "yes"},
         ],
     )
     def test_ids_and_flags_of_the_wrong_type_are_rejected(self, env, song, body):

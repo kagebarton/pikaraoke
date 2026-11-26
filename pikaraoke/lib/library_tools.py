@@ -20,7 +20,7 @@ from urllib.parse import parse_qs, urlparse
 
 import srt
 
-from pikaraoke.lib import lrclib
+from pikaraoke.lib import lrc_auto_pick, lrclib
 from pikaraoke.lib.download_manager import DownloadManager
 from pikaraoke.lib.events import EventSystem
 from pikaraoke.lib.genius import (
@@ -145,11 +145,6 @@ CUSTOM_SHEET_MAX_CHARS = 100_000
 # limit took minutes of request time, this much about ten seconds.
 MOVIE_SUBTITLES_MAX_CHARS = 300_000
 
-# How far an LRCLIB match's length may be from the clip's, in seconds, for it to time
-# the song. Measured on the library: fits with no flagged run had gaps of up to 14 s (a
-# music video's longer intro or outro), so the limit sits just past that.
-LRC_MAX_GAP_S = 15
-
 # A caption check that couldn't run (YouTube refusing, often after many calls in a
 # row) is tried once more after this pause.
 CAPTION_RETRY_PAUSE_S = 30
@@ -249,22 +244,20 @@ class LrcTimingCheck:
     """How an LRCLIB match's own line times checked against a song's clip.
 
     ``clip_s``: the clip's length. ``gap_s``: how many seconds longer the match is
-    than the clip (negative: shorter), None when the match has no length. ``record``:
-    the match's provenance (:func:`lrclib.record_meta`), for naming it. ``viable``: the
-    fit passed and the gap is within :data:`LRC_MAX_GAP_S`, so the match may time the
-    song; the flagged lines (``fit.mistimed``, ``fit.unheard``) are for the admin to
-    read first. ``overridable``: the fit passed but the gap is over the limit or unknown,
-    so the admin may use the match anyway (a concert clip's talk before the song makes
-    a long gap); a refused fit never is. ``regenerate_helps`` is as for
-    :class:`MovieSliceCheck`.
+    than the clip (negative: shorter), None when the match has no length; the length
+    rules nothing out, it is for the admin to read. ``record``: the match's provenance
+    (:func:`lrclib.record_meta`), for naming it. ``refusal``: why the download's bar
+    (:func:`lrc_auto_pick.refusal`) would not take this fit, None when it would; a fit
+    with status ``fits`` may time the song whatever it says, the admin being the check,
+    and the flagged lines (``fit.mistimed``, ``fit.unheard``) are for them to read first.
+    ``regenerate_helps`` is as for :class:`MovieSliceCheck`.
     """
 
     fit: SliceFit
     clip_s: float
     gap_s: int | None
     record: dict
-    viable: bool
-    overridable: bool
+    refusal: str | None
     regenerate_helps: bool
 
 
@@ -635,16 +628,12 @@ class LibraryTools:
         """:meth:`check_lrc_timing` for a song already checked and read, and its match."""
         length = _clip_length(job)
         fit = self._fit_to_clip(job, lrc_to_srt(record["syncedLyrics"]), length)
-        gap_s = length_gap_s(record.get("duration"), length)
-        fits = fit.status == FITS
-        viable = fits and gap_s is not None and abs(gap_s) <= LRC_MAX_GAP_S
         return LrcTimingCheck(
             fit,
             length,
-            gap_s,
+            length_gap_s(record.get("duration"), length),
             lrclib.record_meta(record),
-            viable=viable,
-            overridable=fits and not viable,
+            lrc_auto_pick.refusal(fit),
             regenerate_helps=job.bundle is not None,
         )
 
@@ -728,7 +717,6 @@ class LibraryTools:
         lrclib_id: int | None = None,
         lrclib_skip: bool = False,
         text: object = None,
-        allow_gap: bool = False,
     ) -> None:
         """Queue a regen that replaces the song's lyric pick.
 
@@ -739,9 +727,8 @@ class LibraryTools:
         only a fit is queued, with the corrected slice as the song's sheet),
         ``lrclib`` (an LRCLIB match's own line times, the record ``lrclib_id`` or
         the ``.lrc`` on disk: fitted again here by :meth:`check_lrc_timing`, and
-        only a viable fit is queued, with the fitted lines as the song's sheet,
-        or with ``allow_gap`` a fit that passes but whose length is over the limit;
-        a record given by id becomes the song's ``.lrc``) or ``transcribe``. For
+        only a fit is queued, with the fitted lines as the song's sheet; a record
+        given by id becomes the song's ``.lrc``) or ``transcribe``. For
         Genius and custom the LRCLIB match is the record
         ``lrclib_id``, or none at all with ``lrclib_skip`` (which wins over an
         id); with neither, the automatic rule applies. The song's files are
@@ -763,7 +750,7 @@ class LibraryTools:
         elif source == "movie":
             job.plan = self._movie_repair_plan(job, text)
         elif source == "lrclib":
-            job.plan = self._lrc_repair_plan(job, lrclib_id, allow_gap)
+            job.plan = self._lrc_repair_plan(job, lrclib_id)
         elif source == "transcribe":
             job.plan = self._transcribe_plan()
         else:
@@ -1324,16 +1311,16 @@ class LibraryTools:
             raise MovieSliceRefused(check)
         return sheet_plan(job.song_path, "movie", check.fit.srt)
 
-    def _lrc_repair_plan(self, job: SongJob, lrclib_id: int | None, allow_gap: bool) -> Plan:
+    def _lrc_repair_plan(self, job: SongJob, lrclib_id: int | None) -> Plan:
         """The plan that saves the LRCLIB match's lines, fitted to the clip, as the song's sheet.
 
-        The match is read once, so the lines that were fitted are the ones saved and, for
-        a record given by id, the ``.lrc`` the run writes. ``allow_gap`` lets a fit that
-        passed through when only its length is over the limit; a refused fit never is.
+        Only a fit is saved, whatever the match's length or the download's bar says. The match
+        is read once, so the lines that were fitted are the ones saved and, for a record given
+        by id, the ``.lrc`` the run writes.
         """
         record = self._lrc_record(job.song_path, lrclib_id)
         check = self._fit_lrc_timing(job, record)
-        if not (check.viable or (allow_gap and check.overridable)):
+        if check.fit.status != FITS:
             raise LrcTimingRefused(check)
         plan = sheet_plan(job.song_path, "lrclib", check.fit.srt)
         if lrclib_id is not None:
