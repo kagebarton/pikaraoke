@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-18 11:11-0500\n"
+"POT-Creation-Date: 2026-11-27 10:31-0500\n"
 "PO-Revision-Date: 2025-11-09 03:26+0300\n"
 "Last-Translator: \n"
 "Language: ru_RU\n"
@@ -29,20 +29,39 @@ msgstr "Транспозиция на  %s полутонов: %s"
 msgid "Volume: %s"
 msgstr "Громкость: %s"
 
-#: karaoke.py:572
+#: karaoke.py:560
 #, python-format
 msgid "Subtitle delay: %s seconds"
 msgstr ""
 
-#: karaoke.py:583
-#, fuzzy, python-format
-msgid "Vocal volume: %s%%"
-msgstr "Громкость: %s"
-
-#: karaoke.py:594
+#. Message shown on the TV when the original vocals level changes
+#: karaoke.py:571
 #, python-format
-msgid "Subtitle mode: %s"
+msgid "Original vocals: %s%%"
 msgstr ""
+
+#. Lyric style where each word lights up as it is sung
+#: karaoke.py:583 templates/singer_tips.html:34
+#, fuzzy
+msgid "Karaoke"
+msgstr "Выход из Pikaraoke"
+
+#. Lyric style that shows the song's words a whole line at a time
+#: karaoke.py:585 templates/singer_tips.html:36
+msgid "Subtitles"
+msgstr ""
+
+#. Lyric style that shows no words
+#: karaoke.py:587 templates/singer_tips.html:38
+msgid "Off"
+msgstr ""
+
+#. Message shown on the TV when the lyric style changes. %s is Karaoke,
+#. Subtitles or Off
+#: karaoke.py:590
+#, fuzzy, python-format
+msgid "Lyrics: %s"
+msgstr "Сейчас играет"
 
 #: lib/download_manager.py:114
 #, python-format
@@ -71,63 +90,63 @@ msgstr "Скачано: %s"
 msgid "Error downloading song: "
 msgstr "Ошибка при скачивании песни: "
 
-#: lib/playback_controller.py:108
+#: lib/playback_controller.py:123
 #, fuzzy, python-format
 msgid "Song file not found: %s"
 msgstr "Песня удалена: %s"
 
-#: lib/playback_controller.py:255
+#: lib/playback_controller.py:262
 #, python-format
 msgid "Song ended abnormally: %s"
 msgstr "Песня завершилась ненормально: %s"
 
-#: lib/playback_controller.py:296
+#: lib/playback_controller.py:303
 #, python-format
 msgid "Skip: %s"
 msgstr "Пропустить: %s"
 
-#: lib/playback_controller.py:315
+#: lib/playback_controller.py:322
 #, fuzzy, python-format
 msgid "Pause: %s"
 msgstr "Громкость: %s"
 
-#: lib/playback_controller.py:317
+#: lib/playback_controller.py:324
 #, python-format
 msgid "Resume: %s"
 msgstr "Возобновить: %s"
 
-#: lib/preference_manager.py:142 lib/preference_manager.py:147
+#: lib/preference_manager.py:141 lib/preference_manager.py:146
 msgid "Your preferences were changed successfully"
 msgstr "Ваши настройки были успешно изменены"
 
-#: lib/preference_manager.py:150
+#: lib/preference_manager.py:149
 msgid "Something went wrong! Your preferences were not changed"
 msgstr "Что-то пошло не так! Ваши настройки остались без изменений"
 
-#: lib/preference_manager.py:167
+#: lib/preference_manager.py:166
 msgid "Your preferences were cleared successfully"
 msgstr "Ваши настройки были успешно сброшены"
 
-#: lib/preference_manager.py:170
+#: lib/preference_manager.py:169
 msgid "Something went wrong! Your preferences were not cleared"
 msgstr "Что-то пошло не так! Ваши настройки не были сброшены"
 
-#: lib/queue_hold.py:137
+#: lib/queue_hold.py:151
 #, fuzzy, python-format
 msgid "Already in the queue: %s"
 msgstr "Песня добавлена в очередь: %s"
 
-#: lib/queue_hold.py:165
+#: lib/queue_hold.py:180
 #, python-format
-msgid "%s couldn't be processed and was taken off the queue"
+msgid "%s couldn't be processed"
 msgstr ""
 
-#: lib/queue_manager.py:138
+#: lib/queue_manager.py:139
 #, fuzzy, python-format
 msgid "Song is already in the queue: %s"
 msgstr "Песня добавлена в очередь: %s"
 
-#: lib/queue_manager.py:146
+#: lib/queue_manager.py:147
 #, python-format
 msgid "You reached the limit of %s song(s) from an user in queue!"
 msgstr "Вы достигли предела %s песен от одного пользователя в очереди!"
@@ -153,32 +172,38 @@ msgid "Clear queue"
 msgstr "Очистить очередь"
 
 #. Shown when a user pauses/unpauses all their queued songs
-#: lib/queue_manager.py:366
+#: lib/queue_manager.py:372
 #, python-format
 msgid "%s paused their songs"
 msgstr ""
 
-#: lib/queue_manager.py:366
+#: lib/queue_manager.py:372
 #, python-format
 msgid "%s is back"
+msgstr ""
+
+#. Shown on the join form when the name is reserved or another guest already
+#. uses it
+#: lib/singers.py:182
+msgid "That name is already taken. Please choose another."
 msgstr ""
 
 #: lib/source_names.py:19
 msgid "Genius"
 msgstr ""
 
-#: lib/source_names.py:20 routes/song_info.py:456
-#: templates/song_repair.html:877 templates/song_repair.html:908
+#: lib/source_names.py:20 routes/song_info.py:463
+#: templates/song_repair.html:891 templates/song_repair.html:922
 msgid "Custom lyrics"
 msgstr ""
 
-#: lib/source_names.py:21 routes/song_info.py:458
-#: templates/song_repair.html:881 templates/song_repair.html:938
-#: templates/song_repair.html:939
+#: lib/source_names.py:21 routes/song_info.py:465
+#: templates/song_repair.html:895 templates/song_repair.html:950
+#: templates/song_repair.html:951
 msgid "Movie subtitles"
 msgstr ""
 
-#: lib/source_names.py:24 routes/song_info.py:310 routes/song_info.py:460
+#: lib/source_names.py:24 routes/song_info.py:317 routes/song_info.py:467
 msgid "YouTube captions"
 msgstr ""
 
@@ -198,75 +223,75 @@ msgid "%(source)s (edited)"
 msgstr ""
 
 #. Message shown after starting the youtube-dl update.
-#: routes/admin.py:63
+#: routes/admin.py:72
 msgid "Updating youtube-dl! Should take a minute or two... "
 msgstr "Обновление youtube-dl! Это займет пару минут... "
 
 #. Message shown after trying to update youtube-dl without admin permissions.
-#: routes/admin.py:70
+#: routes/admin.py:79
 msgid "You don't have permission to update youtube-dl"
 msgstr "У вас нет прав для обновления youtube-dl"
 
 #. Message shown after quitting pikaraoke.
-#: routes/admin.py:101
+#: routes/admin.py:110
 msgid "Exiting pikaraoke now!"
 msgstr "Выйти из pikaraoke прямо сейчас!"
 
 #. Message shown after trying to quit pikaraoke without admin permissions.
-#: routes/admin.py:108
+#: routes/admin.py:117
 msgid "You don't have permission to quit"
 msgstr "У вас не хватает прапв для выхода"
 
 #. Message shown after shutting down the system.
-#: routes/admin.py:118
+#: routes/admin.py:127
 msgid "Shutting down system now!"
 msgstr "Останавливаем систему прямо сейчас!"
 
 #. Message shown after trying to shut down the system without admin
 #. permissions.
-#: routes/admin.py:125
+#: routes/admin.py:134
 msgid "You don't have permission to shut down"
 msgstr "У вас не хватает прав на выключение"
 
 #. Message shown after rebooting the system.
-#: routes/admin.py:135
+#: routes/admin.py:144
 msgid "Rebooting system now!"
 msgstr "Сейчас перезагрузим систему!"
 
 #. Message shown after trying to reboot the system without admin permissions.
-#: routes/admin.py:142
+#: routes/admin.py:151
 msgid "You don't have permission to Reboot"
 msgstr "У вас не хватает прав на перезагрузку"
 
 #. Message shown after expanding the filesystem.
-#: routes/admin.py:152
+#: routes/admin.py:161
 msgid "Expanding filesystem and rebooting system now!"
 msgstr "А сейчас расширяем файловую систему и перезагружаем систему!"
 
 #. Message shown after trying to expand the filesystem on a non-raspberry pi
 #. device.
-#: routes/admin.py:157
+#: routes/admin.py:166
 msgid "Cannot expand fs on non-raspberry pi devices!"
 msgstr "Невозможно расширить ФС на устройствах, отличных от raspberry pi!"
 
 #. Message shown after trying to expand the filesystem without admin
 #. permissions
-#: routes/admin.py:160
+#: routes/admin.py:169
 msgid "You don't have permission to resize the filesystem"
 msgstr "У вас не хватает прав, чтобы изменить размер файловой системы"
 
 #. Message shown after logging in as admin successfully
-#: routes/admin.py:182
+#: routes/admin.py:191
 msgid "Admin mode granted!"
 msgstr "Права администратора получены!"
 
 #. Message shown after failing to login as admin
-#: routes/admin.py:186
+#: routes/admin.py:195
 msgid "Incorrect admin password!"
 msgstr "Неверный пароль администратора!"
 
 #. Message shown after logging out as admin successfully
-#: routes/admin.py:196
+#: routes/admin.py:205
 msgid "Logged out of admin mode!"
 msgstr "Выход из режима администратора!"
 
@@ -281,7 +306,7 @@ msgstr ""
 msgid "Batch Song Renamer"
 msgstr ""
 
-#: routes/batch_song_renamer.py:237 routes/files.py:193 routes/files.py:225
+#: routes/batch_song_renamer.py:237 routes/files.py:202 routes/files.py:234
 #, fuzzy
 msgid "You don't have permission to edit songs"
 msgstr "У вас не хватает прапв для выхода"
@@ -291,24 +316,24 @@ msgstr "У вас не хватает прапв для выхода"
 msgid "Error: No filename parameters were specified!"
 msgstr "Ошибка: Не указан параметр имя файла!"
 
-#: routes/batch_song_renamer.py:250 routes/files.py:198 routes/files.py:233
+#: routes/batch_song_renamer.py:250 routes/files.py:207 routes/files.py:242
 msgid "Error: Can't edit this song because it is in the current queue: "
 msgstr ""
 "Ошибка: Нельзя отредактировать песню,  поскольку она стоит в текущей "
 "очереди: "
 
 #. Message shown after trying to rename a song to a blank name.
-#: routes/batch_song_renamer.py:276 routes/files.py:243
+#: routes/batch_song_renamer.py:276 routes/files.py:252
 msgid "Error: The new name can't be empty"
 msgstr ""
 
 #. Message shown after trying to rename a file to a name that already exists.
-#: routes/batch_song_renamer.py:281 routes/files.py:247
+#: routes/batch_song_renamer.py:281 routes/files.py:256
 #, python-format
 msgid "Error renaming file: '%s' to '%s', Filename already exists"
 msgstr "Ошибка переименования файла из '%s' в '%s', Такое имя файла уже есть"
 
-#: routes/batch_song_renamer.py:288 routes/files.py:254
+#: routes/batch_song_renamer.py:288 routes/files.py:263
 #, fuzzy, python-format
 msgid "Error renaming file: '%s' to '%s', %s"
 msgstr "Ошибка переименования файла из '%s' в '%s', %s"
@@ -323,39 +348,39 @@ msgstr ""
 #. Navigation link for the page where the user can add existing songs to the
 #. queue.
 #. Page title for the page showing how a song's lyrics were made.
-#: routes/files.py:141 templates/base.html:230 templates/song_info.html:88
+#: routes/files.py:139 templates/base.html:273 templates/song_info.html:88
 msgid "Browse"
 msgstr "Просмотр"
 
-#: routes/files.py:156
+#: routes/files.py:165
 #, fuzzy
 msgid "You don't have permission to delete songs"
 msgstr "Вам не хватает прав для обновления списка песен"
 
 #. Message shown after trying to delete a song that is in the queue.
-#: routes/files.py:161
+#: routes/files.py:170
 msgid "Error: Can't delete this song because it is in the current queue"
 msgstr "Ошибка: Нельзя удалить данную песню, потому что она  в текущей очереди"
 
 #. Message shown when a song could not be deleted. Followed by the path and the
 #. reason
-#: routes/files.py:174
+#: routes/files.py:183
 #, fuzzy, python-format
 msgid "Error deleting file: '%s', %s"
 msgstr "Ошибка переименования файла из '%s' в '%s', %s"
 
-#: routes/files.py:178
+#: routes/files.py:187
 #, python-format
 msgid "Song deleted: %s"
 msgstr "Песня удалена: %s"
 
 #. Message shown after renaming a file.
-#: routes/files.py:260
+#: routes/files.py:269
 #, python-format
 msgid "Renamed file: %s to %s"
 msgstr "Файл переименован из  %s в %s"
 
-#: routes/info.py:112
+#: routes/info.py:110
 msgid "CPU usage query unsupported"
 msgstr "Запрос использования процессора не поддерживается"
 
@@ -419,13 +444,13 @@ msgstr ""
 msgid "Up to date"
 msgstr "Обновление"
 
-#: routes/library.py:61 routes/song_info.py:212 templates/processing.html:108
+#: routes/library.py:61 routes/song_info.py:219 templates/processing.html:108
 #: templates/processing.html:258
 #, fuzzy
 msgid "No lyrics"
 msgstr "Сейчас играет"
 
-#: routes/library.py:62 routes/song_info.py:214
+#: routes/library.py:62 routes/song_info.py:221
 msgid "Not processed"
 msgstr ""
 
@@ -433,12 +458,12 @@ msgstr ""
 #: routes/library.py:242 routes/library.py:251 routes/library.py:268
 #: routes/library.py:281 routes/library.py:294 routes/library.py:318
 #: routes/library.py:356 routes/library.py:386 routes/library.py:400
-#: routes/processing.py:73 routes/processing.py:115 routes/processing.py:134
-#: routes/processing.py:144 routes/processing.py:154 routes/processing.py:164
-#: routes/song_info.py:529 routes/song_info.py:647 routes/song_info.py:663
-#: routes/song_info.py:695 routes/song_info.py:716 routes/song_info.py:1050
-#: routes/song_info.py:1079 routes/song_info.py:1098 routes/song_info.py:1111
-#: routes/song_info.py:1153
+#: routes/processing.py:79 routes/processing.py:121 routes/processing.py:140
+#: routes/processing.py:150 routes/processing.py:160 routes/processing.py:170
+#: routes/song_info.py:536 routes/song_info.py:660 routes/song_info.py:676
+#: routes/song_info.py:708 routes/song_info.py:729 routes/song_info.py:1095
+#: routes/song_info.py:1124 routes/song_info.py:1147 routes/song_info.py:1170
+#: routes/song_info.py:1208
 msgid "Admin only"
 msgstr ""
 
@@ -556,9 +581,7 @@ msgstr ""
 
 #. Button label for the direct download form's submit button.
 #: routes/library.py:325 templates/processing.html:218
-#: templates/search.html:699 templates/search.html:828
-#: templates/search.html:1114 templates/search.html:1188
-#: templates/search.html:1209
+#: templates/search.html:1667
 msgid "Download"
 msgstr "Загрузить"
 
@@ -626,183 +649,188 @@ msgstr "У вас не хватает прав, чтобы менять наст
 msgid "You don't have permission to clear preferences"
 msgstr "У вас нет прав на сброс настроек"
 
-#: routes/processing.py:77 routes/song_info.py:533 routes/song_info.py:651
-#: routes/song_info.py:699 routes/song_info.py:720 routes/song_info.py:1054
-#: routes/song_info.py:1083 routes/song_info.py:1102 routes/song_info.py:1115
-#: routes/song_info.py:1157
+#: routes/processing.py:83 routes/song_info.py:540 routes/song_info.py:664
+#: routes/song_info.py:712 routes/song_info.py:733 routes/song_info.py:1099
+#: routes/song_info.py:1128 routes/song_info.py:1151 routes/song_info.py:1174
+#: routes/song_info.py:1212
 #, fuzzy
 msgid "Not a song in the library"
 msgstr "Песни из локальной библиотеки"
 
-#: routes/processing.py:80
+#: routes/processing.py:86
 msgid "This song is already waiting or running."
 msgstr ""
 
-#: routes/processing.py:95 routes/processing.py:104
+#: routes/processing.py:101 routes/processing.py:110
 msgid "Not owner"
 msgstr ""
 
-#: routes/queue.py:80
+#: routes/queue.py:85
 #, fuzzy
 msgid "You don't have permission to add random songs"
 msgstr "У вас не хватает прав на перезагрузку"
 
 #. Message shown after adding random tracks
-#: routes/queue.py:86
+#: routes/queue.py:91
 #, python-format
 msgid "Added %s random tracks"
 msgstr "Добавлено %s случайных треков"
 
 #. Message shown after running out songs to add during random track addition
-#: routes/queue.py:89
+#: routes/queue.py:94
 msgid "Ran out of songs!"
 msgstr "Вышли за пределы списка песен!"
 
 #. Message shown when non-admin tries to edit queue
-#: routes/queue.py:121
+#: routes/queue.py:126
 msgid "Unauthorized"
 msgstr ""
 
-#: routes/queue.py:131
+#: routes/queue.py:136
 msgid "Cleared the queue!"
 msgstr "Очередь очищена!"
 
-#: routes/queue.py:143
+#: routes/queue.py:149
 #, fuzzy
 msgid "Moved to top of queue"
 msgstr "%s добавлено в начало очереди: %s"
 
-#: routes/queue.py:144
+#: routes/queue.py:150
 #, fuzzy
 msgid "Moved to bottom of queue"
 msgstr "%s добавлено в начало очереди: %s"
 
-#: routes/queue.py:145
+#: routes/queue.py:151
 msgid "Moved up in queue"
 msgstr "Перемещено в начало очереди"
 
-#: routes/queue.py:146
+#: routes/queue.py:152
 msgid "Moved down in queue"
 msgstr "Перемещено в конец очереди"
 
-#: routes/queue.py:147
+#: routes/queue.py:153
 msgid "Deleted from queue"
 msgstr "Удалено из очереди"
 
-#: routes/queue.py:148
+#: routes/queue.py:154
 msgid "Toggled pause on queue item"
 msgstr ""
 
-#: routes/queue.py:151
+#: routes/queue.py:157
 #, fuzzy
 msgid "Error moving to top of queue"
 msgstr "Ошибка перемещения в начало очереди"
 
-#: routes/queue.py:152
+#: routes/queue.py:158
 #, fuzzy
 msgid "Error moving to bottom of queue"
 msgstr "%s добавлено в начало очереди: %s"
 
-#: routes/queue.py:153
+#: routes/queue.py:159
 msgid "Error moving up in queue"
 msgstr "Ошибка перемещения в начало очереди"
 
-#: routes/queue.py:154
+#: routes/queue.py:160
 msgid "Error moving down in queue"
 msgstr "Ошибка перемещения в конец очереди"
 
-#: routes/queue.py:155
+#: routes/queue.py:161
 msgid "Error deleting from queue"
 msgstr "Ошибка удаления из очереди"
 
-#: routes/queue.py:156
+#: routes/queue.py:162
 #, fuzzy
 msgid "Error toggling pause"
 msgstr "Ошибка при скачивании песни: "
 
-#: routes/song_info.py:153
+#: routes/song_info.py:160
 #, python-format
 msgid "%(n)d s longer"
 msgstr ""
 
-#: routes/song_info.py:154
+#: routes/song_info.py:161
 #, python-format
 msgid "%(n)d s shorter"
 msgstr ""
 
-#: routes/song_info.py:161
+#: routes/song_info.py:168
 #, python-format
 msgid "The match is %(match)s; this video is %(video)s."
 msgstr ""
 
-#: routes/song_info.py:162
+#: routes/song_info.py:169
 #, python-format
 msgid "The match is %(match)s; this video is %(video)s (%(gap)s)."
 msgstr ""
 
-#: routes/song_info.py:176
+#: routes/song_info.py:183
 msgid "within a few s"
 msgstr ""
 
-#: routes/song_info.py:184
+#: routes/song_info.py:191
 msgid "lines didn't line up"
 msgstr ""
 
-#: routes/song_info.py:186
+#: routes/song_info.py:193
 msgid ""
 "Not used: its line times didn't line up with this video. Usually a "
 "different recording."
 msgstr ""
 
-#: routes/song_info.py:191
+#: routes/song_info.py:198
 msgid "lyrics didn't match"
 msgstr ""
 
-#: routes/song_info.py:191
+#: routes/song_info.py:198
 msgid "Not used: its lines didn't match these lyrics."
 msgstr ""
 
-#: routes/song_info.py:193
+#: routes/song_info.py:200
 msgid "starts too early"
 msgstr ""
 
-#: routes/song_info.py:193
+#: routes/song_info.py:200
 msgid "Not used: its timing starts before this video does."
 msgstr ""
 
-#: routes/song_info.py:194
+#: routes/song_info.py:201
 msgid "not checked"
 msgstr ""
 
-#: routes/song_info.py:194
+#: routes/song_info.py:201
 msgid "Not checked on the last run."
 msgstr ""
 
-#: routes/song_info.py:222
+#: routes/song_info.py:229
 #, python-format
 msgid "behind (v%(v)d)"
 msgstr ""
 
-#: routes/song_info.py:224
+#: routes/song_info.py:231
 #, fuzzy
 msgid "up to date"
 msgstr "Обновление"
 
-#: routes/song_info.py:225
+#. Label of the control where a guest picks how the words show on their songs:
+#. Karaoke, Subtitles or Off
+#. Heading of Now Playing's choice between Karaoke, Subtitles and Off for the
+#. words on screen
+#: routes/song_info.py:232 templates/base.html:388 templates/home.html:412
+#: templates/search.html:1734
 msgid "Lyrics"
 msgstr ""
 
-#: routes/song_info.py:230 routes/song_info.py:236 routes/song_info.py:320
+#: routes/song_info.py:237 routes/song_info.py:243 routes/song_info.py:327
 #: templates/song_info.html:206
 msgid "Timed"
 msgstr ""
 
-#: routes/song_info.py:232
+#: routes/song_info.py:239
 #, python-format
 msgid "%(n)d guessed"
 msgstr ""
 
-#: routes/song_info.py:235 routes/song_info.py:363
+#: routes/song_info.py:242 routes/song_info.py:370
 #, python-format
 msgid "%(num)d word"
 msgid_plural "%(num)d words"
@@ -810,25 +838,25 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: routes/song_info.py:242
+#: routes/song_info.py:249
 msgid "Timing"
 msgstr ""
 
-#: routes/song_info.py:242
+#: routes/song_info.py:249
 #, fuzzy
 msgid "times this song"
 msgstr "Удалить эту песню"
 
-#: routes/song_info.py:244
+#: routes/song_info.py:251
 msgid "Genius or custom lyrics only"
 msgstr ""
 
-#: routes/song_info.py:248
+#: routes/song_info.py:255
 #, fuzzy
 msgid "Used"
 msgstr "Пауза"
 
-#: routes/song_info.py:248
+#: routes/song_info.py:255
 #, python-format
 msgid "fills %(num)d line"
 msgid_plural "fills %(num)d lines"
@@ -836,95 +864,95 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: routes/song_info.py:250
+#: routes/song_info.py:257
 msgid "skipped by you"
 msgstr ""
 
-#: routes/song_info.py:250 routes/song_info.py:269
+#: routes/song_info.py:257 routes/song_info.py:276
 #: templates/library_run.html:51
 msgid "Skipped"
 msgstr ""
 
-#: routes/song_info.py:252
+#: routes/song_info.py:259
 msgid "Unreadable"
 msgstr ""
 
-#: routes/song_info.py:252
+#: routes/song_info.py:259
 msgid "the .lrc file can't be read"
 msgstr ""
 
-#: routes/song_info.py:259
+#: routes/song_info.py:266
 msgid "Not used"
 msgstr ""
 
-#: routes/song_info.py:260
+#: routes/song_info.py:267
 msgid "no match found"
 msgstr ""
 
-#: routes/song_info.py:260 routes/song_info.py:274
-#: templates/song_repair.html:157
+#: routes/song_info.py:267 routes/song_info.py:281
+#: templates/song_repair.html:156
 msgid "None"
 msgstr ""
 
-#: routes/song_info.py:271
+#: routes/song_info.py:278
 msgid "Unreadable .lrc"
 msgstr ""
 
-#: routes/song_info.py:287
+#: routes/song_info.py:294
 msgid "Checked at download: no LRCLIB record passed the timing check."
 msgstr ""
 
-#: routes/song_info.py:290
+#: routes/song_info.py:297
 msgid ""
 "LRCLIB could not be checked at download. Repair lyrics can time this song"
 " from LRCLIB by hand."
 msgstr ""
 
-#: routes/song_info.py:308
+#: routes/song_info.py:315
 msgid "Lyric aligner"
 msgstr ""
 
-#: routes/song_info.py:309
+#: routes/song_info.py:316
 msgid "Transcription"
 msgstr ""
 
-#: routes/song_info.py:311
+#: routes/song_info.py:318
 msgid "LRCLIB fill"
 msgstr ""
 
-#: routes/song_info.py:316
+#: routes/song_info.py:323
 msgid "Aligned"
 msgstr ""
 
-#: routes/song_info.py:317
+#: routes/song_info.py:324
 msgid "Re-aligned"
 msgstr ""
 
-#: routes/song_info.py:321
+#: routes/song_info.py:328
 msgid "Spaced from caption"
 msgstr ""
 
-#: routes/song_info.py:321
+#: routes/song_info.py:328
 #, fuzzy
 msgid "Guessed"
 msgstr "Пауза"
 
-#: routes/song_info.py:351
+#: routes/song_info.py:358
 #, python-format
 msgid "Missing from the screen: %(count)s. Regenerate to show them."
 msgstr ""
 
-#: routes/song_info.py:356
+#: routes/song_info.py:363
 #, python-format
 msgid "Guessed timing: %(count)s."
 msgstr ""
 
-#: routes/song_info.py:362
+#: routes/song_info.py:369
 #, python-format
 msgid "%(words)s in %(lines)s"
 msgstr ""
 
-#: routes/song_info.py:364
+#: routes/song_info.py:371
 #, python-format
 msgid "%(num)d line"
 msgid_plural "%(num)d lines"
@@ -932,7 +960,7 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: routes/song_info.py:378
+#: routes/song_info.py:385
 #, python-format
 msgid "Used: it filled %(num)d line."
 msgid_plural "Used: it filled %(num)d lines."
@@ -940,163 +968,164 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: routes/song_info.py:381
+#: routes/song_info.py:388
 msgid "Skipped: you chose no match."
 msgstr ""
 
-#: routes/song_info.py:384
+#: routes/song_info.py:391
 msgid "No LRCLIB match was found."
 msgstr ""
 
-#: routes/song_info.py:389
+#: routes/song_info.py:396
 msgid ""
 "Lyrics from the movie's subtitles, timed against the subtitles' own line "
 "times."
 msgstr ""
 
-#: routes/song_info.py:391
+#: routes/song_info.py:398
 msgid "Lyrics from an LRCLIB match, timed against its own line times."
 msgstr ""
 
-#: routes/song_info.py:394
+#: routes/song_info.py:401
 msgid ""
 "Lyrics from an LRCLIB match picked at download, timed against its own "
 "line times."
 msgstr ""
 
-#: routes/song_info.py:396
+#: routes/song_info.py:403
 msgid ""
 "Lyrics from the YouTube caption, timed against the caption's own line "
 "times."
 msgstr ""
 
-#: routes/song_info.py:402
+#: routes/song_info.py:409
 msgid "The words were edited here."
 msgstr ""
 
-#: routes/song_info.py:407
+#: routes/song_info.py:414
 msgid ""
 "Custom lyrics, timed by combining the lyric aligner, a transcription and "
 "YouTube's auto-captions."
 msgstr ""
 
-#: routes/song_info.py:410
+#: routes/song_info.py:417
 msgid "Custom lyrics, timed by combining the lyric aligner and a transcription."
 msgstr ""
 
-#: routes/song_info.py:413
+#: routes/song_info.py:420
 msgid ""
 "Genius lyrics, timed by combining the lyric aligner, a transcription and "
 "YouTube's auto-captions."
 msgstr ""
 
-#: routes/song_info.py:416
+#: routes/song_info.py:423
 msgid "Genius lyrics, timed by combining the lyric aligner and a transcription."
 msgstr ""
 
-#: routes/song_info.py:430
+#: routes/song_info.py:437
 msgid "no LRCLIB"
 msgstr ""
 
-#: routes/song_info.py:433
+#: routes/song_info.py:440
 #, python-format
 msgid "LRCLIB %(length)s"
 msgstr ""
 
-#: routes/song_info.py:451 templates/song_repair.html:885
-#: templates/song_repair.html:916
+#: routes/song_info.py:458 templates/song_repair.html:899
+#: templates/song_repair.html:930
 msgid "LRCLIB timing"
 msgstr ""
 
-#: routes/song_info.py:453
+#: routes/song_info.py:460
 #, python-format
 msgid "Genius · %(artist)s"
 msgstr ""
 
-#: routes/song_info.py:465
+#: routes/song_info.py:472
 #, fuzzy
 msgid "added"
 msgstr "Продвинутое"
 
-#: routes/song_info.py:465
+#: routes/song_info.py:472
 #, fuzzy
 msgid "changed"
 msgstr "Поменять высоту"
 
-#: routes/song_info.py:475
+#: routes/song_info.py:482
 #, python-format
 msgid "%(timed)d of %(n)d lines"
 msgstr ""
 
-#: routes/song_info.py:492
+#: routes/song_info.py:499
 #, fuzzy
 msgid "You don't have permission to view song info"
 msgstr "У вас не хватает прапв для выхода"
 
-#: routes/song_info.py:505 templates/song_info.html:89
+#: routes/song_info.py:512 templates/song_info.html:89
 #, fuzzy
 msgid "Song Info"
 msgstr "Информация о системе"
 
-#: routes/song_info.py:512 templates/song_repair.html:873
+#: routes/song_info.py:519 templates/song_repair.html:887
 msgid "Genius lyrics"
 msgstr ""
 
-#: routes/song_info.py:556 templates/pick_pass.html:78
-#: templates/song_repair.html:143
+#: routes/song_info.py:563 templates/pick_pass.html:78
+#: templates/song_repair.html:142
 #, fuzzy
 msgid "current"
 msgstr "Следующий певец"
 
-#: routes/song_info.py:580
+#: routes/song_info.py:592
 #, fuzzy
 msgid "You don't have permission to repair lyrics"
 msgstr "У вас нет прав на сброс настроек"
 
-#: routes/song_info.py:595 templates/song_edit_words.html:62
-#: templates/song_info.html:220 templates/song_repair.html:857
+#: routes/song_info.py:607 templates/song_edit_words.html:62
+#: templates/song_info.html:220 templates/song_repair.html:871
 msgid "Repair lyrics"
 msgstr ""
 
-#: routes/song_info.py:615
+#: routes/song_info.py:628
 #, fuzzy
 msgid "You don't have permission to edit words"
 msgstr "У вас не хватает прапв для выхода"
 
-#: routes/song_info.py:632 templates/song_edit_words.html:261
+#: routes/song_info.py:645 templates/song_edit_words.html:261
 #: templates/song_info.html:222
 #, fuzzy
 msgid "Edit words"
 msgstr "Редактировать песню"
 
-#: routes/song_info.py:666 routes/song_info.py:702
+#: routes/song_info.py:679 routes/song_info.py:715
 msgid "Not a Genius song"
 msgstr ""
 
-#: routes/song_info.py:671 routes/song_info.py:708
+#: routes/song_info.py:684 routes/song_info.py:721
 msgid "Genius didn't return that song's lyrics. Try again."
 msgstr ""
 
-#: routes/song_info.py:681
+#: routes/song_info.py:694 routes/song_info.py:1156
 msgid "LRCLIB can't be reached right now. Try again."
 msgstr ""
 
-#: routes/song_info.py:686
+#: routes/song_info.py:699 routes/song_info.py:1162
 #, python-format
 msgid "video is %(length)s"
 msgstr ""
 
-#: routes/song_info.py:769 templates/song_repair.html:155
+#: routes/song_info.py:791 routes/song_info.py:1001
+#: templates/song_repair.html:154
 #, python-format
 msgid "matches %(n)s of %(m)s lines"
 msgstr ""
 
-#: routes/song_info.py:777
+#: routes/song_info.py:799
 #, python-format
 msgid "Speed adjusted by %(pct)s%%."
 msgstr ""
 
-#: routes/song_info.py:783
+#: routes/song_info.py:805
 #, python-format
 msgid "%(num)d line falls outside the clip and is dropped."
 msgid_plural "%(num)d lines fall outside the clip and are dropped."
@@ -1104,105 +1133,105 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: routes/song_info.py:797
+#: routes/song_info.py:819
 #, python-format
 msgid "Subtitle times move %(time)s earlier."
 msgstr ""
 
-#: routes/song_info.py:798
+#: routes/song_info.py:820
 #, python-format
 msgid "Subtitle times move %(time)s later."
 msgstr ""
 
-#: routes/song_info.py:800
+#: routes/song_info.py:822
 msgid ""
 "The subtitles run at a different speed than the clip. That happens when "
 "they were made for a different frame rate, or when the clip was sped up "
 "or slowed down."
 msgstr ""
 
-#: routes/song_info.py:805
+#: routes/song_info.py:827
 msgid "Fits. The timing already matches the clip."
 msgstr ""
 
-#: routes/song_info.py:807
+#: routes/song_info.py:829
 msgid "Fits. These subtitles can time this song."
 msgstr ""
 
-#: routes/song_info.py:820
+#: routes/song_info.py:842
 msgid "Not an SRT file."
 msgstr ""
 
-#: routes/song_info.py:822
+#: routes/song_info.py:844
 msgid ""
 "SRT subtitles are numbered cues with times, like 00:01:02,500 --> "
 "00:01:05,000."
 msgstr ""
 
-#: routes/song_info.py:829
+#: routes/song_info.py:851
 #, python-format
 msgid "These subtitles have more than %(n)s lines."
 msgstr ""
 
-#: routes/song_info.py:830
+#: routes/song_info.py:852
 msgid "Paste only the part of the movie with the song."
 msgstr ""
 
-#: routes/song_info.py:835
+#: routes/song_info.py:857
 msgid ""
 "This song has no heard words to compare the subtitles with, and a song "
 "whose lyrics were transcribed doesn't keep them yet."
 msgstr ""
 
-#: routes/song_info.py:839
+#: routes/song_info.py:861
 msgid ""
 "This song has no heard words yet, so there is nothing to compare the "
 "subtitles with."
 msgstr ""
 
-#: routes/song_info.py:841
+#: routes/song_info.py:863
 msgid "These subtitles have no lines to check."
 msgstr ""
 
-#: routes/song_info.py:843
+#: routes/song_info.py:865
 msgid ""
 "The clip may be cut from several scenes, or these subtitles are for a "
 "different release."
 msgstr ""
 
-#: routes/song_info.py:847
+#: routes/song_info.py:869
 msgid ""
 "Check that these subtitles are from this movie and cover the part this "
 "clip shows."
 msgstr ""
 
-#: routes/song_info.py:868
-msgid "Can't check."
-msgstr ""
-
-#: routes/song_info.py:873
-msgid "Can't check yet."
-msgstr ""
-
-#: routes/song_info.py:876
+#: routes/song_info.py:898
 msgid "Regenerate the song from Song info first, then come back and check."
 msgstr ""
 
-#: routes/song_info.py:886
+#: routes/song_info.py:908
 #, python-format
 msgid "Found %(n)d of %(m)d lines, but they don't agree on one timing."
 msgstr ""
 
-#: routes/song_info.py:890
+#: routes/song_info.py:912
 #, python-format
 msgid "Only %(n)d of %(m)d lines were found in the clip."
 msgstr ""
 
-#: routes/song_info.py:892 routes/song_info.py:966
+#: routes/song_info.py:920
 msgid "Doesn't fit."
 msgstr ""
 
-#: routes/song_info.py:906
+#: routes/song_info.py:921
+msgid "Can't check yet."
+msgstr ""
+
+#: routes/song_info.py:921
+msgid "Can't check."
+msgstr ""
+
+#: routes/song_info.py:935
 #, python-format
 msgid "%(first)s–%(last)s · %(num)d line"
 msgid_plural "%(first)s–%(last)s · %(num)d lines"
@@ -1210,178 +1239,242 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: routes/song_info.py:931
+#: routes/song_info.py:955
 #, python-format
-msgid "Line times move %(time)s earlier."
+msgid "%(num)d line is heard far from its time."
+msgid_plural "%(num)d lines are heard far from their time."
+msgstr[0] ""
+msgstr[1] ""
+msgstr[2] ""
+
+#: routes/song_info.py:961
+#, python-format
+msgid ""
+"The clip has %(num)d words in a row that no line of this match has. The "
+"video may have a section this match lacks."
 msgstr ""
 
-#: routes/song_info.py:932
+#: routes/song_info.py:966
 #, python-format
-msgid "Line times move %(time)s later."
+msgid ""
+"%(num)d lines in a row are heard a few seconds off their time. The video "
+"may be a different cut here."
 msgstr ""
 
-#: routes/song_info.py:934
+#: routes/song_info.py:980
+msgid "Fits, but read the warning first."
+msgstr ""
+
+#: routes/song_info.py:981
+msgid "Fits. This match can time this song."
+msgstr ""
+
+#: routes/song_info.py:983
+#, python-format
+msgid "This match has more than %(n)s lines."
+msgstr ""
+
+#: routes/song_info.py:991
+msgid "fits"
+msgstr ""
+
+#: routes/song_info.py:993
+msgid "can't check"
+msgstr ""
+
+#: routes/song_info.py:995
+msgid "fits, check first"
+msgstr ""
+
+#: routes/song_info.py:997
+msgid "doesn't fit"
+msgstr ""
+
+#: routes/song_info.py:1017
 msgid ""
 "The match runs at a different speed than the clip. That happens when it "
 "was made for a different frame rate, or when the video is sped up or "
 "slowed down."
 msgstr ""
 
-#: routes/song_info.py:939
-msgid "Fits. This match can time this song."
-msgstr ""
-
-#: routes/song_info.py:942
-msgid "The lines fit, but the length is too far off."
-msgstr ""
-
-#: routes/song_info.py:944
-msgid "The lines fit, but the match has no length to check."
-msgstr ""
-
-#: routes/song_info.py:946
-msgid "Fits, but check these lines first."
-msgstr ""
-
-#: routes/song_info.py:949
+#: routes/song_info.py:1022
 #, python-format
-msgid ""
-"A match this much longer or shorter than the video is usually another "
-"edit or another recording, so its line times would drift. The limit is "
-"%(n)d s."
+msgid "Line times move %(time)s earlier."
 msgstr ""
 
-#: routes/song_info.py:954
+#: routes/song_info.py:1023
+#, python-format
+msgid "Line times move %(time)s later."
+msgstr ""
+
+#: routes/song_info.py:1033
 msgid "No line was heard far from its time."
 msgstr ""
 
-#: routes/song_info.py:966
+#: routes/song_info.py:1043
 msgid "This match has no timed lines."
 msgstr ""
 
-#: routes/song_info.py:969
-#, python-format
-msgid "This match has more than %(n)s lines."
-msgstr ""
-
-#: routes/song_info.py:974
+#: routes/song_info.py:1049
 msgid ""
 "This song has no heard words to compare the match with, and a song whose "
 "lyrics were transcribed doesn't keep them yet."
 msgstr ""
 
-#: routes/song_info.py:978
+#: routes/song_info.py:1053
 msgid ""
 "This song has no heard words yet, so there is nothing to compare the "
 "match with."
 msgstr ""
 
-#: routes/song_info.py:980
+#: routes/song_info.py:1055
 msgid "This match has no lines to check."
 msgstr ""
 
-#: routes/song_info.py:982
+#: routes/song_info.py:1057
 msgid ""
 "The video may be a different edit of the song, with a section this match "
 "lacks or repeats."
 msgstr ""
 
-#: routes/song_info.py:986
+#: routes/song_info.py:1061
 msgid ""
 "Check that this match is the same song as the video. A cover, a live take"
 " or another language won't match the words heard."
 msgstr ""
 
-#: routes/song_info.py:1000
-msgid "The match has no length, so the video can't be compared with it."
-msgstr ""
-
-#: routes/song_info.py:1002
-#, python-format
-msgid "The video is more than %(n)d s longer or shorter than this match."
-msgstr ""
-
-#: routes/song_info.py:1009
-msgid ""
-"That's fine if the extra is talk, applause or an intro before or after "
-"the song; those parts get no lyrics. It's wrong if the video skips or "
-"adds a section at the start or end. The checks above can't see that, so "
-"listen first."
-msgstr ""
-
-#: routes/song_info.py:1086 routes/song_info.py:1118
+#: routes/song_info.py:1131 routes/song_info.py:1177
 #, python-format
 msgid "%(key)s must be a number"
 msgstr ""
 
-#: routes/song_info.py:1121
+#: routes/song_info.py:1180
 msgid "lrclib_skip must be true or false"
 msgstr ""
 
-#: routes/song_info.py:1124
-msgid "allow_gap must be true or false"
+#. Shown on the join form when saving fails for a reason other than the name
+#. being taken
+#: templates/base.html:50
+msgid "Could not save. Please try again."
 msgstr ""
 
-#. Prompt to change the username displayed next to queued songs. CURRENT_NAME
-#. is replaced with the name
-#: templates/base.html:25
-msgid ""
-"Do you want to change the name of the person using this device? This will"
-" show up on queued songs. Current: CURRENT_NAME"
+#. Shown on the join form when a guest's saved settings were lost because the
+#. app restarted while they edited them
+#: templates/base.html:52
+msgid "The app was restarted. Please join again."
+msgstr ""
+
+#. Shown when a guest taps their name to change their settings and the app
+#. can't be reached
+#: templates/base.html:54
+msgid "Could not reach the app. Please try again."
 msgstr ""
 
 #. Confirmation prompt to clear entire queue. User must type ok to confirm
-#: templates/base.html:27
+#: templates/base.html:56
 #, fuzzy
 msgid "Are you sure you want to clear the ENTIRE queue? Type ok to continue"
 msgstr "Вы уверены, что хотите очистить свои настройки?"
 
 #. Confirmation dialog when removing a song from the queue. SONG_TITLE is
 #. replaced with the title
-#: templates/base.html:29
+#: templates/base.html:58
 #, fuzzy
 msgid "Are you sure you want to delete SONG_TITLE from the queue?"
 msgstr "Вы уверены, что хотите удалить эту песню из библиотеки?"
 
 #. Confirmation dialog when permanently deleting a song file from the library
-#: templates/base.html:31
+#: templates/base.html:60
 msgid "Are you sure you want to delete this song from the library?"
 msgstr "Вы уверены, что хотите удалить эту песню из библиотеки?"
 
-#. Prompt which asks the user their name when they first try to add to the
-#. queue.
-#: templates/base.html:95
-msgid ""
-"Please enter your name. This will show up next to the songs you queue up "
-"from this device."
-msgstr ""
-"Пожалуйста, введите имя. Оно будет показываться при показе следующих "
-"песен, которые были добавлены с этого устройства."
-
 #. Navigation link for the home page.
-#: templates/base.html:214
+#: templates/base.html:257
 msgid "Home"
 msgstr "Домой"
 
 #. Navigation link for the queue page.
 #. Title text for the queue settings section of preferences
-#: templates/base.html:220 templates/info.html:364 templates/queue.html:466
+#: templates/base.html:263 templates/files.html:134 templates/info.html:364
+#: templates/queue.html:481 templates/search.html:929
+#: templates/search_result.html:44 templates/search_result.html:60
 msgid "Queue"
 msgstr "Очередь"
 
 #. Navigation link for the search page add songs to the queue.
 #. Submit button on the search form for searching YouTube.
-#: templates/base.html:225 templates/search.html:1049
-#: templates/search.html:1204
+#: templates/base.html:268 templates/search.html:1631
+#: templates/search.html:1758
 msgid "Search"
 msgstr "Поиск"
 
 #. Navigation link for the processing pipeline monitoring page.
-#: templates/base.html:236 templates/library_run.html:257
-#: templates/pick_pass.html:351 templates/playlist.html:288
+#: templates/base.html:281 templates/library_run.html:257
+#: templates/pick_pass.html:356 templates/playlist.html:288
 #: templates/processing.html:64 templates/processing.html:231
 #: templates/song_edit_words.html:268 templates/song_info.html:229
 msgid "Processing"
+msgstr ""
+
+#. Title of the form a guest fills in the first time they open the app
+#: templates/base.html:348
+msgid "Join the party"
+msgstr ""
+
+#. Title of the form a guest opens by tapping their name at the top of the
+#. page, to change their name, original vocals level, key and lyric style
+#: templates/base.html:350
+msgid "Your singer settings"
+msgstr ""
+
+#. Label of the field where a guest types their name
+#: templates/base.html:356
+#, fuzzy
+msgid "Your name"
+msgstr "Ваши баллы"
+
+#. Help under the name field of the guest form. It explains where the name
+#. shows up
+#: templates/base.html:363
+#, fuzzy
+msgid "This will show up next to the songs you queue up from this device."
+msgstr ""
+"Пожалуйста, введите имя. Оно будет показываться при показе следующих "
+"песен, которые были добавлены с этого устройства."
+
+#. Label of the slider for how loud the original recording's singer is. Not the
+#. guest's own microphone
+#. Heading of Now Playing's slider for how loud the original recording's singer
+#. is. Not the guest's own microphone
+#: templates/base.html:370 templates/home.html:396
+msgid "Original vocals"
+msgstr ""
+
+#. Label of the control where a guest picks the key their songs start at
+#. Heading of Now Playing's slider that moves the playing song up or down in
+#. pitch
+#: templates/base.html:380 templates/home.html:404
+msgid "Key"
+msgstr ""
+
+#. Line at the bottom of the first-visit form. It says where a guest changes
+#. these settings later: the icon stands for the button with their name at the
+#. top of the page
+#: templates/base.html:397
+#, python-format
+msgid "Change these any time from %(icon)s your name at the top of the page."
+msgstr ""
+
+#. Label on button which saves the changes.
+#: templates/base.html:400 templates/edit.html:89
+msgid "Save"
+msgstr "Сохранить"
+
+#: templates/base.html:401 templates/edit.html:94 templates/library_run.html:74
+#: templates/library_run.html:284 templates/playlist.html:315
+#: templates/processing.html:266 templates/song_edit_words.html:295
+#: templates/song_repair.html:959
+msgid "Cancel"
 msgstr ""
 
 #. Message about the wait for loading the songs
@@ -1446,24 +1539,13 @@ msgstr "Автоформат"
 msgid "Swap artist/song order"
 msgstr "Поменять порядок артист/песня"
 
-#. Label on button which saves the changes.
-#: templates/edit.html:89
-msgid "Save"
-msgstr "Сохранить"
-
-#: templates/edit.html:94 templates/library_run.html:74
-#: templates/library_run.html:284 templates/playlist.html:315
-#: templates/processing.html:266 templates/song_edit_words.html:295
-#: templates/song_repair.html:947
-msgid "Cancel"
-msgstr ""
-
 #. Label on link which opens the page showing how the song's lyrics were made.
 #. Title of the page where an admin fixes the words of a song's lyrics line by
 #. line.
 #. Title of the page where an admin replaces a song's lyric source.
-#: templates/edit.html:104 templates/processing.html:263
-#: templates/song_edit_words.html:260 templates/song_repair.html:855
+#: templates/edit.html:104 templates/files.html:170
+#: templates/processing.html:263 templates/song_edit_words.html:260
+#: templates/song_repair.html:869
 #, fuzzy
 msgid "Song info"
 msgstr "Информация о системе"
@@ -1473,111 +1555,160 @@ msgstr "Информация о системе"
 msgid "Delete this song"
 msgstr "Удалить эту песню"
 
-#. Label which displays that the songs are currently sorted by
-#. alphabetical order.
-#: templates/files.html:97
-msgid "Sorted Alphabetically"
-msgstr "Отсортировать по алфавиту"
-
-#. Button which changes how the songs are sorted so they become sorted by date.
-#: templates/files.html:99
-msgid ""
-"Sort by\n"
-"\t\t\tDate"
-msgstr "Отсортировано по дате"
-
-#. Label which displays that the songs are currently sorted by
-#. date.
-#: templates/files.html:103
-msgid "Sorted by date"
-msgstr "Отсортировано по дате"
-
-#. Button which changes how the songs are sorted so they become sorted by name.
-#: templates/files.html:105
-msgid ""
-"Sort by\n"
-"\t\t\tAlphabetical"
-msgstr "Отсортировано по алфавиту"
+#: templates/files.html:65
+#, fuzzy
+msgid "Could not add song to the queue."
+msgstr "В очереди нет песен."
 
 #. Button to open the batch song renamer page.
-#: templates/files.html:112
+#: templates/files.html:92
 msgid "Edit all songs"
 msgstr "Редактировать все песни"
 
-#: templates/home.html:139
+#. Browse sort toggle: list by the artist's name.
+#: templates/files.html:99
+msgid "By artist"
+msgstr ""
+
+#. Browse sort toggle: list by the song's title.
+#: templates/files.html:100
+#, fuzzy
+msgid "By song"
+msgstr "Ваши баллы"
+
+#. Screen-reader name of the row of letters on the Browse page.
+#: templates/files.html:104
+msgid "Songs by letter"
+msgstr ""
+
+#. Label over the Browse list: the letter, then "artists".
+#: templates/files.html:119
+#, python-format
+msgid "%(letter)s artists"
+msgstr ""
+
+#. Label over the Browse list: the letter, then "songs".
+#: templates/files.html:120
+#, fuzzy, python-format
+msgid "%(letter)s songs"
+msgstr "Удалить эту песню"
+
+#: templates/files.html:123 templates/pick_pass.html:64
+#: templates/pick_pass.html:376 templates/processing.html:87
+#: templates/processing.html:288
+#, fuzzy
+msgid "No songs in this list."
+msgstr "В очереди нет песен."
+
+#. A song in Browse that cannot be queued until the host repairs it.
+#: templates/files.html:130
+msgid "needs fix"
+msgstr ""
+
+#: templates/files.html:134 templates/queue.html:48
+msgid "processing"
+msgstr ""
+
+#: templates/files.html:145 templates/queue.html:55
+msgid "Options"
+msgstr ""
+
+#. Menu entry in Browse: rename this song's file.
+#: templates/files.html:166
+#, fuzzy
+msgid "Edit song"
+msgstr "Редактировать песню"
+
+#: templates/home.html:187
 #, fuzzy
 msgid "Current singer"
 msgstr "Следующий певец"
 
 #. Message which shows in the "Now Playing" section when there is no song
 #. currently playing
-#: templates/home.html:148
+#: templates/home.html:196
 msgid "Nothing is playing right now."
 msgstr "Нечего воспроизвести."
 
-#: templates/home.html:153
+#: templates/home.html:201
 msgid "Next singer"
 msgstr "Следующий певец"
 
 #. Alternative text for the "Up next" section if no more songs are queued up.
-#: templates/home.html:156
+#: templates/home.html:204
 msgid "No song is queued."
 msgstr "В очереди нет песен."
 
-#. Confirmation message when clicking a button to skip a track.
-#: templates/home.html:334
-msgid ""
-"Are you sure you want to skip this track? If you didn't add this song, "
-"ask permission first!"
-msgstr ""
-"Вы точно хотите пропустить этот трек? Если это не вы добавили песню, "
-"предварительно будет запрошено разрешение на это!"
+#. Confirmation when tapping Restart, which starts the playing song over
+#: templates/home.html:302
+#, fuzzy
+msgid "Restart this song?"
+msgstr "Рестарт песни"
+
+#. Confirmation when tapping Skip, which ends the playing song and starts the
+#. next
+#: templates/home.html:309
+#, fuzzy
+msgid "Skip this song?"
+msgstr "Пропустить: %s"
 
 #. Header showing the currently playing song.
-#: templates/home.html:396
+#: templates/home.html:343
 msgid "Now Playing"
 msgstr "Сейчас играет"
 
+#. Tag beside the "Now Playing" heading while the song is paused
+#: templates/home.html:351
+#, fuzzy
+msgid "Paused"
+msgstr "Пауза"
+
 #. Title for the section displaying the next song to be played.
-#: templates/home.html:409
+#: templates/home.html:358
 msgid "Next Song"
 msgstr "Следующая песня"
 
-#. Title of the box with controls such as pause and skip.
-#: templates/home.html:415
-msgid "Player Control"
-msgstr "Управление плейером"
-
-#. Title attribute on the button to play or pause the current song.
-#: templates/home.html:428
-msgid "Restart Song"
+#. Button that starts the playing song over from its beginning (Now Playing)
+#: templates/home.html:375 templates/queue.html:552
+#, fuzzy
+msgid "Restart"
 msgstr "Рестарт песни"
 
-#. Title attribute on the button to skip to the next song.
-#: templates/home.html:430
-msgid "Play/Pause"
-msgstr "Играть/пауза"
+#. Button that pauses the playing song. It reads "Resume" while the song is
+#. paused (Now Playing)
+#: templates/home.html:377 templates/queue.html:61 templates/queue.html:532
+#: templates/queue.html:556 templates/search.html:942
+msgid "Pause"
+msgstr "Пауза"
 
-#: templates/home.html:432
-msgid "Stop Current Song"
-msgstr "Останов текущей песни"
+#. What the pause button reads while the song is paused, a tap resumes it (Now
+#. Playing)
+#: templates/home.html:379
+#, fuzzy, python-format
+msgid "Resume"
+msgstr "Возобновить: %s"
 
-#: templates/home.html:453
-msgid "Vocal Volume"
+#. Button that skips the playing song and starts the next (Now Playing)
+#: templates/home.html:382 templates/playlist.html:54 templates/queue.html:560
+msgid "Skip"
 msgstr ""
 
-#. Title of a control to change the key/pitch of the playing song.
-#: templates/home.html:474
-msgid "Change Key"
-msgstr "Поменять высоту"
+#. Heading of Now Playing's slider for the speaker volume
+#: templates/home.html:388
+#, fuzzy, python-format
+msgid "Volume"
+msgstr "Громкость: %s"
 
-#: templates/home.html:502
-msgid "Subtitles"
+#. Heading of Now Playing's slider that moves the on-screen lines earlier or
+#. later
+#: templates/home.html:422
+msgid "Subtitle delay"
 msgstr ""
 
-#. Title of a control to adjust subtitle timing.
-#: templates/home.html:520
-msgid "Subtitle Delay"
+#. Note beside "Subtitle delay", the slider that moves the on-screen lines
+#. earlier or later (Now Playing)
+#: templates/home.html:424
+msgid "Below 0 the lines show earlier, above 0 later."
 msgstr ""
 
 #. Confirmation text whe the user selects quit.
@@ -1635,7 +1766,7 @@ msgid "Handy URL QR code to share with a pal:"
 msgstr "Простой УРЛ QR код чтобы поделиться с другими:"
 
 #. Title of the admin section.
-#: templates/info.html:187 templates/info.html:547
+#: templates/info.html:187 templates/info.html:540
 msgid "Admin"
 msgstr ""
 
@@ -1690,9 +1821,10 @@ msgstr ""
 msgid "Default volume of the videos (min 0, max 100)"
 msgstr "Громкость видео по уморчанию (мин 0, макс 100)"
 
-#. Numberbox label for default vocal volume
+#. Numberbox label for the default level of the original recording's singer.
+#. Not the guests' own microphones
 #: templates/info.html:259
-msgid "Default vocal volume (0-100%, dual-stem songs only)"
+msgid "Default original vocals level (0-100%, dual-stem songs only)"
 msgstr ""
 
 #. Numberbox label for subtitle delay
@@ -1780,7 +1912,7 @@ msgstr ""
 
 #. Title text for the advanced settings section of preferences
 #. Checkbox label which enables more options when searching.
-#: templates/info.html:394 templates/search.html:1062
+#: templates/info.html:394 templates/search.html:1640
 msgid "Advanced"
 msgstr "Продвинутое"
 
@@ -1790,94 +1922,94 @@ msgid "Download high quality videos"
 msgstr "Скачивать видео высокого качества"
 
 #. Label for the blocked processing words preference. Comma-separated list.
-#: templates/info.html:420
+#: templates/info.html:413
 msgid ""
 "Skip processing for titles containing these words (comma-separated, blank"
 " = none)"
 msgstr ""
 
 #. Label for language selection dropdown
-#: templates/info.html:434
+#: templates/info.html:427
 msgid "Preferred language (requires restart)"
 msgstr "Выбор языка (требуется рестарт)"
 
 #. Text for the link where the user can clear all user preferences
-#: templates/info.html:440
+#: templates/info.html:433
 msgid "Clear preferences"
 msgstr "Сбросить настройки"
 
 #. Title of the system data section.
-#: templates/info.html:447
+#: templates/info.html:440
 msgid "System Data"
 msgstr "Статистика системы"
 
 #. Header of the information section about the computer running Pikaraoke.
-#: templates/info.html:452
+#: templates/info.html:445
 msgid "System Info"
 msgstr "Информация о системе"
 
 #. The hardware platform
-#: templates/info.html:458
+#: templates/info.html:451
 msgid "Platform:"
 msgstr "Платформа:"
 
 #. The os version
-#: templates/info.html:460
+#: templates/info.html:453
 msgid "OS Version:"
 msgstr "Версия ОС:"
 
 #. The version of the program "Youtube-dl".
-#: templates/info.html:462
+#: templates/info.html:455
 msgid "Youtube-dl (yt-dlp) version:"
 msgstr "Версия Youtube-dl (yt-dlp):"
 
 #. The version of the program "ffmpeg".
-#: templates/info.html:464
+#: templates/info.html:457
 msgid "FFmpeg version:"
 msgstr "Версия FFmpeg:"
 
 #. The version of Pikaraoke running right now.
-#: templates/info.html:466
+#: templates/info.html:459
 msgid "Pikaraoke version:"
 msgstr "Версия Pikaraoke:"
 
 #. Header of the information section about the System stats.
-#: templates/info.html:472
+#: templates/info.html:465
 msgid "System stats"
 msgstr "Статистика системы"
 
 #. The CPU usage of the computer running Pikaraoke.
-#: templates/info.html:478
+#: templates/info.html:471
 msgid "CPU:"
 msgstr ""
 
-#: templates/info.html:478 templates/info.html:480 templates/info.html:482
+#: templates/info.html:471 templates/info.html:473 templates/info.html:475
 #, fuzzy
 msgid "Loading..."
 msgstr "Загрузка песен..."
 
 #. The disk usage of the computer running Pikaraoke. Used by downloaded songs.
-#: templates/info.html:480
+#: templates/info.html:473
 msgid "Disk Usage:"
 msgstr ""
 
 #. The memory (RAM) usage of the computer running Pikaraoke.
-#: templates/info.html:482
+#: templates/info.html:475
 msgid "Memory:"
 msgstr ""
 
 #. Title of the updates section.
-#: templates/info.html:489
+#: templates/info.html:482
 msgid "Updates"
 msgstr "Обновление"
 
 #. Label for the YT-DLP update on the updates section
-#: templates/info.html:494
+#: templates/info.html:487
 msgid "YT-DLP update"
 msgstr ""
 
 #. Text explaining why you might want to update youtube-dl.
-#: templates/info.html:499
+#: templates/info.html:492
 #, python-format
 msgid ""
 "\n"
@@ -1892,13 +2024,13 @@ msgstr ""
 
 #. Text for the link which will try and update youtube-dl on the machine
 #. running Pikaraoke.
-#: templates/info.html:505
+#: templates/info.html:498
 msgid "Update youtube-dl"
 msgstr "Обновить youtube-dl"
 
 #. Help text which explains why updating youtube-dl can fail. The log is a file
 #. on the machine running Pikaraoke.
-#: templates/info.html:509
+#: templates/info.html:502
 msgid ""
 "* This update link above may fail if you don't have proper file "
 "permissions.\n"
@@ -1909,19 +2041,19 @@ msgstr ""
 "    Смотрите ошибки в логах pikaraoke."
 
 #. Title of the updates section.
-#: templates/info.html:521
+#: templates/info.html:514
 msgid "Other"
 msgstr "Иное"
 
 #. Title for section containing a few other options on the Info page.
 #. Text for button
-#: templates/info.html:526 templates/info.html:538
+#: templates/info.html:519 templates/info.html:531
 msgid "Expand Raspberry Pi filesystem"
 msgstr "Раскрыть файловую систему Raspberry Pi"
 
 #. Explainitory text which explains why you might want to expand the
 #. filesystem.
-#: templates/info.html:531
+#: templates/info.html:524
 msgid ""
 "If you just installed the pre-built pikaraoke pi image and your SD card "
 "is larger than 4GB,\n"
@@ -1936,23 +2068,23 @@ msgstr ""
 "    Система будет перезагружена."
 
 #. Message for the log out user from admin mode button.
-#: templates/info.html:553
+#: templates/info.html:546
 msgid "Click here to logout from admin mode."
 msgstr ""
 
 #. Link which will log out the user from admin mode.
-#: templates/info.html:555
+#: templates/info.html:548
 msgid "Log out"
 msgstr ""
 
 #. Title of the section on shutting down / turning off the machine running
 #. Pikaraoke.
-#: templates/info.html:562
+#: templates/info.html:555
 msgid "Shutdown"
 msgstr "Выключить"
 
 #. Explainitory text which explains why to use the shutdown link.
-#: templates/info.html:569
+#: templates/info.html:562
 msgid ""
 "Don't just pull the plug! Always shut down your server properly to avoid "
 "data corruption."
@@ -1962,21 +2094,21 @@ msgstr ""
 
 #. Text for button which turns off Pikaraoke for everyone using it at your
 #. house.
-#: templates/info.html:576
+#: templates/info.html:569
 msgid "Quit Pikaraoke"
 msgstr "Выход из Pikaraoke"
 
 #. Text for button which reboots the machine running Pikaraoke.
-#: templates/info.html:579
+#: templates/info.html:572
 msgid "Reboot System"
 msgstr "Перезагрузить систему"
 
 #. Text for button which turn soff the machine running Pikaraoke.
-#: templates/info.html:582
+#: templates/info.html:575
 msgid "Shutdown System"
 msgstr "Выключить систему"
 
-#: templates/info_tip.html:4
+#: templates/info_tip.html:5
 #, fuzzy
 msgid "More info"
 msgstr "Информация о системе"
@@ -2001,7 +2133,7 @@ msgstr ""
 msgid "Keeps its lyric pick"
 msgstr ""
 
-#: templates/library_run.html:50 templates/song_repair.html:889
+#: templates/library_run.html:50 templates/song_repair.html:903
 msgid "No lyrics (transcribe)"
 msgstr ""
 
@@ -2109,7 +2241,7 @@ msgid "Discard run"
 msgstr ""
 
 #: templates/library_run.html:77 templates/library_run.html:289
-#: templates/processing.html:160
+#: templates/processing.html:160 templates/queue.html:582
 msgid "Keep it"
 msgstr ""
 
@@ -2157,24 +2289,18 @@ msgstr ""
 msgid "Picked · processing"
 msgstr ""
 
-#: templates/pick_pass.html:61 templates/pick_pass.html:363
+#: templates/pick_pass.html:61 templates/pick_pass.html:368
 msgid "To pick"
 msgstr ""
 
-#: templates/pick_pass.html:62 templates/pick_pass.html:364
+#: templates/pick_pass.html:62 templates/pick_pass.html:369
 msgid "Picked"
 msgstr ""
 
-#: templates/pick_pass.html:63 templates/pick_pass.html:366
+#: templates/pick_pass.html:63 templates/pick_pass.html:371
 #: templates/processing.html:104
 msgid "Looks poor"
 msgstr ""
-
-#: templates/pick_pass.html:64 templates/pick_pass.html:371
-#: templates/processing.html:87 templates/processing.html:288
-#, fuzzy
-msgid "No songs in this list."
-msgstr "В очереди нет песен."
 
 #: templates/pick_pass.html:65 templates/processing.html:269
 msgid "Keep"
@@ -2185,7 +2311,7 @@ msgstr ""
 msgid "Change"
 msgstr "Поменять высоту"
 
-#: templates/pick_pass.html:67
+#: templates/pick_pass.html:67 templates/search.html:1713
 #, fuzzy
 msgid "Close"
 msgstr "Очистить"
@@ -2207,21 +2333,21 @@ msgstr ""
 msgid "%(guessed)s of %(n)s lines guessed"
 msgstr ""
 
-#: templates/pick_pass.html:74 templates/song_repair.html:894
+#: templates/pick_pass.html:74 templates/song_repair.html:908
 #, fuzzy
 msgid "Genius search"
 msgstr "Поиск"
 
-#: templates/pick_pass.html:75 templates/song_repair.html:147
+#: templates/pick_pass.html:75 templates/song_repair.html:146
 #, fuzzy
 msgid "Searching…"
 msgstr "Поиск"
 
-#: templates/pick_pass.html:76 templates/song_repair.html:145
+#: templates/pick_pass.html:76 templates/song_repair.html:144
 msgid "No Genius results."
 msgstr ""
 
-#: templates/pick_pass.html:77 templates/song_repair.html:146
+#: templates/pick_pass.html:77 templates/song_repair.html:145
 msgid "Search failed. Try again."
 msgstr ""
 
@@ -2252,7 +2378,7 @@ msgstr ""
 msgid "Could not save that pick."
 msgstr ""
 
-#: templates/pick_pass.html:355
+#: templates/pick_pass.html:360
 #, python-format
 msgid "%(run)s: picks"
 msgstr ""
@@ -2329,17 +2455,20 @@ msgstr ""
 msgid "Already in library (%(n)s)"
 msgstr ""
 
-#: templates/playlist.html:52
+#. What the download dialog's button, or Advanced's Download button, shows for
+#. a moment when the library already has the video, so nothing was downloaded.
+#. Badge on a search result's thumbnail: the library already has this exact
+#. video.
+#. Small label over a library song's file name, in a row under a search result
+#. that looks like it: the library has this song under another upload.
+#: templates/playlist.html:52 templates/search.html:934
+#: templates/search_result.html:19 templates/search_result.html:57
 #, fuzzy
 msgid "In library"
 msgstr "Песни из локальной библиотеки"
 
 #: templates/playlist.html:53
 msgid "Left out"
-msgstr ""
-
-#: templates/playlist.html:54 templates/queue.html:550
-msgid "Skip"
 msgstr ""
 
 #: templates/playlist.html:56
@@ -2543,7 +2672,7 @@ msgstr ""
 msgid "Problems"
 msgstr ""
 
-#: templates/processing.html:217
+#: templates/processing.html:217 templates/queue.html:42
 msgid "Now"
 msgstr ""
 
@@ -2690,12 +2819,7 @@ msgstr ""
 msgid "Retry"
 msgstr "Рестарт песни"
 
-#. Submit button on the search form when selecting a locally downloaded song.
-#. The button adds it to                                         the queue.
-#. Checkbox label which marks the song to take a place in the queue while it
-#. downloads.
-#: templates/processing.html:265 templates/search.html:1052
-#: templates/search.html:1109 templates/search.html:1162
+#: templates/processing.html:265
 msgid "Add to queue"
 msgstr "Добавить в очередь"
 
@@ -2704,7 +2828,7 @@ msgstr "Добавить в очередь"
 msgid "Delete song"
 msgstr "Удалить эту песню"
 
-#: templates/processing.html:268
+#: templates/processing.html:268 templates/queue.html:57
 msgid "Dismiss"
 msgstr ""
 
@@ -2762,7 +2886,7 @@ msgstr ""
 msgid "Could not open the run."
 msgstr ""
 
-#: templates/processing.html:287 templates/song_repair.html:153
+#: templates/processing.html:287 templates/song_repair.html:152
 #, fuzzy
 msgid "Loading…"
 msgstr "Загрузка песен..."
@@ -2771,176 +2895,233 @@ msgstr "Загрузка песен..."
 msgid "Couldn't load this list."
 msgstr ""
 
-#: templates/queue.html:167 templates/queue.html:218 templates/queue.html:224
-msgid "Options"
-msgstr ""
-
-#: templates/queue.html:180
-#, fuzzy
-msgid "downloading"
-msgstr "Загрузить"
-
-#: templates/queue.html:181
-msgid "processing"
-msgstr ""
-
-#: templates/queue.html:182
-msgid "waiting for lyrics"
-msgstr ""
-
-#: templates/queue.html:196
-msgid "Drag to reorder"
-msgstr ""
-
-#: templates/queue.html:208
+#: templates/queue.html:44
 #, fuzzy
 msgid "paused"
 msgstr "Пауза"
 
-#: templates/queue.html:252
-msgid "The queue is empty"
-msgstr "Очередь пуста"
+#: templates/queue.html:45
+msgid "failed"
+msgstr ""
 
-#: templates/queue.html:324
+#: templates/queue.html:47
 #, fuzzy
-msgid "Unpause"
-msgstr "Пауза"
+msgid "downloading"
+msgstr "Загрузить"
 
-#: templates/queue.html:326 templates/queue.html:392 templates/queue.html:522
-#: templates/queue.html:546
-msgid "Pause"
-msgstr "Пауза"
-
-#: templates/queue.html:349
-msgid "I'm back (unpause)"
-msgstr ""
-
-#: templates/queue.html:350 templates/queue.html:567
-msgid "Pause (I'll be right back)"
-msgstr ""
-
-#: templates/queue.html:390
-msgid "Play"
-msgstr ""
-
-#: templates/queue.html:488
-msgid ""
-"Add <input id=\"randomNumberInput\" class=\"input mx-2 p-2\" "
-"pattern=\"\\d*\" maxlength=\"2\" value=\"3\" min=\"1\" max=\"99\" "
-"style=\"width: 42px\" /> random songs"
-msgstr ""
-"Добавить <input id=\"randomNumberInput\" class=\"input mx-2 p-2\" "
-"pattern=\"\\d*\" maxlength=\"2\" value=\"3\" min=\"1\" max=\"99\" "
-"style=\"width: 40px\" /> случайных песни"
-
-#: templates/queue.html:492
-msgid "Clear all"
-msgstr "Очистить все"
-
-#: templates/queue.html:506
+#: templates/queue.html:50
 #, fuzzy
-msgid "Play Next"
-msgstr "Следующая:"
+msgid "lyrics"
+msgstr "Сейчас играет"
 
-#: templates/queue.html:506
-msgid "Move to Top"
+#: templates/queue.html:52
+msgid "Couldn't be prepared. The host can retry it."
 msgstr ""
 
-#: templates/queue.html:510
-msgid "Move Up"
-msgstr ""
+#: templates/queue.html:53
+#, fuzzy, python-format
+msgid "Up next · %(n)s song"
+msgstr "Ошибка помещения песни в очередь: "
 
-#: templates/queue.html:514
-msgid "Move Down"
-msgstr ""
+#: templates/queue.html:54
+#, fuzzy, python-format
+msgid "Up next · %(n)s songs"
+msgstr "Ошибка помещения песни в очередь: "
 
-#: templates/queue.html:518
-msgid "Move to Bottom"
-msgstr ""
-
-#: templates/queue.html:526 templates/queue.html:571
+#: templates/queue.html:56 templates/queue.html:536
 #, fuzzy
 msgid "Remove from Queue"
 msgstr "Удалено из очереди"
 
-#: templates/queue.html:542
-#, fuzzy
-msgid "Restart"
-msgstr "Рестарт песни"
+#: templates/queue.html:58
+msgid "Drag to reorder"
+msgstr ""
 
-#: templates/queue.html:561
-#, fuzzy
-msgid "Your Song"
-msgstr "Ваши баллы"
+#: templates/queue.html:59
+msgid "Pause my songs (BRB)"
+msgstr ""
 
-#: templates/search.html:300
-msgid "Available songs in local library"
+#: templates/queue.html:60
+msgid "I'm back: unpause my songs"
+msgstr ""
+
+#: templates/queue.html:62
+#, fuzzy
+msgid "Unpause"
+msgstr "Пауза"
+
+#: templates/queue.html:63 templates/search.html:941 templates/search.html:1777
+msgid "Play"
+msgstr ""
+
+#: templates/queue.html:64
+#, fuzzy, python-format
+msgid "%(song)s will come out of the queue."
+msgstr "Песня добавлена в очередь: %s"
+
+#: templates/queue.html:490
+msgid "The queue is empty"
+msgstr "Очередь пуста"
+
+#: templates/queue.html:495
+#, fuzzy, python-format
+msgid "Add random songs"
+msgstr "Добавлено %s случайных треков"
+
+#: templates/queue.html:496
+msgid "How many"
+msgstr ""
+
+#: templates/queue.html:500
+#, fuzzy
+msgid "Clear the whole queue"
+msgstr "Очередь очищена!"
+
+#: templates/queue.html:516
+#, fuzzy
+msgid "Play Next"
+msgstr "Следующая:"
+
+#: templates/queue.html:516
+msgid "Move to Top"
+msgstr ""
+
+#: templates/queue.html:520
+msgid "Move Up"
+msgstr ""
+
+#: templates/queue.html:524
+msgid "Move Down"
+msgstr ""
+
+#: templates/queue.html:528
+msgid "Move to Bottom"
+msgstr ""
+
+#: templates/queue.html:578
+#, fuzzy
+msgid "Remove this song?"
+msgstr "Удалить эту песню"
+
+#: templates/queue.html:583
+msgid "Remove"
+msgstr ""
+
+#: templates/search.html:923
+msgid "Checking YouTube for captions…"
+msgstr ""
+
+#: templates/search.html:924
+#, fuzzy
+msgid "Searching Genius for lyrics…"
+msgstr "Поиск"
+
+#: templates/search.html:925
+#, fuzzy
+msgid "Choose the lyrics"
+msgstr "Сейчас играет"
+
+#: templates/search.html:926
+#, fuzzy
+msgid "YouTube"
+msgstr "Иное"
+
+#: templates/search.html:927
+msgid "YouTube captions (recommended)"
+msgstr ""
+
+#: templates/search.html:928
+#, fuzzy
+msgid "Genius.com"
+msgstr "Поиск"
+
+#: templates/search.html:930
+#, fuzzy
+msgid "Add to library"
 msgstr "Песни из локальной библиотеки"
 
-#: templates/search.html:678 templates/song_repair.html:137
-msgid "Checking the caption…"
+#: templates/search.html:931
+#, fuzzy
+msgid "Queued"
+msgstr "Очередь"
+
+#: templates/search.html:932
+#, fuzzy
+msgid "Added"
+msgstr "Продвинутое"
+
+#. What a button shows for a moment when the song is in the queue already.
+#: templates/search.html:936
+#, fuzzy
+msgid "Already queued"
+msgstr "Очистить очередь"
+
+#. Shown when adding a library song to the queue failed.
+#: templates/search.html:938
+#, fuzzy, python-format
+msgid "Could not add to the queue."
+msgstr "Песня добавлена в очередь: %s"
+
+#: templates/search.html:939
+msgid "Could not save the lyric choice, so the song was not downloaded."
 msgstr ""
 
-#: templates/search.html:679 templates/song_repair.html:140
-msgid "This video's caption is too sparse to be lyrics."
+#: templates/search.html:940
+msgid "Could not start the download."
 msgstr ""
 
-#: templates/search.html:680 templates/song_repair.html:142
-msgid "Could not check the caption."
+#. Accessible name of the speaker button under a search result's video preview
+#. while it has sound: it turns the sound off.
+#: templates/search.html:944
+#, fuzzy
+msgid "Mute"
+msgstr "Иное"
+
+#. Accessible name of the speaker button under a search result's video preview
+#. while it is muted: it turns the sound on.
+#: templates/search.html:945 templates/search.html:1785
+#, fuzzy
+msgid "Unmute"
+msgstr "Пауза"
+
+#. Shown under the search results when Show more found nothing new.
+#: templates/search.html:947
+msgid "No more results"
 msgstr ""
 
-#: templates/search.html:866 templates/search.html:886
-#: templates/search.html:914
-msgid "Added for processing..."
+#. Shown when the Show more button could not load the next page of search
+#. results.
+#: templates/search.html:949
+msgid "Couldn't load more results."
 msgstr ""
 
 #. Title for the search page.
-#: templates/search.html:1034
+#: templates/search.html:1614
 msgid "Search / Add New"
 msgstr "Поиск/добавить новую"
 
-#: templates/search.html:1044
-msgid "Available Songs"
-msgstr "Доступные песни"
-
 #. Link which clears the text from the search box.
-#: templates/search.html:1058
+#: templates/search.html:1636
 msgid "Clear"
 msgstr "Очистить"
 
-#. Help text below the search bar.
-#: templates/search.html:1077
-msgid ""
-"- Type a song (title/artist) to search\n"
-"\t\t\t\t\t\t\t\tthe available songs and click 'Add to queue' to add it to"
-" the queue."
-msgstr ""
-"Набери песню\n"
-"          (название/артист) для поиска среди доступных песен и нажми "
-"'Добавить в очередь'\n"
-"          чтобы добавить ее в очередь."
-
-#. Additonal help text below the search bar.
-#: templates/search.html:1081
-msgid ""
-"- If the song doesn't appear in\n"
-"\t\t\t\t\t\t\t\tthe \"Available Songs\" dropdown, click 'Search' to find "
-"it on Youtube"
-msgstr ""
-"Если\n"
-"          песня не представлена в выпадающем списке доступных песен Нажми"
-"\n"
-"          'Поиск' чтобы поискать ее на Youtube"
+#. Checkbox label, in Advanced, for every download started from the search page
+#. (a picked result or a typed link): whether the song is added to the queue as
+#. part of the download.
+#: templates/search.html:1649
+#, fuzzy
+msgid "Add to queue after download"
+msgstr "Добавить в очередь"
 
 #. Label for an input which takes a YouTube url directly instead of searching
 #. titles.
-#: templates/search.html:1095
+#: templates/search.html:1655
 msgid "Direct download YouTube url:"
 msgstr "Прямая ссылка на скачивание с YouTube:"
 
 #. Html text which displays what was searched for, in quotes while the page is
 #. loading.
-#: templates/search.html:1135
+#: templates/search.html:1680
 #, python-format
 msgid ""
 "Searching YouTube for\n"
@@ -2950,7 +3131,7 @@ msgstr ""
 "    <small><i>'%(search_term)s'</i></small>"
 
 #. Html text which displays what was searched for, in quotes.
-#: templates/search.html:1142
+#: templates/search.html:1687
 #, fuzzy, python-format
 msgid ""
 "Search results for\n"
@@ -2959,16 +3140,136 @@ msgstr ""
 "Результаты поиска для\n"
 "        <small><i>'%(search_string)s'</i></small>"
 
-#: templates/search.html:1186
-msgid "YouTube captions will be used for lyrics."
+#. Button under the search results which loads the next page of results.
+#: templates/search.html:1698
+#, fuzzy
+msgid "Show more"
+msgstr "Домой"
+
+#: templates/search.html:1719 templates/search_result.html:11
+msgid "Play preview"
 msgstr ""
 
-#: templates/search.html:1190
-msgid "More options"
+#: templates/search.html:1722 templates/search_result.html:13
+msgid "Preview unavailable"
 msgstr ""
 
-#: templates/search_result.html:21
-msgid "Select"
+#: templates/search.html:1727
+msgid "Lyrics: <strong>YouTube captions</strong>"
+msgstr ""
+
+#: templates/search.html:1729 templates/search.html:1736
+msgid ""
+"This video has its own lyric captions, written for it rather than made by"
+" YouTube's speech recognition. They usually give the best timing."
+msgstr ""
+
+#: templates/search.html:1737
+msgid "This video's captions are too sparse to be lyrics."
+msgstr ""
+
+#: templates/search.html:1738
+msgid "Could not check this video's captions."
+msgstr ""
+
+#: templates/search.html:1739
+msgid "This video has no captions of its own."
+msgstr ""
+
+#: templates/search.html:1740
+msgid ""
+"These are Genius lyrics found from the video's title. Wrong song? Pick "
+"another, or search for other lyrics."
+msgstr ""
+
+#: templates/search.html:1741
+msgid "Genius found nothing for the video's title."
+msgstr ""
+
+#: templates/search.html:1742
+msgid ""
+"These are Genius lyrics found for what you typed. Pick the one that "
+"matches this video."
+msgstr ""
+
+#: templates/search.html:1743
+msgid ""
+"A song needs lyrics to become karaoke: search by title and artist, or "
+"pick another video."
+msgstr ""
+
+#: templates/search.html:1749
+msgid "No lyrics found for this video."
+msgstr ""
+
+#: templates/search.html:1752
+msgid "Search for other lyrics…"
+msgstr ""
+
+#: templates/search.html:1755 templates/song_repair.html:909
+#: templates/song_repair.html:932 templates/song_repair.html:971
+msgid "Type the song title and artist"
+msgstr ""
+
+#: templates/search.html:1760
+msgid "Nothing found for that search."
+msgstr ""
+
+#: templates/search.html:1766
+#, fuzzy
+msgid "Other lyrics…"
+msgstr "Сейчас играет"
+
+#. Accessible name of the seek bar under a search result's video preview.
+#: templates/search.html:1783
+msgid "Seek"
+msgstr ""
+
+#. Badge on a search result's thumbnail: the act's own verified channel
+#. uploaded this music video.
+#: templates/search_result.html:25
+msgid "Official video"
+msgstr ""
+
+#. Badge on a search result's thumbnail: the act's label published this as
+#. audio only (a "Topic" channel upload).
+#: templates/search_result.html:28
+msgid "Official audio"
+msgstr ""
+
+#. Grey button on a search result card whose song the library already has under
+#. another upload: it opens the download dialog. The row under the card queues
+#. the library's copy instead.
+#: templates/search_result.html:47
+#, fuzzy
+msgid "Download…"
+msgstr "Загрузить"
+
+#: templates/search_result.html:49
+#, fuzzy
+msgid "Queue…"
+msgstr "Очередь"
+
+#. Note beside "Original vocals", the slider for how loud the original
+#. recording's singer is (the guest form and Now Playing). Guests tend to read
+#. it as their own microphone, so the note says it isn't
+#: templates/singer_tips.html:13
+#, python-format
+msgid ""
+"How loud the recording's singer is. Your microphone isn't changed. 0% "
+"leaves just the music."
+msgstr ""
+
+#. Note beside "Key", the slider that moves a song up or down in pitch (the
+#. guest form and Now Playing)
+#: templates/singer_tips.html:18
+msgid "Moves the song up or down in half-steps. 0 is the original key."
+msgstr ""
+
+#. Note beside "Lyrics", the choice between Karaoke, Subtitles and Off (the
+#. guest form and Now Playing)
+#: templates/singer_tips.html:23
+msgid "Karaoke highlights each word as it's sung. Subtitles shows whole lines."
 msgstr ""
 
 #: templates/song_edit_words.html:46
@@ -3050,7 +3351,7 @@ msgid ""
 msgstr ""
 
 #: templates/song_edit_words.html:64 templates/song_info.html:77
-#: templates/song_repair.html:161
+#: templates/song_repair.html:160
 msgid "Could not queue the regeneration."
 msgstr ""
 
@@ -3091,14 +3392,14 @@ msgstr ""
 msgid "Line dropped"
 msgstr ""
 
-#: templates/song_edit_words.html:296 templates/song_repair.html:160
-#: templates/song_repair.html:948 templates/song_repair.html:974
+#: templates/song_edit_words.html:296 templates/song_repair.html:159
+#: templates/song_repair.html:960 templates/song_repair.html:986
 #, fuzzy
 msgid "Regenerate song"
 msgstr "Следующая песня"
 
-#: templates/song_edit_words.html:297 templates/song_repair.html:949
-#: templates/song_repair.html:975
+#: templates/song_edit_words.html:297 templates/song_repair.html:961
+#: templates/song_repair.html:987
 msgid ""
 "Regenerating backs up this song's lyric files, then queues it. It runs "
 "behind new downloads, and waits if the song is playing."
@@ -3224,214 +3525,232 @@ msgstr ""
 msgid "Go to Song info"
 msgstr ""
 
-#: templates/song_repair.html:138
+#: templates/song_repair.html:136
+msgid "Checking the caption…"
+msgstr ""
+
+#: templates/song_repair.html:137
 msgid "This song has no YouTube ID."
 msgstr ""
 
-#: templates/song_repair.html:139
+#: templates/song_repair.html:138
 msgid ""
 "No usable English caption found. If YouTube is busy, reload the page to "
 "check again."
 msgstr ""
 
-#: templates/song_repair.html:141
+#: templates/song_repair.html:139
+msgid "This video's caption is too sparse to be lyrics."
+msgstr ""
+
+#: templates/song_repair.html:140
 msgid "Use the video's caption as the lyrics."
 msgstr ""
 
-#: templates/song_repair.html:144
+#: templates/song_repair.html:141
+msgid "Could not check the caption."
+msgstr ""
+
+#: templates/song_repair.html:143
 msgid "best fit"
 msgstr ""
 
-#: templates/song_repair.html:148 templates/song_repair.html:903
+#: templates/song_repair.html:147 templates/song_repair.html:917
 msgid "Preview these lyrics"
 msgstr ""
 
-#: templates/song_repair.html:149 templates/song_repair.html:969
+#: templates/song_repair.html:148 templates/song_repair.html:942
+#: templates/song_repair.html:981
 msgid "Preview selected timing"
 msgstr ""
 
-#: templates/song_repair.html:150
+#: templates/song_repair.html:149
 msgid "Custom lyrics."
 msgstr ""
 
-#: templates/song_repair.html:151
+#: templates/song_repair.html:150
 msgid "Could not read that file."
 msgstr ""
 
-#: templates/song_repair.html:152
+#: templates/song_repair.html:151
 msgid "Hide preview"
 msgstr ""
 
-#: templates/song_repair.html:154
+#: templates/song_repair.html:153
 #, python-format
 msgid "Genius pick: %(title)s · %(artist)s."
 msgstr ""
 
-#: templates/song_repair.html:156
+#: templates/song_repair.html:155
 msgid "No synced matches found. If LRCLIB is busy, try again in a moment."
 msgstr ""
 
-#: templates/song_repair.html:158
+#: templates/song_repair.html:157
 msgid "Skip LRCLIB. Guessed lines stay guessed."
 msgstr ""
 
-#: templates/song_repair.html:159
+#: templates/song_repair.html:158
 msgid "Next: LRCLIB match"
 msgstr ""
 
-#: templates/song_repair.html:162 templates/song_repair.html:929
-#: templates/song_repair.html:942
+#: templates/song_repair.html:161 templates/song_repair.html:945
+#: templates/song_repair.html:954
 msgid "Check fit"
 msgstr ""
 
-#: templates/song_repair.html:163
+#: templates/song_repair.html:162
 msgid "Checking…"
 msgstr ""
 
-#: templates/song_repair.html:164
+#: templates/song_repair.html:163
 msgid "Paste subtitles or open an .srt file to start."
 msgstr ""
 
-#: templates/song_repair.html:165 templates/song_repair.html:173
+#: templates/song_repair.html:164 templates/song_repair.html:172
 msgid "Not checked yet. Check fit before you regenerate."
 msgstr ""
 
-#: templates/song_repair.html:166
+#: templates/song_repair.html:165
 msgid ""
 "The subtitles changed since the last check. Check fit again to turn "
 "Regenerate back on."
 msgstr ""
 
-#: templates/song_repair.html:167
+#: templates/song_repair.html:166
 msgid "This is the saved slice. Check fit confirms it, then Regenerate turns on."
 msgstr ""
 
-#: templates/song_repair.html:168
+#: templates/song_repair.html:167
 msgid "Could not check the subtitles."
 msgstr ""
 
-#: templates/song_repair.html:169
+#: templates/song_repair.html:168
 msgid "on disk"
 msgstr ""
 
-#: templates/song_repair.html:170 templates/song_repair.html:921
-#: templates/song_repair.html:928 templates/song_repair.html:958
-#: templates/song_repair.html:962
+#: templates/song_repair.html:169 templates/song_repair.html:935
+#: templates/song_repair.html:944 templates/song_repair.html:970
+#: templates/song_repair.html:974
 #, fuzzy
 msgid "Search LRCLIB"
 msgstr "Поиск"
 
-#: templates/song_repair.html:171
+#: templates/song_repair.html:170
 #, fuzzy
 msgid "Hide search"
 msgstr "Поиск"
 
-#: templates/song_repair.html:172
+#: templates/song_repair.html:171
 msgid "Search for a match to start."
 msgstr ""
 
-#: templates/song_repair.html:174
+#: templates/song_repair.html:173
 msgid "This is the saved timing. Check fit confirms it, then Regenerate turns on."
 msgstr ""
 
-#: templates/song_repair.html:175
+#: templates/song_repair.html:174
 msgid "Could not check the match."
 msgstr ""
 
-#: templates/song_repair.html:856
+#: templates/song_repair.html:870
 msgid "Step 1"
 msgstr ""
 
-#: templates/song_repair.html:862
+#: templates/song_repair.html:876
 msgid "Step 1 of 2"
 msgstr ""
 
-#: templates/song_repair.html:865 templates/song_repair.html:866
+#: templates/song_repair.html:879 templates/song_repair.html:880
 msgid "Lyric source"
 msgstr ""
 
-#: templates/song_repair.html:869
+#: templates/song_repair.html:883
 msgid "YouTube caption"
 msgstr ""
 
-#: templates/song_repair.html:873
+#: templates/song_repair.html:887
 msgid "Search and pick, then choose an LRCLIB match."
 msgstr ""
 
-#: templates/song_repair.html:877
+#: templates/song_repair.html:891
 msgid "Type or paste the lyrics, or open a .txt file."
 msgstr ""
 
-#: templates/song_repair.html:881
+#: templates/song_repair.html:895
 msgid "Time the song from the movie's own subtitles."
 msgstr ""
 
-#: templates/song_repair.html:885
+#: templates/song_repair.html:899
 msgid "Time the song from an LRCLIB match's own line times."
 msgstr ""
 
-#: templates/song_repair.html:889
+#: templates/song_repair.html:903
 msgid "Words come from what the singer is heard singing."
 msgstr ""
 
-#: templates/song_repair.html:895 templates/song_repair.html:918
-#: templates/song_repair.html:959
-msgid "Type the song title and artist"
-msgstr ""
-
-#: templates/song_repair.html:898
+#: templates/song_repair.html:912
 #, fuzzy
 msgid "Search Genius"
 msgstr "Поиск"
 
-#: templates/song_repair.html:909
+#: templates/song_repair.html:923
 msgid "One line of lyrics per row. Section headers like [Chorus] are ignored."
 msgstr ""
 
-#: templates/song_repair.html:911 templates/song_repair.html:940
+#: templates/song_repair.html:925 templates/song_repair.html:952
 msgid "Open file"
 msgstr ""
 
-#: templates/song_repair.html:916
+#: templates/song_repair.html:930
 msgid ""
 "The match's own line times become the song's timing. Check fit finds "
 "where its lines sit in the clip, using the words already heard in it, and"
 " shows any that sit far from their time."
 msgstr ""
 
-#: templates/song_repair.html:925 templates/song_repair.html:967
+#: templates/song_repair.html:939 templates/song_repair.html:979
 msgid "Results"
 msgstr ""
 
-#: templates/song_repair.html:930
+#: templates/song_repair.html:946
 msgid "Finding where this match sits in the clip…"
 msgstr ""
 
-#: templates/song_repair.html:932
-msgid "Use this match anyway"
-msgstr ""
-
-#: templates/song_repair.html:938
+#: templates/song_repair.html:950
 msgid ""
 "Paste the stretch of the movie's SRT subtitles that this clip covers. "
 "Check fit finds where it sits, using the words already heard in the clip."
 msgstr ""
 
-#: templates/song_repair.html:943
+#: templates/song_repair.html:955
 msgid "Finding where these subtitles sit in the clip…"
 msgstr ""
 
-#: templates/song_repair.html:954
+#: templates/song_repair.html:966
 msgid "Step 2 of 2"
 msgstr ""
 
-#: templates/song_repair.html:955
+#: templates/song_repair.html:967
 msgid "LRCLIB match"
 msgstr ""
 
-#: templates/song_repair.html:973
+#: templates/song_repair.html:985
 msgid "Back"
 msgstr ""
+
+#. Name of the button on a slider that lowers its value by one tap (Now
+#. Playing's sliders and the guest form's)
+#: templates/stepper.html:10
+#, fuzzy
+msgid "Lower"
+msgstr "Иное"
+
+#. Name of the button on a slider that raises its value by one tap (Now
+#. Playing's sliders and the guest form's)
+#: templates/stepper.html:17
+#, fuzzy
+msgid "Raise"
+msgstr "Рестарт песни"
 
 #~ msgid "Add 3 random songs"
 #~ msgstr "Добавить три случайных песни"
@@ -3826,4 +4145,171 @@ msgstr ""
 
 #~ msgid "current (edited)"
 #~ msgstr "Следующий певец"
+
+#~ msgid "Vocal volume: %s%%"
+#~ msgstr "Громкость: %s"
+
+#~ msgid "Subtitle mode: %s"
+#~ msgstr ""
+
+#~ msgid "%s couldn't be processed and was taken off the queue"
+#~ msgstr ""
+
+#~ msgid "The lines fit, but the length is too far off."
+#~ msgstr ""
+
+#~ msgid "The lines fit, but the match has no length to check."
+#~ msgstr ""
+
+#~ msgid "Fits, but check these lines first."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "A match this much longer or "
+#~ "shorter than the video is usually "
+#~ "another edit or another recording, so"
+#~ " its line times would drift. The "
+#~ "limit is %(n)d s."
+#~ msgstr ""
+
+#~ msgid "The match has no length, so the video can't be compared with it."
+#~ msgstr ""
+
+#~ msgid "The video is more than %(n)d s longer or shorter than this match."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "That's fine if the extra is talk,"
+#~ " applause or an intro before or "
+#~ "after the song; those parts get no"
+#~ " lyrics. It's wrong if the video "
+#~ "skips or adds a section at the "
+#~ "start or end. The checks above "
+#~ "can't see that, so listen first."
+#~ msgstr ""
+
+#~ msgid "allow_gap must be true or false"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "Do you want to change the name "
+#~ "of the person using this device? "
+#~ "This will show up on queued songs."
+#~ " Current: CURRENT_NAME"
+#~ msgstr ""
+
+#~ msgid "Sorted Alphabetically"
+#~ msgstr "Отсортировать по алфавиту"
+
+#~ msgid ""
+#~ "Sort by\n"
+#~ "\t\t\tDate"
+#~ msgstr "Отсортировано по дате"
+
+#~ msgid "Sorted by date"
+#~ msgstr "Отсортировано по дате"
+
+#~ msgid ""
+#~ "Sort by\n"
+#~ "\t\t\tAlphabetical"
+#~ msgstr "Отсортировано по алфавиту"
+
+#~ msgid ""
+#~ "Are you sure you want to skip "
+#~ "this track? If you didn't add this"
+#~ " song, ask permission first!"
+#~ msgstr ""
+#~ "Вы точно хотите пропустить этот трек?"
+#~ " Если это не вы добавили песню, "
+#~ "предварительно будет запрошено разрешение на"
+#~ " это!"
+
+#~ msgid "Player Control"
+#~ msgstr "Управление плейером"
+
+#~ msgid "Play/Pause"
+#~ msgstr "Играть/пауза"
+
+#~ msgid "Stop Current Song"
+#~ msgstr "Останов текущей песни"
+
+#~ msgid "Vocal Volume"
+#~ msgstr ""
+
+#~ msgid "Change Key"
+#~ msgstr "Поменять высоту"
+
+#~ msgid "Subtitle Delay"
+#~ msgstr ""
+
+#~ msgid "Default vocal volume (0-100%, dual-stem songs only)"
+#~ msgstr ""
+
+#~ msgid "waiting for lyrics"
+#~ msgstr ""
+
+#~ msgid "I'm back (unpause)"
+#~ msgstr ""
+
+#~ msgid "Pause (I'll be right back)"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "Add <input id=\"randomNumberInput\" class=\"input"
+#~ " mx-2 p-2\" pattern=\"\\d*\" maxlength=\"2\" "
+#~ "value=\"3\" min=\"1\" max=\"99\" style=\"width: "
+#~ "42px\" /> random songs"
+#~ msgstr ""
+#~ "Добавить <input id=\"randomNumberInput\" "
+#~ "class=\"input mx-2 p-2\" pattern=\"\\d*\" "
+#~ "maxlength=\"2\" value=\"3\" min=\"1\" max=\"99\" "
+#~ "style=\"width: 40px\" /> случайных песни"
+
+#~ msgid "Clear all"
+#~ msgstr "Очистить все"
+
+#~ msgid "Available songs in local library"
+#~ msgstr "Песни из локальной библиотеки"
+
+#~ msgid "Added for processing..."
+#~ msgstr ""
+
+#~ msgid "Available Songs"
+#~ msgstr "Доступные песни"
+
+#~ msgid ""
+#~ "- Type a song (title/artist) to search\n"
+#~ "\t\t\t\t\t\t\t\tthe available songs and "
+#~ "click 'Add to queue' to add it "
+#~ "to the queue."
+#~ msgstr ""
+#~ "Набери песню\n"
+#~ "          (название/артист) для поиска среди"
+#~ " доступных песен и нажми 'Добавить в"
+#~ " очередь'\n"
+#~ "          чтобы добавить ее в очередь."
+
+#~ msgid ""
+#~ "- If the song doesn't appear in\n"
+#~ "\t\t\t\t\t\t\t\tthe \"Available Songs\" "
+#~ "dropdown, click 'Search' to find it "
+#~ "on Youtube"
+#~ msgstr ""
+#~ "Если\n"
+#~ "          песня не представлена в "
+#~ "выпадающем списке доступных песен Нажми\n"
+#~ ""
+#~ "          'Поиск' чтобы поискать ее на Youtube"
+
+#~ msgid "YouTube captions will be used for lyrics."
+#~ msgstr ""
+
+#~ msgid "More options"
+#~ msgstr ""
+
+#~ msgid "Select"
+#~ msgstr ""
+
+#~ msgid "Use this match anyway"
+#~ msgstr ""
 
