@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: minna.soudunsaari@gmail.com\n"
-"POT-Creation-Date: 2026-11-27 09:17-0500\n"
+"POT-Creation-Date: 2026-11-27 10:06-0500\n"
 "PO-Revision-Date: 2024-05-08 18:57-0300\n"
 "Last-Translator: FULL NAME <minna.soudunsaari@gmail.com>\n"
 "Language: fi_FI\n"
@@ -1384,9 +1384,10 @@ msgid "Queue"
 msgstr "Jono"
 
 #. Navigation link for the search page add songs to the queue.
+#. Title for the search page.
 #. Submit button on the search form for searching YouTube.
-#: templates/base.html:268 templates/search.html:1631
-#: templates/search.html:1758
+#: templates/base.html:268 templates/search.html:1614
+#: templates/search.html:1631 templates/search.html:1758
 msgid "Search"
 msgstr "Etsi"
 
@@ -1677,7 +1678,7 @@ msgstr ""
 
 #. Heading of Now Playing's slider for the speaker volume
 #: templates/home.html:388
-#, fuzzy, python-format
+#, fuzzy
 msgid "Volume"
 msgstr "Ääni kovemmalle: %s"
 
@@ -2944,7 +2945,7 @@ msgid "The queue is empty"
 msgstr "Jono on tyhjä"
 
 #: templates/queue.html:495
-#, fuzzy, python-format
+#, fuzzy
 msgid "Add random songs"
 msgstr "Valitse %s kappaletta satunnaisesti"
 
@@ -3032,13 +3033,13 @@ msgstr "Tarkemmat hakuvaihtoehdot"
 
 #. What a button shows for a moment when the song is in the queue already.
 #: templates/search.html:936
-#, fuzzy, python-format
+#, fuzzy
 msgid "Already queued"
 msgstr "Jonoon lisätty kappale: %s"
 
 #. Shown when adding a library song to the queue failed.
 #: templates/search.html:938
-#, fuzzy, python-format
+#, fuzzy
 msgid "Could not add to the queue."
 msgstr "Jonoon lisätty kappale: %s"
 
@@ -3074,11 +3075,6 @@ msgstr ""
 #: templates/search.html:949
 msgid "Couldn't load more results."
 msgstr ""
-
-#. Title for the search page.
-#: templates/search.html:1614
-msgid "Search / Add New"
-msgstr "Etsi / Uusi Kappale"
 
 #. Link which clears the text from the search box.
 #: templates/search.html:1636
@@ -4263,4 +4259,7 @@ msgstr "Aloita kappale uudelleen"
 
 #~ msgid "Select"
 #~ msgstr ""
+
+#~ msgid "Search / Add New"
+#~ msgstr "Etsi / Uusi Kappale"
 

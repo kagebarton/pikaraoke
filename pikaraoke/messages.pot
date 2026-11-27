@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-27 09:17-0500\n"
+"POT-Creation-Date: 2026-11-27 10:06-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1351,9 +1351,10 @@ msgid "Queue"
 msgstr ""
 
 #. Navigation link for the search page add songs to the queue.
+#. Title for the search page.
 #. Submit button on the search form for searching YouTube.
-#: templates/base.html:268 templates/search.html:1631
-#: templates/search.html:1758
+#: templates/base.html:268 templates/search.html:1614
+#: templates/search.html:1631 templates/search.html:1758
 msgid "Search"
 msgstr ""
 
@@ -2965,11 +2966,6 @@ msgstr ""
 #. results.
 #: templates/search.html:949
 msgid "Couldn't load more results."
-msgstr ""
-
-#. Title for the search page.
-#: templates/search.html:1614
-msgid "Search / Add New"
 msgstr ""
 
 #. Link which clears the text from the search box.

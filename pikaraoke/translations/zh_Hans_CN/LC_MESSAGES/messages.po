@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  1.1.1\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-27 09:17-0500\n"
+"POT-Creation-Date: 2026-11-27 10:06-0500\n"
 "PO-Revision-Date: 2022-04-28 10:09-0400\n"
 "Last-Translator: \n"
 "Language: zh_CN\n"
@@ -1364,9 +1364,10 @@ msgid "Queue"
 msgstr "列表"
 
 #. Navigation link for the search page add songs to the queue.
+#. Title for the search page.
 #. Submit button on the search form for searching YouTube.
-#: templates/base.html:268 templates/search.html:1631
-#: templates/search.html:1758
+#: templates/base.html:268 templates/search.html:1614
+#: templates/search.html:1631 templates/search.html:1758
 msgid "Search"
 msgstr "搜索"
 
@@ -2914,7 +2915,7 @@ msgid "The queue is empty"
 msgstr "播放列表是空的"
 
 #: templates/queue.html:495
-#, fuzzy, python-format
+#, fuzzy
 msgid "Add random songs"
 msgstr "添加随机%s首歌"
 
@@ -3002,13 +3003,13 @@ msgstr "高级设置"
 
 #. What a button shows for a moment when the song is in the queue already.
 #: templates/search.html:936
-#, fuzzy, python-format
+#, fuzzy
 msgid "Already queued"
 msgstr "成功添加歌曲：%s"
 
 #. Shown when adding a library song to the queue failed.
 #: templates/search.html:938
-#, fuzzy, python-format
+#, fuzzy
 msgid "Could not add to the queue."
 msgstr "成功添加歌曲：%s"
 
@@ -3043,11 +3044,6 @@ msgstr ""
 #: templates/search.html:949
 msgid "Couldn't load more results."
 msgstr ""
-
-#. Title for the search page.
-#: templates/search.html:1614
-msgid "Search / Add New"
-msgstr "搜索 / 添加新歌"
 
 #. Link which clears the text from the search box.
 #: templates/search.html:1636
@@ -4206,4 +4202,7 @@ msgstr "重新开始"
 
 #~ msgid "Select"
 #~ msgstr ""
+
+#~ msgid "Search / Add New"
+#~ msgstr "搜索 / 添加新歌"
 
