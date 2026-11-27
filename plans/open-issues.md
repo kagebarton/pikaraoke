@@ -348,7 +348,7 @@ measurements: `plans/search-official-captions.md` on the tag.
   since still offers Queue… (the download dialog) on its card, not the in-library Queue, and no
   "In library" badge shows it, until the next search. Harmless since 2026-11-27: that Queue…
   now queues the library copy instead of downloading it again (K4 in `plans/search-phone.md`
-  on branch `search_phone`, "Not doing": redrawing restored cards was not chosen). The stuck
+  on tag `archive/search_phone`, "Not doing": redrawing restored cards was not chosen). The stuck
   loading button this entry used to name is fixed: the dialog's half by
   `archive/download_modal_speed` (O11), the cards' half by `8d95c0e7`, which makes the saved
   copy once at load and never reads the live page again. Found in the `/code-review` of
@@ -540,13 +540,13 @@ measurements: `plans/search-official-captions.md` on the tag.
   choice overwrites the first one's. Closing it needs `DownloadManager.queue_download` to
   check and add under one lock; it is also called from `library_tools.py`. Left out of
   `search_phone` (Part 3) on purpose. Found in the Phase 2 `/code-review` (finding 5), Results
-  log and "Not doing" in `plans/search-phone.md` on branch `search_phone`. Not ruled.
+  log and "Not doing" in `plans/search-phone.md` on tag `archive/search_phone`. Not ruled.
 - **A lyric choice can be left for a song the library has.** `/lyrics_select` and `/download`
   each check the library; a download of the same video that lands between the two calls lets
   the first write the choice and the second answer `in_library`, so that song's next lyrics
   run reads it. Fix: `/download` deletes the choice when it answers `in_library`, or one route
   checks once. Narrow window; not ruled. Found in the Phase 2 `/code-review` (finding 3),
-  Results log in `plans/search-phone.md` on branch `search_phone`.
+  Results log in `plans/search-phone.md` on tag `archive/search_phone`.
 
 ## Movie splits (on `dev`)
 
@@ -723,10 +723,10 @@ Stage 4, after `queue_phone` lands, side by side:
 - ~~`browse_phone` Phase 1, after GATE N.~~ Landed 2026-11-24 (see Stage 1).
 - `processing_phone` (`f28d582`), after its open question on group order under All is ruled.
 - ~~Search Part 3 (L12, L13), after Parts 1-2 land too (`download_modal_speed` is on `dev`
-  already): it restyles the dialog's controls. Spec'd 2026-11-24 on branch `search_phone`
+  already): it restyles the dialog's controls. Spec'd 2026-11-24 on tag `archive/search_phone`
   (`7d111ce9`).~~ Landed on `dev` 2026-11-27 (`35e9904a`..`076a8fab`, ten code commits as
-  copies and the two catalog passes regenerated on `dev`; `tests/unit` 4665 passed). The branch
-  `search_phone` still carries the plan and its Results log until it is retired as a tag.
+  copies and the two catalog passes regenerated on `dev`; `tests/unit` 4665 passed). Retired as
+  `archive/search_phone` 2026-11-27; the plan and its Results log are on the tag.
 
 Independent of the phone order:
 
@@ -927,7 +927,7 @@ The "Small gaps inside the v2 group" above were ruled 2026-11-18 (S1-S4 in `plan
   `#search-input`, `#direct-download-url`, `#lyrics-custom-input` and the lyrics list, in
   `search.html`) because making the shared `.input` dark would restyle those pages at
   once. Moving the rule into the theme means checking each of them. Not ruled. Record:
-  "Not doing" in `plans/search-phone.md` on branch `search_phone`.
+  "Not doing" in `plans/search-phone.md` on tag `archive/search_phone`.
 
 ## Queue page: review findings (on `dev`)
 
