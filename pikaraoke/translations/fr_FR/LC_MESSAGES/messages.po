@@ -1397,9 +1397,10 @@ msgid "Queue"
 msgstr "File d'attente"
 
 #. Navigation link for the search page add songs to the queue.
+#. Title for the search page.
 #. Submit button on the search form for searching YouTube.
-#: templates/base.html:268 templates/search.html:1631
-#: templates/search.html:1758
+#: templates/base.html:268 templates/search.html:1614
+#: templates/search.html:1631 templates/search.html:1758
 msgid "Search"
 msgstr "Recherche"
 
@@ -1679,7 +1680,7 @@ msgstr "Pause"
 #. What the pause button reads while the song is paused, a tap resumes it (Now
 #. Playing)
 #: templates/home.html:379
-#, fuzzy, python-format
+#, fuzzy
 msgid "Resume"
 msgstr "Reprendre : %s"
 
@@ -1690,7 +1691,7 @@ msgstr ""
 
 #. Heading of Now Playing's slider for the speaker volume
 #: templates/home.html:388
-#, fuzzy, python-format
+#, fuzzy
 msgid "Volume"
 msgstr "Volume : %s"
 
@@ -2961,7 +2962,7 @@ msgid "The queue is empty"
 msgstr "La file d'attente est vide"
 
 #: templates/queue.html:495
-#, fuzzy, python-format
+#, fuzzy
 msgid "Add random songs"
 msgstr "Ajout de %s pistes aléatoires"
 
@@ -3055,7 +3056,7 @@ msgstr "Effacer la file d'attente"
 
 #. Shown when adding a library song to the queue failed.
 #: templates/search.html:938
-#, fuzzy, python-format
+#, fuzzy
 msgid "Could not add to the queue."
 msgstr "Chanson ajoutée à la file d'attente : %s"
 
@@ -3091,11 +3092,6 @@ msgstr ""
 #: templates/search.html:949
 msgid "Couldn't load more results."
 msgstr ""
-
-#. Title for the search page.
-#: templates/search.html:1614
-msgid "Search / Add New"
-msgstr "Recherche / Ajout"
 
 #. Link which clears the text from the search box.
 #: templates/search.html:1636
@@ -4335,4 +4331,7 @@ msgstr "Recommencer la chanson"
 
 #~ msgid "Use this match anyway"
 #~ msgstr ""
+
+#~ msgid "Search / Add New"
+#~ msgstr "Recherche / Ajout"
 

@@ -1353,9 +1353,10 @@ msgid "Queue"
 msgstr ""
 
 #. Navigation link for the search page add songs to the queue.
+#. Title for the search page.
 #. Submit button on the search form for searching YouTube.
-#: templates/base.html:268 templates/search.html:1631
-#: templates/search.html:1758
+#: templates/base.html:268 templates/search.html:1614
+#: templates/search.html:1631 templates/search.html:1758
 msgid "Search"
 msgstr ""
 
@@ -2969,11 +2970,6 @@ msgstr ""
 msgid "Couldn't load more results."
 msgstr ""
 
-#. Title for the search page.
-#: templates/search.html:1614
-msgid "Search / Add New"
-msgstr ""
-
 #. Link which clears the text from the search box.
 #: templates/search.html:1636
 msgid "Clear"
@@ -4231,5 +4227,8 @@ msgstr ""
 #~ msgstr ""
 
 #~ msgid "Use this match anyway"
+#~ msgstr ""
+
+#~ msgid "Search / Add New"
 #~ msgstr ""
 
