@@ -5,8 +5,11 @@ act is the original is not known, so it is voted from the results: the rows YouT
 verified channel, or a label-distributed "art track") name the act in their titles and channels.
 A row lifts only when it is the song, comes from the act or its label, and says what it is. Another
 act's video lifts only from a label channel, after the original's (a film song's second cast).
-Every rule errs toward lifting nothing, because a miss costs only YouTube's own order. There is no
-caption lookup, which is too slow for a search: the ranking is a guess from title and channel.
+A query that is an act's name alone (its own channel answers it twice) names no song: every title
+reads "Act - Song", any of the act's videos is the song, the song a title names explains the
+title, and no other act lifts. Every other rule errs toward lifting nothing, because a miss costs
+only YouTube's own order. There is no caption lookup, which is too slow for a search: the ranking
+is a guess from title and channel.
 """
 
 from __future__ import annotations
@@ -23,7 +26,8 @@ from pikaraoke.lib.youtube_dl import SearchResult
 OfficialKind = Literal["video", "audio"]
 _Tier = Literal["original", "other"]  # whose upload: an original's, or another act's on a label
 
-# An act needs this many trusted credits to be an original.
+# An act needs this many trusted credits to be an original, and a query this many rows from its
+# own channel to be an act's name.
 _MIN_CREDITS = 2
 
 _SEPARATOR = re.compile(r"\s+[-–—|]\s+|\s*[–—|]\s*")
@@ -80,11 +84,13 @@ _VIDEO_PLACE: dict[_Tier, int] = {"original": _FIRST, "other": _AFTER_FIRST}
 @dataclass(frozen=True)
 class Acts:
     """What the first page says: the original acts' names, the words of the record's own title,
-    and whether that page lifts any video. ``Acts()`` is "nothing known"."""
+    whether that page lifts any video, and whether the query is an act's name. ``Acts()`` is
+    "nothing known"."""
 
     originals: frozenset[str] = frozenset()
     record_words: frozenset[str] = frozenset()
     has_video: bool = False
+    act_search: bool = False
 
 
 def _words(text: str) -> list[str]:
@@ -152,19 +158,29 @@ def _channel_name(result: SearchResult) -> str:
     return name.removeprefix("the")
 
 
-def _separated_artists(title: str, query_words: Sequence[str]) -> set[str]:
+def _sides(title: str) -> list[str]:
+    """The parts of "A - B" that have words, brackets dropped."""
+    return [side for side in _SEPARATOR.split(_BRACKETED.sub(" ", title)) if _words(side)]
+
+
+def _separated_artists(title: str, query_words: Sequence[str], act_search: bool) -> set[str]:
     """The artists "A - B" credits: the side that is not the song.
 
     "Artist - Song" unless the left side holds every query word and the right one does not
-    ("Song - Artist"). Collaborators on that side each count, and so does the whole side: the
-    split cannot tell "Simon & Garfunkel" or "Lil Nas X" from a duet, and whole, the name
-    matches the band's channel.
+    ("Song - Artist"); an act search has no song in its query, so it is always "Artist - Song".
+    Collaborators on that side each count, and so does the whole side: the split cannot tell
+    "Simon & Garfunkel" or "Lil Nas X" from a duet, and whole, the name matches the band's
+    channel.
     """
-    sides = [side for side in _SEPARATOR.split(_BRACKETED.sub(" ", title)) if _words(side)]
+    sides = _sides(title)
     if len(sides) < 2:
         return set()
     left, right = sides[0], sides[1]
-    song_first = _share_found(query_words, left) == 1.0 and _share_found(query_words, right) < 1.0
+    song_first = (
+        not act_search
+        and _share_found(query_words, left) == 1.0
+        and _share_found(query_words, right) < 1.0
+    )
     artist_side = right if song_first else left
     collaborators = {name for part in _COLLAB.split(artist_side) if (name := _compact(part))}
     return collaborators | {_compact(artist_side)}
@@ -190,28 +206,32 @@ def _quoted_song_artists(title: str) -> set[str]:
     return {name for name in names if name}
 
 
-def _title_artists(title: str, query_words: Sequence[str]) -> set[str]:
-    return _separated_artists(title, query_words) or _quoted_song_artists(title)
+def _title_artists(title: str, query_words: Sequence[str], act_search: bool) -> set[str]:
+    return _separated_artists(title, query_words, act_search) or _quoted_song_artists(title)
 
 
-def _credited_artists(result: SearchResult, query_words: Sequence[str]) -> set[str]:
+def _credited_artists(
+    result: SearchResult, query_words: Sequence[str], act_search: bool
+) -> set[str]:
     """The artists a row credits: its title's, plus its channel's for an art track (whose title
     is only the song) and for a title that names no one."""
-    artists = _title_artists(result.title, query_words)
+    artists = _title_artists(result.title, query_words, act_search)
     if _is_art_track(result) or not artists:
         artists = artists | {_channel_artist(result)}
     return {artist for artist in artists if artist}
 
 
-def _row_names(result: SearchResult, query_words: Sequence[str]) -> set[str]:
+def _row_names(result: SearchResult, query_words: Sequence[str], act_search: bool) -> set[str]:
     """The acts a row is an upload of. A "- Topic" channel is named for its act and its title is
     only the song (or a cover's "Song - Film"), so there the channel alone says."""
     if result.channel.endswith(" - Topic"):
         return {_channel_artist(result)} - {""}
-    return _credited_artists(result, query_words)
+    return _credited_artists(result, query_words, act_search)
 
 
-def _pick_originals(results: Sequence[SearchResult], query_words: Sequence[str]) -> frozenset[str]:
+def _pick_originals(
+    results: Sequence[SearchResult], query_words: Sequence[str], act_search: bool
+) -> frozenset[str]:
     """Every name tied for the most trusted credits, or none below ``_MIN_CREDITS``.
 
     A tie is a duet's two singers and the pair, or two casts of a film song; both are lifted.
@@ -220,7 +240,7 @@ def _pick_originals(results: Sequence[SearchResult], query_words: Sequence[str])
         artist
         for result in results
         if _is_trusted(result)
-        for artist in _credited_artists(result, query_words)
+        for artist in _credited_artists(result, query_words, act_search)
     )
     top = max(votes.values(), default=0)
     if top < _MIN_CREDITS:
@@ -269,6 +289,13 @@ def _is_own_channel(result: SearchResult, names: set[str]) -> bool:
     )
 
 
+def _is_act_search(results: Sequence[SearchResult], query_words: Sequence[str]) -> bool:
+    """Whether the query is an act's name alone: its own channel answers it on the page. A song's
+    name is no channel's, so a query that names a song never is."""
+    act = {"".join(query_words)}
+    return sum(_is_own_channel(result, act) for result in results) >= _MIN_CREDITS
+
+
 def _is_label_channel(result: SearchResult) -> bool:
     """A verified channel whose name ends in "VEVO" or says Records, Recordings or Label. Only the
     name makes a channel a label's: the verified fan channel "Disney¡Fan!" titles its re-uploads
@@ -304,17 +331,32 @@ def _is_another_cast_on_a_label(
     )
 
 
+def _named_song(title: str) -> str:
+    """The song a title names after its act, or "": the second side of "Act - Song", narrowed to
+    its quote ("Act - 'Song' DANCE PRACTICE"); or, in a title with one side, the quote in it."""
+    sides = _sides(title)
+    if not sides:
+        return ""
+    side = sides[1] if len(sides) > 1 else sides[0]
+    quote = _QUOTED.search(side)
+    if quote:
+        return quote.group()
+    return side if len(sides) > 1 else ""
+
+
 def _says_what_it_is(
     result: SearchResult, query_words: Sequence[str], names: set[str], acts: Acts
 ) -> bool:
     """A video whose title carries more than act and song must say what it is: "(O2 Arena)" and
     "@ The Tonight Show" are live, "(2025 Version)" and "(Official HD Video)" are not. The record's
     own title is explained ("(To Your New Lover)"), and so is a mark, which got this far only
-    because the query asked for it ("bohemian rhapsody live" wants "(Live Aid 1985)")."""
+    because the query asked for it ("bohemian rhapsody live" wants "(Live Aid 1985)"). In an act
+    search the song the title names is explained too: the query has none."""
     title = result.title
     if _SAYS_OFFICIAL.search(title) or _SAYS_VERSION.search(title) or _marks(title):
         return True
-    return not _unexplained(title, query_words, names) - acts.record_words
+    known = [*query_words, *_words(_named_song(title))] if acts.act_search else query_words
+    return not _unexplained(title, known, names) - acts.record_words
 
 
 def _lift(result: SearchResult, query: str, acts: Acts) -> _Lift | None:
@@ -322,7 +364,7 @@ def _lift(result: SearchResult, query: str, acts: Acts) -> _Lift | None:
     if _has_letters_without_ascii(query) or _marks(result.title) - _marks(query):
         return None
     query_words = _words(query)
-    names = _row_names(result, query_words)
+    names = _row_names(result, query_words, acts.act_search)
     if not names:
         return None
     is_audio = _is_art_track(result) or bool(_AUDIO.search(result.title))
@@ -331,8 +373,14 @@ def _lift(result: SearchResult, query: str, acts: Acts) -> _Lift | None:
         tier: _Tier = "original"
         found = _is_the_originals_upload(result, query_words, names, credited)
     else:
+        # No song is named in an act search, so "another cast of the song" is any label upload
+        # whose title holds the act's name.
         tier = "other"
-        found = not is_audio and _is_another_cast_on_a_label(result, query_words, names)
+        found = (
+            not is_audio
+            and not acts.act_search
+            and _is_another_cast_on_a_label(result, query_words, names)
+        )
     if not found:
         return None
     if is_audio:
@@ -354,16 +402,17 @@ def official_kind(result: SearchResult, query: str, acts: Acts) -> OfficialKind 
 
 
 def read_first_page(results: Sequence[SearchResult], query: str) -> Acts:
-    """Vote the originals, read the record's title off their art tracks, and note whether the
-    page lifts any video. Each step needs the one before.
+    """Decide whether the query is an act's name, vote the originals, read the record's title off
+    their art tracks, and note whether the page lifts any video. Each step needs the one before.
 
     Pass only the first page: over more rows the vote drifts to whoever uploaded the most
     variants of the song. A query the matching cannot read knows nothing.
     """
     if _has_letters_without_ascii(query):
         return Acts()
-    originals = _pick_originals(results, _words(query))
-    acts = Acts(originals)
+    query_words = _words(query)
+    act_search = _is_act_search(results, query_words)
+    acts = Acts(_pick_originals(results, query_words, act_search), act_search=act_search)
     record_words = frozenset(
         word
         for result in results

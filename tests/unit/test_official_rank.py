@@ -1,18 +1,20 @@
 """Tests for lifting an original act's official uploads to the top of a search.
 
 The fixtures are real ``ytsearch`` captures (``tests/unit/data/youtube_search``): 14 from
-2026-11-08, 30 from 2026-11-11 and six held-out searches from 2026-11-16, frozen because
-YouTube's live results differ from day to day. Each is loaded through ``_parse_search_line``, so
-these tests also cover parsing a real yt-dlp row. The expected tables were read off the
-captures, ranking their first page.
+2026-11-08, 30 from 2026-11-11, six held-out searches from 2026-11-16 and 20 searches for an
+act's name alone from 2026-11-27, frozen because YouTube's live results differ from day to day.
+Each is loaded through ``_parse_search_line``, so these tests also cover parsing a real yt-dlp
+row. The expected tables were read off the captures, ranking their first page.
 """
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from pikaraoke.lib.official_rank import (
     Acts,
+    _named_song,
     official_first,
     official_kind,
     read_first_page,
@@ -175,12 +177,156 @@ _STAYS_PUT = [
 
 _SIXTY_ROW_FIXTURES = ["bohemian rhapsody", "hallelujah", "let it go frozen", "rolling in the deep"]
 
+# The 2026-11-27 captures: a search for an act's name alone. Query, whether the page is read as
+# an act search, the originals the vote picks, then the 1-based lines of the capture that are
+# official videos in lifted order and official audio in YouTube's order (lifted only when no
+# video is). "bts" (an act with no channel of its own on the page) and the film names "frozen"
+# and "moana" are not act searches and are read as they always were.
+_ACT_SEARCHES = [
+    (
+        "abba",
+        True,
+        ("abba",),
+        [2, 3, 5, 6, 7, 10, 11, 12, 16, 17, 18, 19, 20, 21, 23, 25, 27, 28],
+        [22, 26],
+    ),
+    ("adele", True, ("adele",), [2, 6, 12, 15, 18, 19, 23, 28], [14, 16, 30]),
+    (
+        "backstreet boys",
+        True,
+        ("backstreetboys",),
+        [3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 21, 23, 24, 25, 26, 30],
+        [27],
+    ),
+    ("blackpink", True, ("blackpink",), [3, 5, 6, 8, 11, 12, 14, 16, 17, 19, 21, 24, 28], []),
+    ("bts", False, ("bts",), [1, 4, 7, 12, 13, 14, 15, 18, 20, 21, 22, 25, 30], []),
+    (
+        "celine dion",
+        True,
+        ("celinedion",),
+        [1, 2, 11, 12, 14, 15, 16, 18, 20, 28, 29],
+        [25, 26, 27],
+    ),
+    (
+        "ed sheeran",
+        True,
+        ("edsheeran",),
+        [2, 3, 5, 7, 8, 9, 12, 13, 14, 15, 18, 19, 20, 22, 23, 27, 28, 29],
+        [],
+    ),
+    (
+        "eminem",
+        True,
+        ("eminem",),
+        [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            9,
+            10,
+            12,
+            13,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            25,
+            27,
+            28,
+            29,
+            30,
+        ],
+        [],
+    ),
+    ("frozen", False, ("idinamenzel",), [], []),
+    ("idina menzel", True, ("idinamenzel",), [7, 12, 14, 17, 30], []),
+    ("journey", True, ("journey",), [3, 6, 8, 9, 10, 11, 13, 14, 15, 19, 23, 28], [2, 20, 21, 24]),
+    (
+        "justin timberlake",
+        True,
+        ("justintimberlake",),
+        [8, 9, 10, 12, 13, 14, 15, 16, 18, 19, 21, 22, 25, 27, 29, 30],
+        [17],
+    ),
+    (
+        "lady gaga",
+        True,
+        ("ladygaga",),
+        [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 19, 20, 21, 22, 25, 26, 27, 28, 30],
+        [13, 17],
+    ),
+    ("moana", False, ("auliicravalho", "dwaynejohnson"), [11], []),
+    (
+        "queen",
+        True,
+        ("queen",),
+        [2, 3, 7, 10, 11, 12, 13, 15, 16, 18, 20, 21, 24, 25, 27, 28, 29, 30],
+        [],
+    ),
+    (
+        "rick astley",
+        True,
+        ("rickastley",),
+        [1, 2, 7, 9, 10, 11, 12, 13, 14, 15, 17, 21, 22, 23, 24, 26, 27],
+        [25],
+    ),
+    (
+        "simon and garfunkel",
+        True,
+        ("simonandgarfunkel",),
+        [],
+        [8, 9, 11, 12, 13, 15, 16, 17, 18, 20, 22, 23, 24, 25, 26, 29],
+    ),
+    (
+        "taylor swift",
+        True,
+        ("taylorswift",),
+        [3, 6, 9, 10, 11, 12, 13, 15, 18, 19, 21, 22, 23, 24, 25, 26, 27, 29],
+        [],
+    ),
+    (
+        "the beatles",
+        True,
+        ("thebeatles",),
+        [8, 11, 12, 13, 14, 15, 17, 20, 21, 23, 24, 25, 26, 27],
+        [9, 16],
+    ),
+    (
+        "the weeknd",
+        True,
+        ("theweeknd",),
+        [1, 2, 3, 4, 6, 7, 8, 11, 14, 15, 16, 17, 18, 20, 23, 25, 26, 30],
+        [9, 21, 24, 27, 28, 29],
+    ),
+]
 
-def _load(query: str) -> list[SearchResult]:
+
+def _raw(query: str) -> list[SearchResult]:
+    """Every row of the capture, channel rows included."""
     path = _FIXTURES / f"{query.replace(' ', '_')}.jsonl"
     results = [_parse_search_line(line) for line in path.read_text().splitlines()]
     assert None not in results, f"{path.name} has a row the parser drops"
     return results
+
+
+def _load(query: str) -> list[SearchResult]:
+    """The capture's videos: the routes drop a channel row before they rank."""
+    return [row for row in _raw(query) if row.is_video]
+
+
+def _at(query: str, positions: list[int]) -> list[str]:
+    """The IDs at 1-based lines of the raw capture, counted before a channel row is dropped."""
+    raw = _raw(query)
+    return [raw[position - 1].id for position in positions]
 
 
 def _ids(ranked) -> list[str]:
@@ -808,3 +954,218 @@ def test_accented_latin_is_still_read():
     rows = [_row("Beyoncé - Halo"), _row("Beyoncé - Halo (Official Video)")]
 
     assert _originals(rows, "beyoncé halo") == {"beyonce"}
+
+
+# An act's name alone
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "query, act_search, originals, videos, audio",
+    _ACT_SEARCHES,
+    ids=[query for query, *_ in _ACT_SEARCHES],
+)
+def test_an_artist_search_lifts_the_acts_videos_and_badges_its_audio(
+    query, act_search, originals, videos, audio
+):
+    results = _load(query)[:_FIRST_PAGE]
+    acts = read_first_page(results, query)
+
+    ranked = official_first(results, query, acts)
+
+    video_ids, audio_ids = _at(query, videos), _at(query, audio)
+    assert acts.act_search is act_search
+    assert acts.originals == frozenset(originals)
+    lifted = video_ids or audio_ids  # audio is lifted only where no video is
+    assert _ids(ranked)[: len(lifted)] == lifted
+    assert {result.id: kind for result, kind in ranked if kind} == {
+        **dict.fromkeys(video_ids, "video"),
+        **dict.fromkeys(audio_ids, "audio"),
+    }
+
+
+@pytest.mark.parametrize(
+    "query, act_search, originals, videos, audio",
+    _ACT_SEARCHES,
+    ids=[query for query, *_ in _ACT_SEARCHES],
+)
+def test_in_an_artist_search_everything_not_lifted_keeps_youtubes_order(
+    query, act_search, originals, videos, audio
+):
+    results = _load(query)[:_FIRST_PAGE]
+    lifted = _at(query, videos) or _at(query, audio)
+
+    ranked = official_first(results, query, read_first_page(results, query))
+
+    assert _ids(ranked)[len(lifted) :] == [r.id for r in results if r.id not in lifted]
+
+
+def _capture_row(query: str, video_id: str) -> tuple[SearchResult, Acts]:
+    """The row, and what the capture's first page says."""
+    acts = read_first_page(_load(query)[:_FIRST_PAGE], query)
+    assert acts.act_search  # else the rows below would be read as a song search's
+    return next(row for row in _raw(query) if row.id == video_id), acts
+
+
+@pytest.mark.parametrize(
+    "query, video_id, place",
+    [
+        pytest.param("idina menzel", "YVVTZgwYwVo", 0, id="film-label-under-her-name"),
+        pytest.param("adele", "0put0_a--Ng", 3, id="label-video-of-another-song"),
+    ],
+)
+def test_a_label_channels_video_of_the_act_lifts_as_the_acts_own(query, video_id, place):
+    """Among the originals' videos in YouTube's order, not after them as another act's."""
+    results = _load(query)[:_FIRST_PAGE]
+    ranked = official_first(results, query, read_first_page(results, query))
+
+    videos = [result.id for result, kind in ranked if kind == "video"]
+
+    assert videos.index(video_id) == place
+
+
+def test_no_other_act_lifts_in_an_artist_search():
+    """A Punjabi singer's "JOURNEY" on a label is another act's video of a song named journey."""
+    row, acts = _capture_row("journey", "tGbKhMg0ijA")
+
+    assert official_kind(row, "journey", acts) is None
+    assert official_kind(row, "journey", replace(acts, act_search=False)) == "video"
+
+
+@pytest.mark.parametrize(
+    "query, video_id",
+    [
+        pytest.param("taylor swift", "e-ORhEE9VVg", id="blank-space"),
+        pytest.param("eminem", "xFYQQPAOz7Y", id="lose-yourself"),
+        pytest.param("abba", "BshxCIjNEjY", id="super-trouper"),
+        pytest.param("the beatles", "2Q_ZzBGPdqE", id="help"),
+    ],
+)
+def test_a_plain_title_on_the_acts_own_channel_lifts(query, video_id):
+    row, acts = _capture_row(query, video_id)
+
+    assert official_kind(row, query, acts) == "video"
+
+
+@pytest.mark.parametrize(
+    "query, video_id",
+    [
+        pytest.param("adele", "fk4BbF7B29w", id="unexplained-bracket"),
+        pytest.param("adele", "X-yIEMduRXk", id="lyric-video"),
+        pytest.param("queen", "j440-D5JhjI", id="hour-long-compilation-2"),
+        pytest.param("queen", "_Uu12zY01ts", id="hour-long-compilation-1"),
+        pytest.param("queen", "2ZBtPf7FOoM", id="top-of-the-pops"),
+    ],
+)
+def test_a_bracket_must_still_say_what_it_is_in_an_artist_search(query, video_id):
+    row, acts = _capture_row(query, video_id)
+
+    assert official_kind(row, query, acts) is None
+
+
+def test_only_the_quoted_song_of_a_title_is_explained():
+    """The quoted "Lovesick Girls" is the song; the "DANCE PRACTICE" outside it is not."""
+    row, acts = _capture_row("blackpink", "YxksUfnuEbI")
+
+    assert official_kind(row, "blackpink", acts) is None
+
+
+@pytest.mark.parametrize(
+    "query, video_id",
+    [
+        pytest.param("blackpink", "Is0iob8lz4w", id="with-blackpink-episode"),
+        pytest.param("celine dion", "gMOovDrWWiI", id="from-a-tv-special"),
+    ],
+)
+def test_known_wrong_lifts_through_a_from_or_with_bracket_are_pinned(query, video_id):
+    """The words after "with" and "from" are dropped to the segment or bracket end, so the episode
+    and the special read as explained. A fix of that hole fails here, which is the point."""
+    row, acts = _capture_row(query, video_id)
+
+    assert official_kind(row, query, acts) == "video"
+
+
+def test_a_search_that_names_a_song_is_never_an_artist_search():
+    act_searches = {query for query, *_ in _ACT_SEARCHES}
+    song_searches = sorted(
+        path.stem.replace("_", " ")
+        for path in _FIXTURES.glob("*.jsonl")
+        if path.stem.replace("_", " ") not in act_searches
+    )
+    assert len(song_searches) == 50
+
+    found = [
+        query
+        for query in song_searches
+        if read_first_page(_load(query)[:_FIRST_PAGE], query).act_search
+    ]
+
+    assert found == []
+
+
+@pytest.mark.parametrize(
+    "own_rows, unverified_own_rows, act_search",
+    [(0, 0, False), (1, 0, False), (2, 0, True), (1, 1, False), (0, 2, False)],
+    ids=["none", "one", "two", "one-and-one-unverified", "two-unverified"],
+)
+def test_two_rows_from_the_querys_own_trusted_channel_make_an_artist_search(
+    own_rows, unverified_own_rows, act_search
+):
+    rows = [
+        *(_row("Alpha - Song (Official Video)", channel="Alpha") for _ in range(own_rows)),
+        *(
+            _row("Alpha - Song (Official Video)", channel="Alpha", verified=False)
+            for _ in range(unverified_own_rows)
+        ),
+        _unrelated(),
+    ]
+
+    assert read_first_page(rows, "alpha").act_search is act_search
+
+
+def _alpha_page(*extra: SearchResult) -> list[SearchResult]:
+    """An act search for "alpha": three videos on Alpha's own channel, then ``extra``."""
+    return [
+        *(
+            _row(f"Alpha - Song {n} (Official Video)", channel="Alpha")
+            for n in "One Two Three".split()
+        ),
+        *extra,
+    ]
+
+
+def test_in_an_artist_search_every_title_reads_act_dash_song():
+    """The query holds the whole left side, which a song search would read as "Song - Artist"
+    and credit each video's song name with one vote."""
+    rows = _alpha_page()
+
+    acts = read_first_page(rows, "alpha")
+
+    assert acts.originals == {"alpha"}
+    assert [kind for _, kind in official_first(rows, "alpha", acts)] == ["video"] * 3
+
+
+def test_in_an_artist_search_a_song_dash_act_title_credits_the_song_and_is_not_badged():
+    rows = _alpha_page(_row("Song Four - Alpha (Official Video)", channel="Alpha"))
+
+    acts = read_first_page(rows, "alpha")
+    ranked = official_first(rows, "alpha", acts)
+
+    assert acts.originals == {"alpha"}
+    assert [kind for _, kind in ranked] == ["video"] * 3 + [None]
+
+
+@pytest.mark.parametrize(
+    "title, named",
+    [
+        ("Taylor Swift - Blank Space", "Blank Space"),
+        ("Taylor Swift | Blank Space", "Blank Space"),
+        ("Adele - Send My Love (To Your New Lover)", "Send My Love"),
+        ("BLACKPINK - 'Lovesick Girls' DANCE PRACTICE VIDEO", "'Lovesick Girls'"),
+        ("BTS (방탄소년단) 'Dynamite' Official MV", "'Dynamite'"),
+        ("Queen", ""),
+        ("Queen (Official)", ""),
+    ],
+)
+def test_the_song_a_title_names_is_the_second_side_or_the_quote_in_a_one_sided_title(title, named):
+    assert _named_song(title).strip() == named
