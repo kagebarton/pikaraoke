@@ -303,6 +303,15 @@ def test_the_labels_keep_their_text_and_show_more_reads_show_more(mock_get, clie
     assert re.search(r'id="show-more"[^>]*>\s*Show more\s*</button>', body)
 
 
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_the_heading_reads_search_like_the_nav_link(mock_get, client):
+    """ "Add New" promised a second job; adding a song is only the downloads, from the cards."""
+    body = _search_body(client, mock_get, _RESULTS, _karaoke_with_library([]))
+
+    heading = re.search(r"<h1>(.*?)</h1>", body, re.S).group(1)
+    assert heading.strip() == "Search"
+
+
 # ---------------------------------------------------------------------------
 # Library songs: cards first, and a copy under another YouTube ID noted on its card
 # ---------------------------------------------------------------------------
