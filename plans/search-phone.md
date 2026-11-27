@@ -719,33 +719,35 @@ scripts in the session scratchpad and name them in the Results row.
 
 ## Manual checks (Ken, on a phone), Phase 5
 
-- [ ] The page looks like "Search: results" and "Search: Advanced open": grey Search beside a
+- [x] The page looks like "Search: results" and "Search: Advanced open": grey Search beside a
       dark box, red Clear, the dark Advanced inset, the small grey results line, no rule.
-- [ ] Scroll down the results: the search box and Search stay at the top, Clear and Advanced
+- [x] Scroll down the results: the search box and Search stay at the top, Clear and Advanced
       scroll away. Browse's toggle and letter strip still pin as before.
-- [ ] A video you own: first, an In library badge on its thumbnail (green folder), green Queue.
-- [ ] An official video: an "Official video" badge with a blue check; an owned official video:
+- [x] A video you own: first, an In library badge on its thumbnail (green folder), green Queue.
+- [x] An official video: an "Official video" badge with a blue check; an owned official video:
       both badges, In library first, the check blue too.
-- [ ] A song you own under another upload: that card's button reads Download… in grey, with the
+- [x] A song you own under another upload: that card's button reads Download… in grey, with the
       dark In library row under it; the row's Queue queues your file; Download… opens the
       dialog, whose button reads Queue.
-- [ ] No YouTube link on any card.
-- [ ] A preview playing and paused: the badges shrink and the duration goes; stopped, full size.
-- [ ] The dialog sits on a card; its X (top right, inside) and a tap on the backdrop both close
+- [x] No YouTube link on any card.
+- [x] A preview playing and paused: the badges shrink and the duration goes; stopped, full size.
+- [x] The dialog sits on a card; its X (top right, inside) and a tap on the backdrop both close
       it. The list and the lyric search box are dark, Search sits beside the box, Search for
       other lyrics… is an outline.
-- [ ] Queue in the dialog: a spinner, then Queued, then it fades. With Advanced's box unticked:
+- [x] Queue in the dialog: a spinner, then Queued, then it fades. With Advanced's box unticked:
       Added.
-- [ ] Download a song, let it finish, go to Queue and back to Search (the page comes back from
+- [x] Download a song, let it finish, go to Queue and back to Search (the page comes back from
       memory): its card still says Queue…; the dialog's Queue says Queued and the queue gets
       your library copy, with no new download on Processing. Box unticked: "In library".
-- [ ] Advanced, a link to a video you own: Download answers without downloading it again.
-- [ ] The server stopped (or the phone offline) when you tap the dialog's Queue: "!", the red
+- [x] Advanced, a link to a video you own: Download answers without downloading it again.
+- [x] The server stopped (or the phone offline) when you tap the dialog's Queue: "!", the red
       line, then Queue comes back.
-- [ ] Show more, tap an owned card's Queue and leave Search at once; come back: no stuck
+- [x] Show more, tap an owned card's Queue and leave Search at once; come back: no stuck
       spinner.
-- [ ] The labels read as before where they existed (Search results for '…', Direct download
+- [x] The labels read as before where they existed (Search results for '…', Direct download
       YouTube url:).
+
+Ticked 2026-11-27 on Ken's word, bar the two problems in the Results log (Phase 5 row).
 
 ## At landing (not Sonnet's)
 
@@ -766,6 +768,12 @@ scripts in the session scratchpad and name them in the Results row.
   `sessionStorage` dies with the tab.
 - Canvas: retitle the "after Part 3" dialog row as built, the Search note's owner.
 - Retire `search_official_captions` as a tag, if not done already, and repoint its references.
+- Commits added after the spec: `163e75e1` (the page heading reads Search, Ken's ask during Phase 5)
+  and its catalog pass `4af6ca01`; both land with the rest. `98d755d4` and `4af6ca01` are generated
+  catalogs: if `dev`'s have moved, regenerate on `dev` (the three commands of commit 8) rather than
+  cherry-picking them into `.po` conflicts.
+- `artist_search` (spec'd, Ken 2026-11-27) lands after this branch: the artist-only query that
+  badges nothing is its ranking change, not this Part's.
 
 ## Results log
 
@@ -783,3 +791,4 @@ scripts in the session scratchpad and name them in the Results row.
 | 8 | `98d755d4` | 4602 passed (`tests/unit`, unchanged from the Phase 3 review row); `test_compile_translations.py`, `test_search_render.py`, `test_youtube_dl.py`, `test_genius.py` 189 passed | The three commands of the plan, from `pikaraoke/`, `compile_translations.py` for the `.mo`; `pre-commit` fixed four `.po` files (it_IT, fr_FR, fi_FI, zh_Hant_TW) on its first run and was clean on the second; recompiling afterwards left every `.mo` byte-identical. 31 files: `messages.pot` and the 15 `.po` and `.mo`. `messages.pot` against `dev`'s: 89 msgids added, 32 removed (the last pass was 2026-11-18, so it carries the Queue, Browse, Now Playing and singer-settings work too). Every string the plan lists is in `messages.pot` once: In library (templates/search_result.html:19 and :57, search.html:934, playlist.html:52), Official video, Official audio, Download…, Already queued, Could not add to the queue., Show more, No more results, Couldn't load more results., Play preview, Preview unavailable, Mute, Unmute, Seek, Close; "In library: <strong>%(name)s</strong>" is in no catalog, not even as an obsolete entry (the old pass predates it). **The `.mo` files changed, against the plan's "should not"**: de_DE, es_VE, fi_FI, fr_FR, it_IT, zh_Hans_CN and zh_Hant_TW -16 messages each, id_ID -14, pt_BR and ru_RU -17; ja_JP, ko_KR, nl_NL, no_NO and th_TH +0 -0 (nothing translated). Compared by translated msgid before and after (`/tmp/claude-1000/-home-ken-pikaraoke/1363a036-21b3-45fa-8755-3aa882a70a09/scratchpad/mo_diff.py`, not committed): only removals, no message added or changed. The removed ones are strings whose templates are gone (Player Control, Change Key, Clear all, Restart Song, Stop Current Song, Play/Pause, Available Songs, Available songs in local library, Sorted by date, Sorted Alphabetically, the two Sort by labels, the two search-help bullets, the skip-confirm line, the name prompt); each is a `#~` entry in its `.po`. `grep` finds none of them in a template or script ("Clear all" survives only as a docstring in `queue_manager.py`). Fuzzy entries in de_DE 89 -> 125 (pybabel's guesses for new strings; left out of the `.mo` as before). Seen, not changed: "Search results for <small>'…'</small>" is **fuzzy in every translated locale** (de, es, fi, fr, id, it, pt, ru, zh_Hans, zh_Hant) and was fuzzy before this commit, so it is not in any `.mo` and shows in English; K1's "their translations still apply" holds for "Direct download YouTube url:" (translated, in the `.mo`) and not for the results label. Un-flagging it is a translator's call (the `msgstr` is the old one for the same words, in `<small><i>` markup the template still has). |
 | 9 | `163e75e1` | 4603 passed (`tests/unit`); `test_search_render.py` 60 -> 61 (the page's `<h1>` reads "Search") | Added after Phase 4, at Ken's ask during Phase 5 (not in the spec): the heading read "Search / Add New", which promised a second job (adding a song is only the downloads from the cards); it now reuses the nav link's "Search". The browser tab title was already "Search" (`base.html` prints the route's `title`). Mutation check (not committed): the old heading back fails the one new test. No new string: "Search" is translated in de, es, fi, fr, id, it, pt, ru, zh_Hans and zh_Hant, empty in ja, ko, nl, no and th. Black reformatted the test file once. |
 | 10 | `4af6ca01` | 4603 passed (`tests/unit`, same run) | Catalog pass for commit 9: "Search / Add New" is the only msgid removed from `messages.pot` (it now sits as a `#~` entry in each `.po`) and "Search" takes its "Title for the search page." comment. `.mo` files: -1 message ("Search / Add New") in each of the ten translated locales, nothing added or changed (compared by `mo_diff.py` against `d018baea`); ja, ko, nl, no and th unchanged. Pre-commit clean on the second run (the first fixed trailing whitespace in `.po` files). |
+| Phase 5 | none (Ken's phone checks) | 4603 passed (`tests/unit`) at `1aec321d` | Run by Ken 2026-11-27 on a test instance of this worktree (`ui-check`'s `launch.sh`, port 5741, `FAKE_JOB_S=10`, a scratch library of two Adele videos, real YouTube search and downloads), launched at `d018baea` and not restarted for the later commits, so it shows the heading as it was. All 14 checks passed except two problems: (1) lyric autofill did nothing for a song with no captions and a typed lyric search always answered "no lyrics found": the instance's own config had no `genius_token` (the client then returns nothing without a network call), not a code fault; the token line was copied from the real config, both `/lyrics_search` routes then returned hits (`curl`), and Ken confirmed on the phone, 2026-11-27, that Genius works again. (2) A search naming only the act ("backstreet boys") badges and lifts nothing, where "backstreet boys i want it that way" badges the official video, audio and versions: `official_rank._pick_originals` needs two credits for one act, and with no song in the query each title's song name is read as a different act, one vote each. The same on `dev` (ran `dev`'s code on the same query: no original, no kind), and Part 3 touched only where the tag is drawn. Spec'd by Ken on branch `artist_search`, lands after this one. Diagnosis script (not committed) `/tmp/claude-1000/-home-ken-pikaraoke/1363a036-21b3-45fa-8755-3aa882a70a09/scratchpad/why_badge.py`. |
