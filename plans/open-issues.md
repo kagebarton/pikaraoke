@@ -343,18 +343,17 @@ on `dev` 2026-11-24 with the rest of its Parts 1-2b (`64d7d657`..`4c260de3`,
 as copies); the entries below that say "the rewrite" describe it. Rules, "Not doing" and the
 measurements: `plans/search-official-captions.md` on the tag.
 
-- **A restored search page can show a stuck card.** After Show more, the page saves the cards
-  so coming back to Search restores them. The copy can catch a card's loading state (an
-  in-library button saved mid-flash), and the restored card then keeps a stuck loading button.
-  The dialog's half is fixed (`archive/download_modal_speed`, O11): the dialog sits outside the saved
-  element, and a restore drops an older copy's own dialog. Left by Ken 2026-11-08. The same
-  copy also shows the library as it was at that render: a song downloaded from the page since
-  still offers Queue… (the download dialog) on its card, not the in-library Queue, so it is
-  easy to download twice, and no "In library" note shows it. Both want the restore to
-  re-check the cards (a small server call, or running the search again) rather than put back
-  the saved HTML. Found in the `/code-review` of `search_official_captions` commits 5-9,
-  2026-11-19 (Results log on that branch). Not ruled.
-- **A search card you already own can be downloaded again.** Tapping any card's thumbnail
+- **A restored search page shows the library as it was at that render.** After Show more, the
+  page saves the cards so coming back to Search restores them. A song downloaded from the page
+  since still offers Queue… (the download dialog) on its card, not the in-library Queue, and no
+  "In library" badge shows it, until the next search. Harmless since 2026-11-27: that Queue…
+  now queues the library copy instead of downloading it again (K4 in `plans/search-phone.md`
+  on branch `search_phone`, "Not doing": redrawing restored cards was not chosen). The stuck
+  loading button this entry used to name is fixed: the dialog's half by
+  `archive/download_modal_speed` (O11), the cards' half by `8d95c0e7`, which makes the saved
+  copy once at load and never reads the live page again. Found in the `/code-review` of
+  `search_official_captions` commits 5-9, 2026-11-19. Not ruled.
+- ~~**A search card you already own can be downloaded again.** Tapping any card's thumbnail
   opens the download dialog (`search.html`, the `.img-wrapper` click calls
   `openPreviewModal`), in-library cards (`data-file-path`) included. The preview plays, but
   the dialog's Queue sends `/download`, and neither the route (`routes/search.py`
@@ -370,7 +369,12 @@ measurements: `plans/search-official-captions.md` on the tag.
   2026-11-24 from `search_official_captions` Part 2b commit 11): every thumbnail's play button
   previews its video in the card instead of opening the dialog, so an owned card no longer
   reaches it. Still open: `/download` taking an ID the library already owns (option 3), which
-  would also cover the stale restored page above.
+  would also cover the stale restored page above.~~ Closed 2026-11-27 by `search_phone`
+  (option 3; `2b1a9a24`, `722ba56a`, `ac2831aa`): `/download` and `/lyrics_select` answer
+  `in_library` for an ID the library owns and do nothing else (no download, no lyric choice
+  written), and the page queues the library file through `/enqueue`. A link with `&list=`,
+  `/v/ID` or `#t=` meets the same check. A video still waiting or downloading is not guarded
+  (see "A video asked for again while it waits or downloads").
 - **A "Song - Artist" title is read the wrong way round** when the query also names the
   artist: for "queen bohemian rhapsody", "Bohemian Rhapsody - Queen" credits the song name as
   the artist. Official uploads are nearly always "Artist - Song". Left by Ken 2026-11-08.
@@ -448,7 +452,7 @@ measurements: `plans/search-official-captions.md` on the tag.
   label's (decision 6), so Ed Sheeran's "Perfect Symphony" on "Ed Sheeran and Andrea Bocelli",
   RHINO's Vitamin C video and Netflix Philippines' "Golden" are not lifted. None has captions,
   so the miss costs nothing on those searches. Accepted, with the plan's decision 6.
-- **Unify the channel cleaners once `search_official_captions` lands.**
+- ~~**Unify the channel cleaners once `search_official_captions` lands.**
   `official_rank.py` and `genius_query.py` each work out what act a channel's name
   stands for, with their own noise words, kept apart while that branch rewrites
   `official_rank`'s. `official_rank` now has two (`_channel_artist` for the credit and
@@ -456,7 +460,12 @@ measurements: `plans/search-official-captions.md` on the tag.
   Once it lands: one function for the name, each module keeping
   its own list of names that stand for no act (the ranking's short, the Genius
   module's wide). Not ruled. Record: `plans/genius-search-spec.md` on tag
-  `archive/genius_search_accuracy`, Calls item 3 and "Channel names".
+  `archive/genius_search_accuracy`, Calls item 3 and "Channel names".~~ Closed 2026-11-27
+  by `search_phone` (`35e9904a`): `lib/youtube_channel.channel_words` is the one cleaner;
+  each caller keeps its own list of names that stand for no act and what a glued VEVO means.
+  Measured on 1146 channels and 54 ranked pages: the ranking is unchanged; Genius's name
+  changes on two channels ("Music Topic BR" now "BR", "Vevo Music Group" now "Group"), neither
+  an act.
 - **A Genius hit is preselected when it does not account for the whole video title.**
   GATE G found two in 63 preselects, both film or stage: a hit titled `You Will Be
   Found (Reprise)` for a video of the full song, and `Mamma Mia — Meryl Streep` for
@@ -483,7 +492,7 @@ measurements: `plans/search-official-captions.md` on the tag.
   enforces it. Closing it costs the second call the landing removed. Found in the
   `/code-review` of `9110167..def8493`, 2026-11-19 (Results log in
   `plans/download-modal-speed.md` on tag `archive/download_modal_speed`). Not ruled.
-- **The dialog's Queue says Queued before the download is accepted** (landed from
+- ~~**The dialog's Queue says Queued before the download is accepted** (landed from
   `archive/download_modal_speed`). The button turns to Queued or Added and the dialog fades once
   `/lyrics_select` answers, before `/download` has. If `/download` then fails, a 3 s notice
   contradicts the button, an SPA move in that time cuts the notice short, and the lyric
@@ -491,7 +500,12 @@ measurements: `plans/search-official-captions.md` on the tag.
   the old dialog. Fixing it means waiting for `/download`'s answer before Queued, with a way
   back on failure and the notice kept for a dialog closed meanwhile. `/download` only adds a
   job, so it rarely fails. Found in the `/code-review` of `def8493..dce7598`, 2026-11-21
-  (finding 4, Results log on tag `archive/download_modal_speed`). Not ruled.
+  (finding 4, Results log on tag `archive/download_modal_speed`). Not ruled.~~ Closed
+  2026-11-27 by `search_phone` (`722ba56a`, review fixes `ac2831aa`): Queue shows a spinner until
+  both calls have answered, then says what happened; a failure shows a red "!" and a line under
+  Queue, and Queue comes back for another tap; the page's notice is used only once the dialog
+  has closed. What stays: a lyric choice written before a failed `/download` is kept for that
+  video ID until someone downloads it, and a retry overwrites it (pre-existing).
 - **Nothing tests what the search dialog's script does** (landed from `archive/download_modal_speed`).
   The render tests check the markup only. Late answers dropped after a close or an SPA
   move, the list held after Queue, a refused play, and the Queue label following the box
@@ -520,6 +534,19 @@ measurements: `plans/search-official-captions.md` on the tag.
   `now_playing_remote`, which landed 2026-11-23, and `search_official_captions` landed
   2026-11-24, so all three copies are on `dev` and nothing blocks it. Part 2b's "Not doing"
   already left it out. Found in the same review (finding 6). Not ruled.
+- **A video asked for again while it waits or downloads.** `/download`'s library check sees
+  only files already in the library. A second tap on the same video inside the download window
+  (a stale page, two phones, a pasted link) still queues a second download, and its lyric
+  choice overwrites the first one's. Closing it needs `DownloadManager.queue_download` to
+  check and add under one lock; it is also called from `library_tools.py`. Left out of
+  `search_phone` (Part 3) on purpose. Found in the Phase 2 `/code-review` (finding 5), Results
+  log and "Not doing" in `plans/search-phone.md` on branch `search_phone`. Not ruled.
+- **A lyric choice can be left for a song the library has.** `/lyrics_select` and `/download`
+  each check the library; a download of the same video that lands between the two calls lets
+  the first write the choice and the second answer `in_library`, so that song's next lyrics
+  run reads it. Fix: `/download` deletes the choice when it answers `in_library`, or one route
+  checks once. Narrow window; not ruled. Found in the Phase 2 `/code-review` (finding 3),
+  Results log in `plans/search-phone.md` on branch `search_phone`.
 
 ## Movie splits (on `dev`)
 
@@ -695,9 +722,11 @@ Stage 4, after `queue_phone` lands, side by side:
 
 - ~~`browse_phone` Phase 1, after GATE N.~~ Landed 2026-11-24 (see Stage 1).
 - `processing_phone` (`f28d582`), after its open question on group order under All is ruled.
-- Search Part 3 (L12, L13), after Parts 1-2 land too (`download_modal_speed` is on `dev`
+- ~~Search Part 3 (L12, L13), after Parts 1-2 land too (`download_modal_speed` is on `dev`
   already): it restyles the dialog's controls. Spec'd 2026-11-24 on branch `search_phone`
-  (`7d111ce9`).
+  (`7d111ce9`).~~ Landed on `dev` 2026-11-27 (`35e9904a`..`076a8fab`, ten code commits as
+  copies and the two catalog passes regenerated on `dev`; `tests/unit` 4665 passed). The branch
+  `search_phone` still carries the plan and its Results log until it is retired as a tag.
 
 Independent of the phone order:
 
@@ -731,7 +760,8 @@ Not ruled (Ken's calls):
   branch, so `queue_phone`'s code can start sooner.~~ Moot: the whole branch landed 2026-11-21.
 - ~~Search Part 3 on a fresh branch off `dev` after `queue_phone` (proposed), or keep
   `search_official_captions` open until Part 3 is done and land all three parts together.~~
-  Ruled 2026-11-24: a fresh branch, `search_phone` (K7 in `plans/search-phone.md`).
+  Ruled 2026-11-24: a fresh branch, `search_phone` (K7 in `plans/search-phone.md`). Landed
+  2026-11-27 (see Stage 4).
 
 ## Phone pages: one look (branches `browse_phone`, `queue_phone`, `processing_phone`, `search_official_captions`, `singer_defaults`, `now_playing_remote`, `download_modal_speed`)
 
@@ -886,10 +916,18 @@ The "Small gaps inside the v2 group" above were ruled 2026-11-18 (S1-S4 in `plan
   `is-fixed-top` or `position: sticky; top: 0` on `.navbar`, with the burger menu open
   state and the SPA page swap in `spa-navigation.js` checked), not a per-page one. Touches
   `singer_defaults`'s nav pill and `queue_phone`'s Processing icon gate only by sharing
-  the file. Not started. Browse's pinned strip and toggle (`.bp-pin` in `files.html`, on
-  `dev`) is `position: sticky; top: 0`: a navbar kept on screen must push the
-  pin's `top` down to the navbar's height, or the strip slides under it (Opus,
-  2026-11-24, `browse_phone` Phase 1 judge read).
+  the file. Not started. Browse's pinned strip and toggle (`.pin-top` in `phone-rows.css`, on
+  `dev`; named `.bp-pin` in `files.html` until 2026-11-27) is `position: sticky; top: 0`: a
+  navbar kept on screen must push the pin's `top` down to the navbar's height, or the strip
+  slides under it (Opus, 2026-11-24, `browse_phone` Phase 1 judge read). Browse and Search
+  share that one `.pin-top` since 2026-11-27, so one `top` serves both.
+- **One dark field style for every page.** `bulma-dark.css`'s `.input` stays white, so the
+  admin pages (edit, info, batch rename) and Processing's playlist box still show white
+  fields on the dark theme. Search keeps its own dark-field rule (`search_phone` A8:
+  `#search-input`, `#direct-download-url`, `#lyrics-custom-input` and the lyrics list, in
+  `search.html`) because making the shared `.input` dark would restyle those pages at
+  once. Moving the rule into the theme means checking each of them. Not ruled. Record:
+  "Not doing" in `plans/search-phone.md` on branch `search_phone`.
 
 ## Queue page: review findings (on `dev`)
 
