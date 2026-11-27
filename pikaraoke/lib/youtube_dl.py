@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -22,6 +23,9 @@ _IMPERSONATE_TARGET = "chrome"
 # The video download and every caption fetch share these, so a fetched caption is what a
 # download would save.
 _MANUAL_EN_SUB_ARGS = ["--write-subs", "--sub-langs", "en.*", "--convert-subs", "srt"]
+
+# A YouTube video ID. A channel's is 24 characters ("UC…"), a playlist's longer.
+VIDEO_ID_RE = re.compile(r"[A-Za-z0-9_-]{11}")
 
 
 def _js_runtime_args() -> list[str]:
@@ -214,6 +218,11 @@ class SearchResult:
     duration: str  # "M:SS", or "" when YouTube gives none
     channel_verified: bool
     description: str  # YouTube's snippet; art tracks start "Provided to YouTube by"
+
+    @property
+    def is_video(self) -> bool:
+        """False for the channels and playlists a search can also return."""
+        return VIDEO_ID_RE.fullmatch(self.id) is not None
 
 
 def _parse_search_line(line: str) -> SearchResult | None:

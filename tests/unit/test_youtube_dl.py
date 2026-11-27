@@ -462,6 +462,25 @@ class TestParseSearchLine:
         assert _parse_search_line(line) is None
 
 
+class TestSearchResultIsVideo:
+    @pytest.mark.parametrize(
+        "row_id, is_video",
+        [
+            ("dQw4w9WgXcQ", True),
+            ("-crgQGdpZR0", True),
+            ("UCuAXFkgsw1L7xaCfnd5JJOw", False),  # a channel: 24 characters
+            ("PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI", False),  # a playlist: 34 characters
+            ("dQw4w9WgXc", False),
+            ("dQw4w9WgXcQ\n", False),
+        ],
+        ids=["video", "dash-led-video", "channel", "playlist", "10-chars", "trailing-newline"],
+    )
+    def test_only_an_11_character_id_is_a_video(self, row_id, is_video):
+        row = SearchResult("t", "u", row_id, "c", "", False, "")
+
+        assert row.is_video is is_video
+
+
 class TestGetSearchResults:
     @staticmethod
     def _stdout(*ids: str) -> bytes:

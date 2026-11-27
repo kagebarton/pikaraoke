@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import subprocess
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
@@ -25,7 +24,7 @@ from pikaraoke.lib.official_rank import (
     read_first_page,
 )
 from pikaraoke.lib.song_match import SongIndex, similar_songs
-from pikaraoke.lib.youtube_dl import SearchResult, get_search_results
+from pikaraoke.lib.youtube_dl import VIDEO_ID_RE, SearchResult, get_search_results
 
 _ = flask_babel.gettext
 
@@ -36,9 +35,6 @@ MAX_SIMILAR_SONGS = 3
 
 # YouTube results fetched for a search.
 PAGE_SIZE = 30
-
-# YouTube ID validation: exactly 11 chars of the allowed character set
-_YT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 class SearchMoreQuery(Schema):
@@ -110,6 +106,12 @@ def _search_rows(
     return sorted(rows, key=lambda row: row.existing_path is None)
 
 
+def _videos(results: Iterable[SearchResult]) -> list[SearchResult]:
+    """The rows that are videos: a search for an act's name can return the act's channel, and
+    downloading its URL would fetch every upload on it."""
+    return [result for result in results if result.is_video]
+
+
 @search_bp.route("/search", methods=["GET"])
 def search():
     """YouTube search page."""
@@ -118,9 +120,11 @@ def search():
     search_string = request.args.get("search_string")
     if search_string:
         results = get_search_results(search_string, PAGE_SIZE)
-        acts = read_first_page(results, search_string)
+        videos = _videos(results)
+        acts = read_first_page(videos, search_string)
         songs = list(k.song_manager.songs)
-        search_rows = _note_library_copies(songs, _search_rows(songs, results, search_string, acts))
+        search_rows = _note_library_copies(songs, _search_rows(songs, videos, search_string, acts))
+        # Counted before the drop, so a channel row does not hide Show more.
         show_more = len(results) >= PAGE_SIZE
     else:
         search_string = None
@@ -151,8 +155,9 @@ def search_more(query):
     except subprocess.CalledProcessError as e:
         logging.error(f"Could not fetch more results for {search_string!r}: {e}")
         return "", 502
-    acts = read_first_page(results[:PAGE_SIZE], search_string)
-    rows = _search_rows(k.song_manager.songs, results[PAGE_SIZE:], search_string, acts)
+    # Slice, then drop: both routes vote over the same rows and no fetched row goes unshown.
+    acts = read_first_page(_videos(results[:PAGE_SIZE]), search_string)
+    rows = _search_rows(k.song_manager.songs, _videos(results[PAGE_SIZE:]), search_string, acts)
     result_card = get_template_attribute("search_result.html", "result_card")
     return "".join(result_card(row) for row in rows)
 
@@ -167,7 +172,7 @@ def caption_check():
     leaves the caption answer as it was.
     """
     yt_id = request.args.get("yt_id", "")
-    if not _YT_ID_RE.match(yt_id):
+    if not VIDEO_ID_RE.fullmatch(yt_id):
         return jsonify({"error": "Invalid yt_id"}), 400
     check, stream_url = check_video_caption(yt_id)
     return jsonify(
@@ -245,7 +250,7 @@ def lyrics_select():
     data = request.get_json(force=True, silent=True) or {}
     yt_id = str(data.get("yt_id", "")).strip()
 
-    if not _YT_ID_RE.match(yt_id):
+    if not VIDEO_ID_RE.fullmatch(yt_id):
         return (
             jsonify(
                 {

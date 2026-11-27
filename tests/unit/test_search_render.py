@@ -850,3 +850,55 @@ def test_page_one_offers_show_more_only_when_youtube_filled_it(mock_get, client,
     assert ('id="show-more"' in body) is button
     if button:
         assert 'data-search-string="Rock &#34;n&#34; Roll &amp; &lt;b&gt;"' in body
+
+
+# A channel in the results is not a card
+# ---------------------------------------------------------------------------
+
+_CHANNEL_ID = "UC" + "c" * 22
+
+
+def _channel_row(title: str = "Some Act") -> SearchResult:
+    """A search can return the act's channel itself: a 24-character ID and a /channel/ URL."""
+    return SearchResult(
+        title=title,
+        url=f"https://www.youtube.com/channel/{_CHANNEL_ID}",
+        id=_CHANNEL_ID,
+        channel=title,
+        duration="",
+        channel_verified=True,
+        description="",
+    )
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_a_channel_row_is_no_card_and_does_not_hide_show_more(mock_get, client):
+    results = _filler(10) + [_channel_row()] + _filler(19, start=10)
+    assert len(results) == 30
+
+    body = _search_body(client, mock_get, results, _karaoke_with_library([]))
+
+    assert _card_ids(body) == _ids(29)
+    assert _CHANNEL_ID not in body
+    assert 'id="show-more"' in body
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_more_shows_every_second_page_row_when_a_channel_row_is_on_the_first_page(mock_get, client):
+    """Fetched rows 31-60, none skipped: the first page's dropped row does not shift the cut."""
+    results = [_channel_row()] + _filler(29) + _filler(30, start=29)
+
+    resp, _ = _more_body(client, mock_get, results)
+
+    assert re.findall(r'<li data-ytID="(\w+)"', resp.get_data(as_text=True)) == _ids(30, start=29)
+
+
+@patch("pikaraoke.routes.search.get_karaoke_instance")
+def test_more_has_no_card_for_a_channel_row_on_the_second_page(mock_get, client):
+    results = _filler(30) + _filler(10, start=30) + [_channel_row()] + _filler(19, start=40)
+
+    resp, _ = _more_body(client, mock_get, results)
+
+    body = resp.get_data(as_text=True)
+    assert re.findall(r'<li data-ytID="(\w+)"', body) == _ids(29, start=30)
+    assert _CHANNEL_ID not in body
